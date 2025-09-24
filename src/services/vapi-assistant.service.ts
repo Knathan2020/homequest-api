@@ -1,0 +1,247 @@
+import axios from 'axios';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL || 'https://fbwmkkskdrvaipmkddwm.supabase.co',
+  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || ''
+);
+
+const VAPI_API_KEY = process.env.VAPI_API_KEY || '';
+const VAPI_BASE_URL = 'https://api.vapi.ai';
+
+interface VapiAssistant {
+  id: string;
+  name: string;
+  firstMessage: string;
+  model: any;
+  voice: any;
+  functions?: any[];
+}
+
+class VapiAssistantService {
+  private apiKey: string;
+
+  constructor() {
+    this.apiKey = VAPI_API_KEY;
+  }
+
+  /**
+   * Create a new VAPI assistant for a company
+   */
+  async createCompanyAssistant(companyName: string, teamId: string): Promise<VapiAssistant> {
+    try {
+      console.log(`🤖 Creating VAPI assistant for ${companyName}`);
+
+      const assistantConfig = {
+        name: `${companyName} Receptionist`,
+        firstMessage: `Good ${this.getTimeOfDay()}, ${companyName}. How may I assist you today?`,
+        model: {
+          provider: 'openai',
+          model: 'gpt-4',
+          temperature: 0.7,
+          systemPrompt: `You are a professional receptionist for ${companyName}, a construction company. 
+          
+          YOUR RESPONSIBILITIES:
+          - Greet callers professionally with ${companyName}'s name
+          - Determine the purpose of their call
+          - Ask for caller's name and company
+          - Route calls appropriately:
+            • For quotes or new business → Sales
+            • For project updates → Project Management
+            • For billing → Accounting
+            • For emergencies → Direct to on-call manager
+          - Take detailed messages when needed
+          - Be friendly, professional, and helpful
+          
+          IMPORTANT:
+          - Always mention ${companyName} in your greeting
+          - Keep responses concise and professional
+          - If unsure, ask clarifying questions
+          - Make callers feel valued and heard`
+        },
+        voice: {
+          provider: '11labs',
+          voiceId: 'OYTbf65OHHFELVut7v2H', // Hope voice as default
+          model: 'eleven_turbo_v2',
+          stability: 0.5,
+          similarityBoost: 0.75
+        },
+        endCallFunctionEnabled: true,
+        dialKeypadFunctionEnabled: true,
+        maxDurationSeconds: 600,
+        silenceTimeoutSeconds: 30,
+        responseDelaySeconds: 0.5,
+        transcriber: {
+          provider: 'deepgram',
+          model: 'nova-2',
+          language: 'en'
+        },
+        // Add scheduling and message-taking functions
+        functions: [
+          {
+            name: 'takeMessage',
+            description: 'Take a message for the team',
+            parameters: {
+              type: 'object',
+              properties: {
+                callerName: { type: 'string', description: 'Name of the caller' },
+                callerPhone: { type: 'string', description: 'Phone number of the caller' },
+                callerCompany: { type: 'string', description: 'Company of the caller' },
+                message: { type: 'string', description: 'The message content' },
+                urgency: { 
+                  type: 'string', 
+                  enum: ['low', 'normal', 'high', 'urgent'],
+                  default: 'normal'
+                }
+              },
+              required: ['callerName', 'callerPhone', 'message']
+            }
+          },
+          {
+            name: 'transferCall',
+            description: 'Transfer the call to a department or person',
+            parameters: {
+              type: 'object',
+              properties: {
+                department: { 
+                  type: 'string',
+                  enum: ['sales', 'support', 'billing', 'management', 'field'],
+                  description: 'Department to transfer to'
+                },
+                reason: { type: 'string', description: 'Reason for transfer' }
+              },
+              required: ['department']
+            }
+          }
+        ]
+      };
+
+      const response = await axios.post(
+        `${VAPI_BASE_URL}/assistant`,
+        assistantConfig,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const assistant = response.data;
+      console.log(`✅ Created VAPI assistant: ${assistant.id} for ${companyName}`);
+
+      // Save assistant ID to database
+      const { error } = await supabase
+        .from('teams')
+        .update({ 
+          vapi_assistant_id: assistant.id,
+          vapi_assistant_name: assistant.name 
+        })
+        .eq('id', teamId);
+
+      if (error) {
+        console.error('Error saving assistant ID:', error);
+      }
+
+      return assistant;
+    } catch (error: any) {
+      console.error('Error creating VAPI assistant:', error.response?.data || error);
+      throw new Error(`Failed to create VAPI assistant: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update an existing VAPI assistant
+   */
+  async updateAssistant(assistantId: string, updates: Partial<VapiAssistant>): Promise<VapiAssistant> {
+    try {
+      const response = await axios.patch(
+        `${VAPI_BASE_URL}/assistant/${assistantId}`,
+        updates,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      console.error('Error updating VAPI assistant:', error.response?.data || error);
+      throw new Error(`Failed to update VAPI assistant: ${error.message}`);
+    }
+  }
+
+  /**
+   * Delete a VAPI assistant
+   */
+  async deleteAssistant(assistantId: string): Promise<void> {
+    try {
+      await axios.delete(
+        `${VAPI_BASE_URL}/assistant/${assistantId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`
+          }
+        }
+      );
+      console.log(`🗑️ Deleted VAPI assistant: ${assistantId}`);
+    } catch (error: any) {
+      console.error('Error deleting VAPI assistant:', error.response?.data || error);
+      throw new Error(`Failed to delete VAPI assistant: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get an assistant by ID
+   */
+  async getAssistant(assistantId: string): Promise<VapiAssistant> {
+    try {
+      const response = await axios.get(
+        `${VAPI_BASE_URL}/assistant/${assistantId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`
+          }
+        }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching VAPI assistant:', error.response?.data || error);
+      throw new Error(`Failed to fetch VAPI assistant: ${error.message}`);
+    }
+  }
+
+  /**
+   * List all assistants
+   */
+  async listAssistants(): Promise<VapiAssistant[]> {
+    try {
+      const response = await axios.get(
+        `${VAPI_BASE_URL}/assistant`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`
+          }
+        }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      console.error('Error listing VAPI assistants:', error.response?.data || error);
+      throw new Error(`Failed to list VAPI assistants: ${error.message}`);
+    }
+  }
+
+  private getTimeOfDay(): string {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'morning';
+    if (hour < 17) return 'afternoon';
+    return 'evening';
+  }
+}
+
+export default new VapiAssistantService();

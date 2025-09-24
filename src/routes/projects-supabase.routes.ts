@@ -1,0 +1,424 @@
+/**
+ * Projects Routes with Supabase Integration
+ * Handles project management with persistent database storage
+ */
+
+import express from 'express';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const router = express.Router();
+
+// Initialize Supabase client
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+
+// Create Supabase client with error handling
+const supabase = supabaseUrl && supabaseKey 
+  ? createClient(supabaseUrl, supabaseKey)
+  : null;
+
+/**
+ * Get all projects
+ */
+router.get('/projects', async (req, res) => {
+  try {
+    console.log('📊 Fetching all projects from database');
+    
+    // If Supabase is not configured, return mock data
+    if (!supabase) {
+      console.log('⚠️ Supabase not configured, using mock data');
+      return res.json({
+        success: true,
+        data: [
+          {
+            id: 'proj-001',
+            project_name: 'Maple Street Residence',
+            address: '123 Maple St, Kennesaw, GA',
+            status: 'active',
+            progress: 35,
+            square_footage: 4850,
+            notes: 'Foundation complete, framing in progress',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          },
+          {
+            id: 'proj-002',
+            project_name: 'Oak Avenue Complex',
+            address: '456 Oak Ave, Marietta, GA',
+            status: 'planning',
+            progress: 10,
+            square_footage: 12000,
+            notes: 'Awaiting permits',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        ]
+      });
+    }
+    
+    // Fetch from Supabase
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Supabase error:', error);
+      
+      // If table doesn't exist, create it
+      if (error.code === '42P01') {
+        console.log('📦 Projects table not found, creating...');
+        
+        // Create the table
+        const { error: createError } = await supabase.rpc('exec_sql', {
+          query: `
+            CREATE TABLE IF NOT EXISTS projects (
+              id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+              project_name VARCHAR(255) NOT NULL,
+              address TEXT,
+              status VARCHAR(50) DEFAULT 'planning',
+              progress INTEGER DEFAULT 0,
+              square_footage INTEGER,
+              notes TEXT,
+              phases JSONB,
+              team_id UUID,
+              user_id UUID,
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+              updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+            
+            -- Create index for faster queries
+            CREATE INDEX IF NOT EXISTS idx_projects_team_id ON projects(team_id);
+            CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
+            CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+          `
+        });
+        
+        if (createError) {
+          // If RPC doesn't work, return empty array
+          console.log('📋 Table creation pending, returning empty project list');
+          return res.json({
+            success: true,
+            data: [],
+            message: 'Projects table is being set up. Please refresh in a moment.'
+          });
+        }
+        
+        // Return empty array for now
+        return res.json({
+          success: true,
+          data: []
+        });
+      }
+      
+      throw error;
+    }
+    
+    res.json({
+      success: true,
+      data: data || []
+    });
+  } catch (error: any) {
+    console.error('Error fetching projects:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch projects'
+    });
+  }
+});
+
+/**
+ * Get single project
+ */
+router.get('/projects/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!supabase) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured'
+      });
+    }
+    
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({
+          success: false,
+          error: 'Project not found'
+        });
+      }
+      throw error;
+    }
+    
+    res.json({
+      success: true,
+      data
+    });
+  } catch (error: any) {
+    console.error('Error fetching project:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch project'
+    });
+  }
+});
+
+/**
+ * Create new project
+ */
+router.post('/projects', async (req, res) => {
+  try {
+    const { 
+      project_name, 
+      address, 
+      status = 'planning', 
+      progress = 0,
+      square_footage,
+      notes,
+      phases,
+      team_id,
+      user_id
+    } = req.body;
+    
+    console.log('🏗️ Creating new project:', project_name);
+    
+    if (!supabase) {
+      // Return mock response if Supabase not configured
+      return res.json({
+        success: true,
+        message: 'Project created (mock mode)',
+        data: {
+          id: 'proj-' + Date.now(),
+          project_name,
+          address,
+          status,
+          progress,
+          square_footage,
+          notes,
+          phases,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      });
+    }
+    
+    // Insert into Supabase
+    const { data, error } = await supabase
+      .from('projects')
+      .insert({
+        project_name,
+        address,
+        status,
+        progress,
+        square_footage,
+        notes,
+        phases,
+        team_id,
+        user_id
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Supabase insert error:', error);
+      
+      // If table doesn't exist, try to create it first
+      if (error.code === '42P01') {
+        return res.status(503).json({
+          success: false,
+          error: 'Projects table not found. Please set up the database schema.',
+          setupRequired: true
+        });
+      }
+      
+      throw error;
+    }
+    
+    res.json({
+      success: true,
+      message: 'Project created successfully',
+      data
+    });
+  } catch (error: any) {
+    console.error('Error creating project:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create project'
+    });
+  }
+});
+
+/**
+ * Update project
+ */
+router.put('/projects/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    if (!supabase) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured'
+      });
+    }
+    
+    // Update in Supabase
+    const { data, error } = await supabase
+      .from('projects')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({
+          success: false,
+          error: 'Project not found'
+        });
+      }
+      throw error;
+    }
+    
+    res.json({
+      success: true,
+      message: 'Project updated successfully',
+      data
+    });
+  } catch (error: any) {
+    console.error('Error updating project:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update project'
+    });
+  }
+});
+
+/**
+ * Delete project
+ */
+router.delete('/projects/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!supabase) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured'
+      });
+    }
+
+    // First, check if the project exists
+    const { data: project, error: checkError } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', id)
+      .single();
+
+    if (checkError || !project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      });
+    }
+
+    // Delete related data first to avoid foreign key constraints
+    // This is a temporary workaround - ideally should be handled by CASCADE in DB
+
+    // Delete project phases
+    await supabase
+      .from('project_phases')
+      .delete()
+      .eq('project_id', id);
+
+    // Delete project sections
+    await supabase
+      .from('project_sections')
+      .delete()
+      .eq('project_id', id);
+
+    // Delete accepted bids
+    await supabase
+      .from('accepted_bids')
+      .delete()
+      .eq('project_id', id);
+
+    // Delete vendor bids
+    await supabase
+      .from('vendor_bids')
+      .delete()
+      .eq('project_id', id);
+
+    // Finally delete the project itself
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      message: 'Project deleted successfully'
+    });
+  } catch (error: any) {
+    console.error('Error deleting project:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete project'
+    });
+  }
+});
+
+/**
+ * Get projects for a specific team
+ */
+router.get('/projects/team/:teamId', async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    
+    if (!supabase) {
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+    
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('team_id', teamId)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    res.json({
+      success: true,
+      data: data || []
+    });
+  } catch (error: any) {
+    console.error('Error fetching team projects:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch team projects'
+    });
+  }
+});
+
+export default router;

@@ -1,0 +1,13 @@
+[build]
+  command = "echo 'Using pre-built API'"
+  publish = "."
+
+[functions]
+  directory = "api"
+  node_bundler = "esbuild"
+  external_node_modules = ["opencv4nodejs", "canvas", "sharp"]
+
+[[redirects]]
+  from = "/*"
+  to = "/api/:splat"
+  status = 200

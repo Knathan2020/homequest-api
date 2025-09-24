@@ -1,0 +1,534 @@
+/**
+ * Vapi Webhook Handlers
+ * Handle function calls and transfer requests from AI assistant
+ */
+
+import express from 'express';
+import { createClient } from '@supabase/supabase-js';
+import aiReceptionistService from '../services/ai-receptionist.service';
+
+const router = express.Router();
+
+const supabase = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_KEY || ''
+);
+
+/**
+ * Vapi webhook endpoint for function calls
+ */
+router.post('/vapi/webhooks/function-call', async (req, res) => {
+  try {
+    console.log('🔍 Webhook received - body keys:', Object.keys(req.body));
+    console.log('🔍 Full webhook body:', JSON.stringify(req.body, null, 2));
+
+    const {
+      call,
+      functionCall,
+      messageResponse
+    } = req.body;
+
+    const { name: functionName, parameters } = functionCall;
+
+    console.log('📞 Vapi function call received:', {
+      functionName,
+      parameters,
+      callId: call?.id,
+      timestamp: new Date().toISOString()
+    });
+
+    switch (functionName) {
+      case 'transferCall':
+        return await handleTransferCall(req, res, call, parameters);
+      
+      case 'takeMessage':
+        return await handleTakeMessage(req, res, call, parameters);
+      
+      case 'scheduleCallback':
+        return await handleScheduleCallback(req, res, call, parameters);
+      
+      case 'checkAvailability':
+        return await handleCheckAvailability(req, res, call, parameters);
+
+      case 'schedule_appointment':
+        return await handleScheduleAppointment(req, res, call, parameters);
+
+      default:
+        console.log('⚠️ Unknown function call received:', functionName);
+        console.log('📋 Available functions: transferCall, takeMessage, scheduleCallback, checkAvailability, schedule_appointment');
+        res.json({
+          result: 'I\'m not sure how to handle that request. Let me help you another way.'
+        });
+    }
+    
+  } catch (error: any) {
+    console.error('Webhook error:', error);
+    res.json({
+      result: 'I apologize, I\'m having technical difficulties. Please try again.'
+    });
+  }
+});
+
+/**
+ * Handle transfer request
+ */
+async function handleTransferCall(req: any, res: any, call: any, params: any) {
+  try {
+    const { department, memberName, reason } = params;
+    const teamId = call.assistantId; // We'll map this to team
+    
+    // Log the transfer request
+    await supabase.from('call_transfers').insert({
+      call_id: call.id,
+      team_id: teamId,
+      from_type: 'ai',
+      to_department: department,
+      to_member: memberName,
+      reason: reason,
+      caller_name: call.customer?.name,
+      caller_phone: call.customer?.number,
+      transferred_at: new Date().toISOString()
+    });
+
+    // Find the team member to transfer to
+    let query = supabase
+      .from('team_members')
+      .select('*')
+      .eq('team_id', teamId)
+      .eq('availability', 'available');
+
+    if (memberName) {
+      query = query.eq('name', memberName);
+    } else if (department) {
+      query = query.eq('department', department);
+    }
+
+    const { data: members } = await query.single();
+
+    if (members && members.length > 0) {
+      const member = members[0];
+      
+      // Update member's transfer count
+      await supabase
+        .from('team_members')
+        .update({
+          transfers_today: member.transfers_today + 1,
+          total_transfers_received: member.total_transfers_received + 1,
+          last_call_at: new Date().toISOString()
+        })
+        .eq('id', member.id);
+
+      // Return transfer instruction to Vapi
+      res.json({
+        action: 'transfer',
+        destination: {
+          type: 'number',
+          number: member.phone_number,
+          message: `Transferring you to ${member.name}, our ${member.role}. Please hold.`
+        },
+        result: `Transferring to ${member.name}`
+      });
+      
+    } else {
+      // No available member, offer to take a message
+      res.json({
+        result: `I'm sorry, ${memberName || 'that department'} is not available right now. Would you like me to take a message?`
+      });
+    }
+    
+  } catch (error) {
+    console.error('Transfer error:', error);
+    res.json({
+      result: 'I\'m having trouble transferring your call. Can I take a message instead?'
+    });
+  }
+}
+
+/**
+ * Handle taking a message
+ */
+async function handleTakeMessage(req: any, res: any, call: any, params: any) {
+  try {
+    const { for: forMember, from, phone, message, urgent } = params;
+    const teamId = call.assistantId;
+    
+    // Find the team member
+    const { data: member } = await supabase
+      .from('team_members')
+      .select('id')
+      .eq('team_id', teamId)
+      .eq('name', forMember)
+      .single();
+
+    // Save the message
+    const { error } = await supabase.from('team_messages').insert({
+      team_id: teamId,
+      for_member_id: member?.id,
+      from_name: from,
+      from_phone: phone,
+      message: message,
+      urgent: urgent || false,
+      taken_by: 'ai',
+      created_at: new Date().toISOString()
+    });
+
+    if (error) throw error;
+
+    res.json({
+      result: `I've taken your message for ${forMember}. ${urgent ? 'I\'ve marked it as urgent and' : ''} They will get back to you as soon as possible.`
+    });
+    
+  } catch (error) {
+    console.error('Message error:', error);
+    res.json({
+      result: 'I\'ve noted your message and will make sure it gets delivered.'
+    });
+  }
+}
+
+/**
+ * Handle scheduling a callback
+ */
+async function handleScheduleCallback(req: any, res: any, call: any, params: any) {
+  try {
+    const { callerName, callerPhone, preferredTime, topic, department } = params;
+    const teamId = call.assistantId;
+    
+    // Parse the preferred time (could be like "tomorrow at 2pm" or "Monday morning")
+    let scheduledAt = new Date();
+    
+    // Simple time parsing (you could enhance this with natural language processing)
+    if (preferredTime.toLowerCase().includes('tomorrow')) {
+      scheduledAt.setDate(scheduledAt.getDate() + 1);
+      scheduledAt.setHours(14, 0, 0, 0); // Default to 2 PM
+    } else if (preferredTime.toLowerCase().includes('morning')) {
+      scheduledAt.setHours(10, 0, 0, 0); // Default to 10 AM
+    } else if (preferredTime.toLowerCase().includes('afternoon')) {
+      scheduledAt.setHours(14, 0, 0, 0); // Default to 2 PM
+    } else if (preferredTime.toLowerCase().includes('evening')) {
+      scheduledAt.setHours(17, 0, 0, 0); // Default to 5 PM
+    }
+    
+    // Create an appointment in the new appointments table
+    const { data: appointment, error: appointmentError } = await supabase
+      .from('appointments')
+      .insert({
+        team_id: teamId,
+        title: `Callback: ${callerName}`,
+        description: `Topic: ${topic}. Department: ${department || 'General'}`,
+        type: 'call',
+        scheduled_at: scheduledAt.toISOString(),
+        duration_minutes: 30,
+        attendee_name: callerName,
+        attendee_phone: callerPhone,
+        location_type: 'phone',
+        location_details: callerPhone,
+        notes: `Preferred time: ${preferredTime}. Topic: ${topic}`,
+        source: 'ai_assistant',
+        created_by_ai: true,
+        ai_call_id: call.id
+      })
+      .select()
+      .single();
+    
+    if (appointmentError) {
+      console.error('Error creating appointment:', appointmentError);
+      
+      // Fallback to the old message system
+      await supabase.from('team_messages').insert({
+        team_id: teamId,
+        from_name: callerName,
+        from_phone: callerPhone,
+        message: `Callback requested. Topic: ${topic}`,
+        preferred_callback_time: preferredTime,
+        callback_requested: true,
+        created_at: new Date().toISOString()
+      });
+    }
+    
+    // Create a reminder if appointment was successful
+    if (appointment) {
+      const reminderTime = new Date(scheduledAt);
+      reminderTime.setMinutes(reminderTime.getMinutes() - 15); // 15 minutes before
+      
+      await supabase
+        .from('appointment_reminders')
+        .insert({
+          appointment_id: appointment.id,
+          type: 'sms',
+          send_at: reminderTime.toISOString(),
+          recipient_phone: callerPhone,
+          message: `Reminder: You have a callback scheduled in 15 minutes regarding ${topic}`
+        });
+    }
+
+    res.json({
+      result: `Perfect! I've scheduled a callback for ${preferredTime}. Someone from our ${department || 'team'} will call you at ${callerPhone} to discuss ${topic}. You'll receive a reminder before the call.`
+    });
+    
+  } catch (error) {
+    console.error('Callback error:', error);
+    res.json({
+      result: 'I\'ve noted your callback request. Our team will reach out to you soon.'
+    });
+  }
+}
+
+/**
+ * Handle appointment scheduling
+ */
+async function handleScheduleAppointment(req: any, res: any, call: any, params: any) {
+  try {
+    const {
+      appointmentType,
+      customerName,
+      customerPhone,
+      preferredDate,
+      preferredTime,
+      projectAddress,
+      notes
+    } = params;
+
+    console.log('📅 Scheduling appointment from AI call:', {
+      params,
+      callId: call.id,
+      assistantId: call.assistantId,
+      customer: call.customer
+    });
+
+    // Use AI to parse natural language date/time
+    const aiParseResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3001'}/api/ai/schedule-appointment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        input: `Schedule ${appointmentType} with ${customerName} on ${preferredDate} at ${preferredTime}`,
+        teamId: call.assistantId || '11111111-1111-1111-1111-111111111111',
+        projects: [], // Would normally fetch from database
+        currentDate: new Date().toISOString()
+      })
+    });
+
+    if (!aiParseResponse.ok) {
+      throw new Error('Failed to parse appointment details');
+    }
+
+    const aiParsedData = await aiParseResponse.json();
+    console.log('🤖 AI parsing response:', aiParsedData);
+
+    if (!aiParsedData.success) {
+      console.error('❌ AI parsing failed:', aiParsedData.error);
+      throw new Error(aiParsedData.error || 'AI parsing failed');
+    }
+
+    const appointmentData = aiParsedData.appointment;
+    console.log('📋 Parsed appointment data:', appointmentData);
+
+    // Ensure we have valid date and time
+    const appointmentDate = appointmentData.date || new Date().toISOString().split('T')[0];
+    const appointmentTime = appointmentData.time || '10:00';
+    const scheduledAt = `${appointmentDate}T${appointmentTime}:00Z`; // Add timezone
+
+    // Create the appointment
+    const appointmentInsertData = {
+      team_id: call.assistantId || '11111111-1111-1111-1111-111111111111',
+      title: appointmentData.title || `${appointmentType} with ${customerName}`,
+      type: appointmentType,
+      scheduled_at: scheduledAt,
+      duration_minutes: 60,
+      attendee_name: customerName,
+      attendee_phone: customerPhone || call.customer?.number,
+      location_address: projectAddress,
+      work_type: appointmentType === 'site_visit' ? 'outdoor' : 'indoor',
+      notes: `Scheduled during AI call. ${notes || ''}`,
+      source: 'ai_call',
+      created_by_ai: true,
+      ai_call_id: call.id,
+      status: 'scheduled'
+    };
+
+    console.log('💾 Inserting appointment into database:', appointmentInsertData);
+
+    const { data: appointment, error: appointmentError } = await supabase
+      .from('appointments')
+      .insert(appointmentInsertData)
+      .select()
+      .single();
+
+    if (appointmentError) {
+      console.error('❌ Database error creating appointment:', appointmentError);
+      throw appointmentError;
+    }
+
+    console.log('✅ Appointment created successfully:', appointment);
+
+    // Create reminder
+    if (appointment && (customerPhone || call.customer?.number)) {
+      try {
+        const reminderTime = new Date(`${appointmentDate}T${appointmentTime}:00Z`);
+        reminderTime.setHours(reminderTime.getHours() - 1); // 1 hour before
+
+        const { error: reminderError } = await supabase
+          .from('appointment_reminders')
+          .insert({
+            appointment_id: appointment.id,
+            type: 'sms',
+            send_at: reminderTime.toISOString(),
+            recipient_phone: customerPhone || call.customer?.number,
+            message: `Reminder: You have a ${appointmentType} scheduled in 1 hour at ${appointmentTime}`
+          });
+
+        if (reminderError) {
+          console.error('⚠️ Warning: Failed to create reminder:', reminderError);
+          // Don't fail the whole appointment for reminder issues
+        } else {
+          console.log('🔔 Reminder created successfully');
+        }
+      } catch (reminderErr) {
+        console.error('⚠️ Warning: Error creating reminder:', reminderErr);
+        // Don't fail the whole appointment for reminder issues
+      }
+    }
+
+    console.log('✅ Appointment scheduled successfully:', appointment.id);
+
+    res.json({
+      result: `Perfect! I've scheduled your ${appointmentType} for ${preferredDate} at ${preferredTime}. You'll receive a reminder before the appointment.`
+    });
+
+  } catch (error) {
+    console.error('❌ Error scheduling appointment:', {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined,
+      params,
+      callId: call?.id,
+      assistantId: call?.assistantId
+    });
+
+    res.json({
+      result: 'I\'ve noted your appointment request. Our team will confirm the details with you shortly.'
+    });
+  }
+}
+
+/**
+ * Check team member availability
+ */
+async function handleCheckAvailability(_req: any, res: any, call: any, params: any) {
+  try {
+    const { department, memberName } = params;
+    const teamId = call.assistantId;
+    
+    let query = supabase
+      .from('available_team_members')
+      .select('name, department, availability')
+      .eq('team_id', teamId);
+
+    if (memberName) {
+      query = query.eq('name', memberName);
+    } else if (department) {
+      query = query.eq('department', department);
+    }
+
+    const { data: members } = await query;
+
+    if (!members || members.length === 0) {
+      res.json({
+        result: `${memberName || department} is not available right now. Would you like to leave a message?`
+      });
+      return;
+    }
+
+    const available = members.filter(m => m.availability === 'available');
+    
+    if (available.length > 0) {
+      res.json({
+        result: `Yes, ${memberName || `someone in ${department}`} is available. Would you like me to transfer you?`
+      });
+    } else {
+      const busy = members.filter(m => m.availability === 'busy');
+      if (busy.length > 0) {
+        res.json({
+          result: `${memberName || `The ${department} team`} is currently busy with another call. Would you like to hold or leave a message?`
+        });
+      } else {
+        res.json({
+          result: `${memberName || `The ${department} team`} is offline right now. Can I take a message?`
+        });
+      }
+    }
+    
+  } catch (error) {
+    console.error('Availability check error:', error);
+    res.json({
+      result: 'Let me check on that for you. One moment please.'
+    });
+  }
+}
+
+/**
+ * Handle call status updates
+ */
+router.post('/vapi/webhooks/status-update', async (req, res) => {
+  try {
+    const { call, status } = req.body;
+    
+    console.log('📞 Call status update:', status, call.id);
+
+    // Update call log
+    await supabase
+      .from('call_logs')
+      .update({
+        status: status.type,
+        duration_seconds: status.duration,
+        ended_at: status.endedAt,
+        cost_estimate: status.cost
+      })
+      .eq('vapi_call_id', call.id);
+
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('Status update error:', error);
+    res.status(500).json({ error: 'Failed to update call status' });
+  }
+});
+
+/**
+ * Handle call ended webhook
+ */
+router.post('/vapi/webhooks/call-ended', async (req, res) => {
+  try {
+    const { call, reason, recording } = req.body;
+    
+    console.log('📞 Call ended:', call.id, reason);
+
+    // Update call log with final details
+    await supabase
+      .from('call_logs')
+      .update({
+        status: 'completed',
+        duration_seconds: call.duration,
+        ended_at: new Date().toISOString(),
+        recording_url: recording?.url
+      })
+      .eq('vapi_call_id', call.id);
+
+    // Update any pending transfers
+    await supabase
+      .from('call_transfers')
+      .update({
+        transfer_status: reason === 'hangup' ? 'completed' : 'failed',
+        duration_seconds: call.duration
+      })
+      .eq('call_id', call.id)
+      .eq('transfer_status', 'initiated');
+
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('Call ended error:', error);
+    res.status(500).json({ error: 'Failed to handle call end' });
+  }
+});
+
+export default router;

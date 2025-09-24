@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomeQuest Floor Plan Upload</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #fafafa;
+        }
+
+        .upload-area:hover,
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .upload-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f4ff;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s;
+            display: none;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .upload-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.processing {
+            background: #cce5ff;
+            color: #004085;
+            border: 1px solid #b8daff;
+        }
+
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            margin-top: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            display: none;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #eee;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏠 HomeQuest RAG</h1>
+        <p class="subtitle">Upload floor plans to train the AI system</p>
+
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📐</div>
+            <p>Drag & drop your floor plan here</p>
+            <p style="margin-top: 10px; color: #999;">or click to browse</p>
+            <input type="file" id="fileInput" accept="image/*,.pdf">
+        </div>
+
+        <div class="file-info" id="fileInfo">
+            <strong>Selected file:</strong> <span id="fileName"></span><br>
+            <strong>Size:</strong> <span id="fileSize"></span>
+        </div>
+
+        <img class="preview-image" id="previewImage" alt="Floor plan preview">
+
+        <button class="upload-btn" id="uploadBtn">Upload to RAG System</button>
+
+        <div class="status" id="status"></div>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value" id="totalPlans">Loading...</div>
+                <div class="stat-label">Plans Learned</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="roomsAnalyzed">Loading...</div>
+                <div class="stat-label">Rooms Analyzed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="processingSpeed">2/min</div>
+                <div class="stat-label">Processing Speed</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:4000';
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const status = document.getElementById('status');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const previewImage = document.getElementById('previewImage');
+        let selectedFile = null;
+
+        // Load stats
+        async function loadStats() {
+            try {
+                const response = await fetch('/workspaces/codespaces-blank/construction-platform/homequest-api/auto-learner-stats.json');
+                const stats = await response.json();
+                document.getElementById('totalPlans').textContent = stats.totalLearned || '0';
+                document.getElementById('roomsAnalyzed').textContent = stats.commonRoomTypes?.[0]?.[1] || '0';
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        loadStats();
+        setInterval(loadStats, 30000); // Refresh every 30 seconds
+
+        // Handle click to browse
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        // Handle file selection
+        fileInput.addEventListener('change', (e) => {
+            handleFileSelect(e.target.files[0]);
+        });
+
+        // Handle drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFileSelect(e.dataTransfer.files[0]);
+        });
+
+        function handleFileSelect(file) {
+            if (!file) return;
+
+            selectedFile = file;
+            fileName.textContent = file.name;
+            fileSize.textContent = (file.size / 1024).toFixed(2) + ' KB';
+            fileInfo.style.display = 'block';
+            uploadBtn.style.display = 'block';
+
+            // Show preview if it's an image
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    previewImage.src = e.target.result;
+                    previewImage.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // Handle upload
+        uploadBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            uploadBtn.disabled = true;
+            status.className = 'status processing';
+            status.textContent = 'Uploading and processing floor plan...';
+            status.style.display = 'block';
+
+            const formData = new FormData();
+            formData.append('floorPlan', selectedFile);
+            formData.append('projectId', 'rag-training-' + Date.now());
+            formData.append('name', selectedFile.name);
+
+            try {
+                const response = await fetch(`${API_URL}/api/floor-plans/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    status.className = 'status success';
+                    status.innerHTML = `
+                        ✅ Successfully uploaded!<br>
+                        Job ID: ${result.jobId}<br>
+                        The floor plan is being processed by the RAG system.
+                    `;
+                    
+                    // Reset after success
+                    setTimeout(() => {
+                        selectedFile = null;
+                        fileInput.value = '';
+                        fileInfo.style.display = 'none';
+                        previewImage.style.display = 'none';
+                        uploadBtn.style.display = 'none';
+                        uploadBtn.disabled = false;
+                        loadStats(); // Refresh stats
+                    }, 5000);
+                } else {
+                    throw new Error(result.message || 'Upload failed');
+                }
+            } catch (error) {
+                status.className = 'status error';
+                status.textContent = '❌ Error: ' + error.message;
+                uploadBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

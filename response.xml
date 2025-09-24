@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">Thank you for calling our company. Please hold while we connect you to our assistant.</Say>
+  <Pause length="2"/>
+  <Say>We're experiencing technical difficulties. Please call back in a few minutes or leave a message after the tone.</Say>
+  <Record maxLength="120" action="/api/twilio/voicemail" />
+</Response>
