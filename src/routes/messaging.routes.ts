@@ -87,13 +87,13 @@ router.post('/send', async (req, res) => {
 
     // Send via Twilio
     const twilioClient = require('twilio')(
-      process.env.TWILIO_ACCOUNT_SID || 'ACdced5b7ba48a5d47222ee6c2fe041419',
-      process.env.TWILIO_AUTH_TOKEN || 'b744e1efe1c156fd8f391be7785aa4a1'
+      process.env.TWILIO_ACCOUNT_SID,
+      process.env.TWILIO_AUTH_TOKEN
     );
 
     const messageOptions: any = {
       body: message,
-      from: process.env.TWILIO_PHONE_NUMBER || '+16783253060',
+      from: process.env.TWILIO_PHONE_NUMBER,
       to: formattedPhone,
       statusCallback: `${process.env.WEBHOOK_BASE_URL}/api/messaging/webhook/status`
     };
@@ -314,7 +314,7 @@ router.get('/conversations/:conversationId/messages', async (req, res) => {
         id: 'msg_1',
         conversationId,
         from: '+1234567890',
-        to: '+16783253060',
+        to: process.env.TWILIO_PHONE_NUMBER,
         body: 'Hi, I wanted to check on the project status.',
         status: 'delivered',
         direction: 'inbound',
@@ -324,7 +324,7 @@ router.get('/conversations/:conversationId/messages', async (req, res) => {
       {
         id: 'msg_2',
         conversationId,
-        from: '+16783253060',
+        from: process.env.TWILIO_PHONE_NUMBER,
         to: '+1234567890',
         body: 'Thanks for reaching out! The foundation work is complete and we\'re starting framing next week.',
         status: 'delivered',
@@ -336,7 +336,7 @@ router.get('/conversations/:conversationId/messages', async (req, res) => {
         id: 'msg_3',
         conversationId,
         from: '+1234567890',
-        to: '+16783253060',
+        to: process.env.TWILIO_PHONE_NUMBER,
         body: 'That\'s great news! Will the electrical rough-in be ready by Friday?',
         status: 'delivered',
         direction: 'inbound',
@@ -461,8 +461,8 @@ router.post('/bulk-send', async (req, res) => {
     }
 
     const twilioClient = require('twilio')(
-      process.env.TWILIO_ACCOUNT_SID || 'ACdced5b7ba48a5d47222ee6c2fe041419',
-      process.env.TWILIO_AUTH_TOKEN || 'b744e1efe1c156fd8f391be7785aa4a1'
+      process.env.TWILIO_ACCOUNT_SID,
+      process.env.TWILIO_AUTH_TOKEN
     );
 
     const results = [];
@@ -480,7 +480,7 @@ router.post('/bulk-send', async (req, res) => {
 
         const messageOptions: any = {
           body: message.replace(/\{name\}/g, recipient.name || 'there'),
-          from: process.env.TWILIO_PHONE_NUMBER || '+16783253060',
+          from: process.env.TWILIO_PHONE_NUMBER,
           to: formattedPhone,
           statusCallback: `${process.env.WEBHOOK_BASE_URL}/api/messaging/webhook/status`
         };

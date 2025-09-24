@@ -8,12 +8,12 @@ import { createClient } from '@supabase/supabase-js';
 import { VoiceResponse } from 'twilio/lib/twiml/VoiceResponse';
 
 const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID || 'ACdced5b7ba48a5d47222ee6c2fe041419',
-  process.env.TWILIO_AUTH_TOKEN || 'b744e1efe1c156fd8f391be7785aa4a1'
+  process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN
 );
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || 'sk-proj-fakekey'
+  apiKey: process.env.OPENAI_API_KEY
 });
 
 const supabase = createClient(
@@ -107,7 +107,7 @@ class BillionaireAIVoiceService {
     await twilioClient.messages.create({
       body: smsMessage,
       to: params.vendorPhone,
-      from: process.env.TWILIO_PHONE_NUMBER || '+16783253060'
+      from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER
     });
 
     // STEP 2: Wait 30 seconds then call
@@ -156,7 +156,7 @@ Project ID: ${context.projectId}`;
 
     const call = await twilioClient.calls.create({
       to: vendorPhone,
-      from: process.env.TWILIO_PHONE_NUMBER || '+16783253060',
+      from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER,
       twiml: `
         <Response>
           <Say voice="Polly.Matthew-Neural">
@@ -683,7 +683,7 @@ Project ID: ${context.projectId}`;
     await twilioClient.messages.create({
       body: message,
       to: state.projectContext.vendorInfo.company, // Should be phone number
-      from: process.env.TWILIO_PHONE_NUMBER || '+16783253060'
+      from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER
     });
   }
 }

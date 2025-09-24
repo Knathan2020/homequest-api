@@ -5,8 +5,8 @@ import twilio from 'twilio';
 import OpenAI from 'openai';
 
 const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID || 'ACdced5b7ba48a5d47222ee6c2fe041419',
-  process.env.TWILIO_AUTH_TOKEN || 'b744e1efe1c156fd8f391be7785aa4a1'
+  process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN
 );
 
 const openai = new OpenAI({
@@ -84,7 +84,7 @@ class ConversationalAIService {
       // Initial greeting with ability to respond
       const call = await twilioClient.calls.create({
         to: params.to,
-        from: process.env.TWILIO_PHONE_NUMBER || '+16783253060',
+        from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER,
         twiml: `
           <Response>
             <Say voice="Polly.Matthew">

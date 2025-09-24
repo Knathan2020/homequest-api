@@ -105,7 +105,7 @@ Keep it conversational and authentic. You're hiring, not selling.`;
         {
           agent_id: agentId,
           to_number: params.to,
-          from_number: process.env.TWILIO_PHONE_NUMBER || '+16783253060',
+          from_number: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER,
           metadata: {
             vendor_name: params.vendorName,
             vendor_company: params.vendorCompany,

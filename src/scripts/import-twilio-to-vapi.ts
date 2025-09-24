@@ -13,7 +13,7 @@ async function importTwilioToVAPI() {
   const VAPI_API_KEY = process.env.VAPI_API_KEY;
   const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
   const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-  const PHONE_NUMBER = '+16783253060';
+  const PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
   const WEBHOOK_URL = 'https://cuddly-giggle-69p59v4xv5gw2rvw7-4000.app.github.dev/api/vapi/webhook';
   
   const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);

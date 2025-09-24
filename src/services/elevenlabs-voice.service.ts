@@ -101,7 +101,7 @@ class ElevenLabsVoiceService {
 
       const call = await twilioClient.calls.create({
         to: params.to,
-        from: process.env.TWILIO_PHONE_NUMBER || '+16783253060',
+        from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER,
         twiml: twimlResponse,
         statusCallback: `${webhookBase}/api/elevenlabs/status`,
         statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed']

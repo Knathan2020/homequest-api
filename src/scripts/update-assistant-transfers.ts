@@ -140,7 +140,7 @@ async function updateAssistantWithTransfers() {
       }
     );
     
-    const ourPhone = phoneResponse.data.find((p: any) => p.number === '+16783253060');
+    const ourPhone = phoneResponse.data.find((p: any) => p.number === process.env.TWILIO_PHONE_NUMBER);
     if (ourPhone) {
       console.log('   Phone is using assistant:', ourPhone.assistantId === ASSISTANT_ID ? '✅ Correct' : '❌ Wrong');
     }

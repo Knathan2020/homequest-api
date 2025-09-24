@@ -5,9 +5,9 @@ import twilio from 'twilio';
 const router = express.Router();
 
 // Your Twilio credentials
-const accountSid = 'ACdced5b7ba48a5d47222ee6c2fe041419';
-const authToken = 'b744e1efe1c156fd8f391be7785aa4a1';
-const fromNumber = '+16783253060';
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+const fromNumber = process.env.TWILIO_PHONE_NUMBER;
 
 const client = twilio(accountSid, authToken);
 
@@ -30,7 +30,7 @@ router.post('/test-call', async (req, res) => {
 
     // Make the call
     const call = await client.calls.create({
-      to: to || '+16783253060', // Default to your number for testing
+      to: to || process.env.TWILIO_PHONE_NUMBER, // Default to your number for testing
       from: fromNumber,
       url: twimlUrl
     });
@@ -55,7 +55,7 @@ router.post('/test-sms', async (req, res) => {
     const { to, message = 'Hello from HomeQuest!' } = req.body;
     
     const sms = await client.messages.create({
-      to: to || '+16783253060',
+      to: to || process.env.TWILIO_PHONE_NUMBER,
       from: fromNumber,
       body: message
     });

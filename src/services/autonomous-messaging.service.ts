@@ -13,8 +13,8 @@ const supabase = createClient(
 );
 
 const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID || 'ACdced5b7ba48a5d47222ee6c2fe041419',
-  process.env.TWILIO_AUTH_TOKEN || 'b744e1efe1c156fd8f391be7785aa4a1'
+  process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN
 );
 
 const openai = new OpenAI({
@@ -270,7 +270,7 @@ class AutonomousMessagingService {
       // Send via Twilio
       const message = await twilioClient.messages.create({
         body: personalizedMessage,
-        from: process.env.TWILIO_PHONE_NUMBER || '+16783253060',
+        from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER,
         to: vendor.phone,
         statusCallback: `${process.env.WEBHOOK_BASE_URL}/api/messaging/status`
       });
@@ -423,7 +423,7 @@ class AutonomousMessagingService {
     try {
       const response = await twilioClient.messages.create({
         body: message,
-        from: process.env.TWILIO_PHONE_NUMBER || '+16783253060',
+        from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER,
         to: vendor.phone
       });
       

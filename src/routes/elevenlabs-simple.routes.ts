@@ -65,7 +65,7 @@ router.post('/call-simple', async (req: Request, res: Response) => {
 
     const call = await twilioClient.calls.create({
       to,
-      from: process.env.TWILIO_PHONE_NUMBER || '+16783253060',
+      from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER,
       twiml: twimlResponse
     });
 

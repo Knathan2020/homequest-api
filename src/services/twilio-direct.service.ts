@@ -6,8 +6,8 @@
 import twilio from 'twilio';
 
 // Use HomeQuest's Twilio credentials
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || 'ACdced5b7ba48a5d47222ee6c2fe041419';
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || 'b744e1efe1c156fd8f391be7785aa4a1';
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN;
 
 class TwilioDirectService {
   public client: any;

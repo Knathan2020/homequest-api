@@ -5,9 +5,9 @@ import twilio from 'twilio';
 import { createClient } from '@supabase/supabase-js';
 
 // HomeQuest's Master Twilio Account
-const HOMEQUEST_TWILIO_SID = process.env.TWILIO_ACCOUNT_SID || 'ACdced5b7ba48a5d47222ee6c2fe041419';
-const HOMEQUEST_TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN || 'b744e1efe1c156fd8f391be7785aa4a1';
-const HOMEQUEST_PHONE = process.env.TWILIO_PHONE_NUMBER || '+16783253060';
+const HOMEQUEST_TWILIO_SID = process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID;
+const HOMEQUEST_TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN;
+const HOMEQUEST_PHONE = process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER;
 
 // Supabase
 const supabase = createClient(

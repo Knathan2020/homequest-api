@@ -8,8 +8,8 @@ import { createClient } from '@supabase/supabase-js';
 import callPreparationService, { EnhancedCallContext } from './call-preparation.service';
 
 const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID || 'ACdced5b7ba48a5d47222ee6c2fe041419',
-  process.env.TWILIO_AUTH_TOKEN || 'b744e1efe1c156fd8f391be7785aa4a1'
+  process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN
 );
 
 const supabase = createClient(
@@ -77,7 +77,7 @@ class OpenAIRealtimeAPIService {
 
       const call = await twilioClient.calls.create({
         to: params.to,
-        from: process.env.TWILIO_PHONE_NUMBER || '+16783253060',
+        from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER,
         twiml: twimlResponse,
         statusCallback: `${webhookBase}/api/realtime/status`,
         statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed']
@@ -158,7 +158,7 @@ class OpenAIRealtimeAPIService {
 
       const call = await twilioClient.calls.create({
         to: params.to,
-        from: process.env.TWILIO_PHONE_NUMBER || '+16783253060',
+        from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER,
         twiml: twimlResponse,
         statusCallback: `${webhookBase}/api/realtime/status`,
         statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed']

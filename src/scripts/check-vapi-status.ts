@@ -13,7 +13,7 @@ async function checkVAPIStatus() {
   const VAPI_API_KEY = process.env.VAPI_API_KEY;
   const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
   const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-  const PHONE_NUMBER = '+16783253060';
+  const PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
   const PHONE_ID = '86c3e687-5341-41b0-ace4-99de82452de0';
   
   const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);

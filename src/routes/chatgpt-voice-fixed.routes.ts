@@ -80,7 +80,7 @@ router.post('/chatgpt-voice-fixed/call', async (req, res) => {
     // Make the call
     const call = await twilioClient.calls.create({
       to,
-      from: process.env.TWILIO_PHONE_NUMBER || '+16783253060',
+      from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER,
       twiml: twiml.toString(),
       statusCallback: `${baseUrl}/api/chatgpt-voice-fixed/status`,
       statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],

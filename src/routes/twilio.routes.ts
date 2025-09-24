@@ -11,7 +11,7 @@ const router = express.Router();
 const validateTwilioWebhook = (req: Request, res: Response, next: Function) => {
   const twilioSignature = req.headers['x-twilio-signature'] as string;
   const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
-  const authToken = process.env.TWILIO_AUTH_TOKEN || '';
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
   
   if (process.env.NODE_ENV === 'production') {
     const isValid = twilio.validateRequest(

@@ -19,7 +19,7 @@ async function testInboundCallSequence() {
       call: {
         id: callId,
         type: 'inboundPhoneCall',
-        phoneNumberId: '66587aff-c4e6-48bd-9c29-966040ffc2e7',
+        phoneNumberId: process.env.VAPI_PHONE_NUMBER || '',
         customer: {
           number: '+16789005531'
         }

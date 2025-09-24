@@ -13,7 +13,7 @@ async function fixVAPIImport() {
   const VAPI_API_KEY = process.env.VAPI_API_KEY;
   const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
   const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-  const PHONE_NUMBER = '+16783253060';
+  const PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
   const PHONE_ID = '86c3e687-5341-41b0-ace4-99de82452de0';
   const ASSISTANT_ID = '29cb6658-7227-4779-b8df-315de7f69c73';
   const WEBHOOK_URL = 'https://cuddly-giggle-69p59v4xv5gw2rvw7-4000.app.github.dev/api/vapi/webhook';
