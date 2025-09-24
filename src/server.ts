@@ -1,358 +1,528 @@
-/**
- * Server Initialization
- * HTTP server setup with graceful shutdown and clustering support
- */
-
-import http from 'http';
-import https from 'https';
-import fs from 'fs';
-import path from 'path';
-import cluster from 'cluster';
-import os from 'os';
+import express from 'express';
+import cors from 'cors';
+import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { AddressInfo } from 'net';
 
-// Load environment variables
 dotenv.config();
 
-// Import app
-import app from './app';
-import { loggers } from './utils/logger';
-import { setupDirectWebSocket } from './websocket-handler';
-import autonomousCallingService from './services/autonomous-calling.service';
-import autonomousMessagingService from './services/autonomous-messaging.service';
+const app = express();
+const PORT = process.env.PORT || 3001;
 
-// Configuration
-const PORT = parseInt(process.env.PORT || '4000', 10);
-const HOST = process.env.HOST || '0.0.0.0';
-const NODE_ENV = process.env.NODE_ENV || 'development';
-const USE_HTTPS = process.env.USE_HTTPS === 'true';
-const USE_CLUSTER = process.env.USE_CLUSTER === 'true' && NODE_ENV === 'production';
-const WORKER_COUNT = parseInt(process.env.WORKER_COUNT || String(os.cpus().length), 10);
-const SHUTDOWN_TIMEOUT = parseInt(process.env.SHUTDOWN_TIMEOUT || '10000', 10);
+// Supabase setup
+const supabaseUrl = process.env.SUPABASE_URL || 'https://fbwmkkskdrvaipmkddwm.supabase.co';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZid21ra3NrZHJ2YWlwbWtkZHdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE2ODI4MTcsImV4cCI6MjA2NzI1ODgxN30.-rBrI8a56Pc-5ROhiZaGtK6QwH1qrZOt7Osmj-lqeJc';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Server instance
-let server: http.Server | https.Server;
+// Middleware
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-/**
- * Create HTTP or HTTPS server
- */
-const createServer = (): http.Server | https.Server => {
-  if (USE_HTTPS) {
-    // HTTPS configuration
-    const httpsOptions = {
-      key: fs.readFileSync(process.env.SSL_KEY_PATH || path.join(__dirname, '../ssl/key.pem')),
-      cert: fs.readFileSync(process.env.SSL_CERT_PATH || path.join(__dirname, '../ssl/cert.pem')),
-      ...(process.env.SSL_CA_PATH && {
-        ca: fs.readFileSync(process.env.SSL_CA_PATH)
-      })
+// Authentication middleware
+const authenticateUser = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+
+    if (!token) {
+      // Allow public access for now but no user context
+      req.user = null;
+      return next();
+    }
+
+    // Verify the token with Supabase
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      req.user = null;
+      return next();
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error('Auth middleware error:', error);
+    req.user = null;
+    next();
+  }
+};
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ============= PROJECTS API =============
+app.get('/api/projects', authenticateUser, async (req, res) => {
+  try {
+    let query = supabase
+      .from('projects')
+      .select('*');
+
+    // If user is authenticated, filter by user_id
+    if (req.user) {
+      query = query.eq('user_id', req.user.id);
+    } else {
+      // No user authenticated, return empty array for security
+      return res.json({ success: true, data: [] });
+    }
+
+    const { data: projects, error } = await query.order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ success: true, data: projects || [] });
+  } catch (error) {
+    console.error('Error fetching projects:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/projects/:id', async (req, res) => {
+  try {
+    const { data: project, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+
+    if (error) throw error;
+
+    res.json({ success: true, data: project });
+  } catch (error) {
+    console.error('Error fetching project:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/projects', authenticateUser, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    // Add user_id to the project data
+    const projectData = {
+      ...req.body,
+      user_id: req.user.id
     };
-    return https.createServer(httpsOptions, app);
-  } else {
-    return http.createServer(app);
+
+    const { data: project, error } = await supabase
+      .from('projects')
+      .insert([projectData])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.status(201).json({ success: true, data: project });
+  } catch (error) {
+    console.error('Error creating project:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
-};
+});
 
-/**
- * Start server
- */
-const startServer = (): void => {
-  server = createServer();
+app.put('/api/projects/:id', async (req, res) => {
+  try {
+    const { data: project, error } = await supabase
+      .from('projects')
+      .update(req.body)
+      .eq('id', req.params.id)
+      .select()
+      .single();
 
-  // Handle server errors
-  server.on('error', (error: NodeJS.ErrnoException) => {
-    if (error.syscall !== 'listen') {
-      throw error;
-    }
+    if (error) throw error;
 
-    switch (error.code) {
-      case 'EACCES':
-        console.error(`❌ Port ${PORT} requires elevated privileges`);
-        process.exit(1);
-        break;
-      case 'EADDRINUSE':
-        console.error(`❌ Port ${PORT} is already in use`);
-        process.exit(1);
-        break;
-      default:
-        throw error;
-    }
-  });
+    res.json({ success: true, data: project });
+  } catch (error) {
+    console.error('Error updating project:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
-  // WebSocket setup will be done after server starts listening
-  
-  // Start listening
-  server.listen(PORT, HOST, () => {
-    const address = server.address() as AddressInfo;
-    
-    // Set up direct WebSocket handling for Twilio streams AFTER server is listening
-    setupDirectWebSocket(server);
-    
-    // Initialize autonomous calling system
-    autonomousCallingService.initialize().catch(console.error);
-    
-    // Initialize autonomous messaging system
-    autonomousMessagingService.initialize().catch(console.error);
-    
-    const protocol = USE_HTTPS ? 'https' : 'http';
-    const workerId = cluster.worker?.id || 'main';
-    
-    console.log(`
-╔════════════════════════════════════════════════════════════╗
-║                                                            ║
-║     🏗️  HomeQuest Floor Plan Processing API                ║
-║                                                            ║
-╠════════════════════════════════════════════════════════════╣
-║                                                            ║
-║  🚀 Server Started Successfully                            ║
-║                                                            ║
-║  📡 Address:  ${protocol}://${address.address}:${address.port}${' '.repeat(Math.max(0, 29 - (protocol.length + address.address.length + String(address.port).length)))}║
-║  🌍 Environment: ${NODE_ENV}${' '.repeat(Math.max(0, 41 - NODE_ENV.length))}║
-║  👷 Worker: ${workerId}${' '.repeat(Math.max(0, 46 - String(workerId).length))}║
-║  ⏰ Started: ${new Date().toISOString()}${' '.repeat(15)}║
-║                                                            ║
-╠════════════════════════════════════════════════════════════╣
-║                                                            ║
-║  📊 Endpoints:                                             ║
-║                                                            ║
-║  • Health Check: ${protocol}://${HOST}:${PORT}/health${' '.repeat(Math.max(0, 22 - (protocol.length + HOST.length + String(PORT).length)))}║
-║  • API Info: ${protocol}://${HOST}:${PORT}/api${' '.repeat(Math.max(0, 27 - (protocol.length + HOST.length + String(PORT).length)))}║
-║  • Floor Plans: ${protocol}://${HOST}:${PORT}/api/floor-plans${' '.repeat(Math.max(0, 16 - (protocol.length + HOST.length + String(PORT).length)))}║
-║                                                            ║
-╚════════════════════════════════════════════════════════════╝
-    `);
+app.delete('/api/projects/:id', async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', req.params.id);
 
-    // Log additional configuration in development
-    if (NODE_ENV === 'development') {
-      console.log('📝 Development Mode - Verbose logging enabled');
-      console.log('🔧 Configuration:', {
-        port: PORT,
-        host: HOST,
-        https: USE_HTTPS,
-        cluster: USE_CLUSTER,
-        workers: USE_CLUSTER ? WORKER_COUNT : 1,
-        shutdownTimeout: SHUTDOWN_TIMEOUT
+    if (error) throw error;
+
+    res.json({ success: true, message: 'Project deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============= BUILDINGS API =============
+app.get('/api/buildings', async (req, res) => {
+  try {
+    const { data: buildings, error } = await supabase
+      .from('buildings')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ success: true, data: buildings || [] });
+  } catch (error) {
+    console.error('Error fetching buildings:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/buildings', async (req, res) => {
+  try {
+    const { data: building, error } = await supabase
+      .from('buildings')
+      .insert([req.body])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.status(201).json({ success: true, data: building });
+  } catch (error) {
+    console.error('Error creating building:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============= NOTIFICATIONS API =============
+app.post('/api/notifications', async (req, res) => {
+  try {
+    const { data: notification, error } = await supabase
+      .from('notifications')
+      .insert([req.body])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.status(201).json({ success: true, data: notification });
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============= TEAM API =============
+app.get('/api/team/:teamId/members', async (req, res) => {
+  try {
+    const { data: members, error } = await supabase
+      .from('team_members')
+      .select('*')
+      .eq('team_id', req.params.teamId);
+
+    if (error) throw error;
+
+    res.json({ success: true, data: members || [] });
+  } catch (error) {
+    console.error('Error fetching team members:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/team/:teamId/members', async (req, res) => {
+  try {
+    const memberData = { ...req.body, team_id: req.params.teamId };
+    const { data: member, error } = await supabase
+      .from('team_members')
+      .insert([memberData])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.status(201).json({ success: true, data: member });
+  } catch (error) {
+    console.error('Error adding team member:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============= ATTACHMENTS API =============
+app.post('/api/attachments/process', async (req, res) => {
+  try {
+    // Process attachment logic here
+    const { file, projectId } = req.body;
+
+    // For now, just save to database
+    const { data: attachment, error } = await supabase
+      .from('attachments')
+      .insert([{
+        project_id: projectId,
+        file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+        url: file.url || '',
+        created_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({ success: true, data: attachment });
+  } catch (error) {
+    console.error('Error processing attachment:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============= VENDOR BIDDING API =============
+app.get('/api/vendor-bidding/projects/:projectId/bidding-details', async (req, res) => {
+  try {
+    const { data: details, error } = await supabase
+      .from('vendor_bids')
+      .select('*')
+      .eq('project_id', req.params.projectId);
+
+    if (error) throw error;
+
+    res.json({ success: true, data: details || [] });
+  } catch (error) {
+    console.error('Error fetching bidding details:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/vendor-bidding/projects/:projectId/line-items', async (req, res) => {
+  try {
+    const { data: items, error } = await supabase
+      .from('project_line_items')
+      .select('*')
+      .eq('project_id', req.params.projectId);
+
+    if (error) throw error;
+
+    res.json({ success: true, data: items || [] });
+  } catch (error) {
+    console.error('Error fetching line items:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/vendor-bidding/vendor/submit-bid', async (req, res) => {
+  try {
+    const { data: bid, error } = await supabase
+      .from('vendor_bids')
+      .insert([req.body])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.status(201).json({ success: true, data: bid });
+  } catch (error) {
+    console.error('Error submitting bid:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============= VENDOR BIDS ENDPOINT =============
+app.get('/api/vendor-bidding/projects/:projectId/bids', async (req, res) => {
+  try {
+    const { data: bids, error } = await supabase
+      .from('bids')
+      .select(`
+        *,
+        vendor:vendors(*)
+      `)
+      .eq('project_id', req.params.projectId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json(bids || []);
+  } catch (error) {
+    console.error('Error fetching bids:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============= USAGE ENDPOINT =============
+app.get('/api/usage/today/:teamId', async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Fetch usage data
+    const { data: usageData, error } = await supabase
+      .from('usage_logs')
+      .select('*')
+      .eq('team_id', req.params.teamId)
+      .gte('created_at', today.toISOString())
+      .lt('created_at', tomorrow.toISOString());
+
+    let usage = {
+      team_id: req.params.teamId,
+      date: today.toISOString().split('T')[0],
+      api_calls: 0,
+      tokens_used: 0,
+      storage_mb: 0,
+      bandwidth_mb: 0,
+      email_sent: 0,
+      phone_minutes: 0,
+      ai_requests: 0
+    };
+
+    if (usageData && usageData.length > 0) {
+      usageData.forEach(log => {
+        usage.api_calls += log.api_calls || 0;
+        usage.tokens_used += log.tokens_used || 0;
+        usage.storage_mb += log.storage_mb || 0;
+        usage.bandwidth_mb += log.bandwidth_mb || 0;
+        usage.email_sent += log.email_sent || 0;
+        usage.phone_minutes += log.phone_minutes || 0;
+        usage.ai_requests += log.ai_requests || 0;
       });
     }
-  });
 
-  // Handle keep-alive connections
-  server.keepAliveTimeout = parseInt(process.env.KEEP_ALIVE_TIMEOUT || '65000', 10);
-  server.headersTimeout = parseInt(process.env.HEADERS_TIMEOUT || '66000', 10);
-};
+    // Calculate costs
+    usage.estimated_cost = {
+      api_calls: usage.api_calls * 0.0001,
+      tokens: usage.tokens_used * 0.00002,
+      storage: usage.storage_mb * 0.023,
+      bandwidth: usage.bandwidth_mb * 0.087,
+      email: usage.email_sent * 0.0001,
+      phone: usage.phone_minutes * 0.015,
+      ai: usage.ai_requests * 0.002,
+      total: 0
+    };
 
-/**
- * Graceful shutdown handler
- */
-const gracefulShutdown = async (signal: string): Promise<void> => {
-  console.log(`\n📍 Received ${signal} signal, starting graceful shutdown...`);
+    usage.estimated_cost.total = Object.values(usage.estimated_cost)
+      .filter(v => typeof v === 'number')
+      .reduce((sum, cost) => sum + cost, 0);
 
-  // Stop accepting new connections
-  server.close(async () => {
-    console.log('✅ HTTP server closed');
-
-    try {
-      // Close database connections
-      await closeDatabaseConnections();
-
-      // Close Redis connections
-      await closeRedisConnections();
-
-      // Close message queues
-      await closeMessageQueues();
-
-      // Clean up temporary files
-      await cleanupTempFiles();
-
-      console.log('✅ All connections closed successfully');
-      process.exit(0);
-    } catch (error) {
-      console.error('❌ Error during graceful shutdown:', error);
-      process.exit(1);
-    }
-  });
-
-  // Force shutdown after timeout
-  setTimeout(() => {
-    console.error('❌ Forced shutdown after timeout');
-    process.exit(1);
-  }, SHUTDOWN_TIMEOUT);
-
-  // Track active connections
-  const connections = new Set<any>();
-  
-  server.on('connection', (connection) => {
-    connections.add(connection);
-    connection.on('close', () => {
-      connections.delete(connection);
-    });
-  });
-
-  // Close active connections
-  console.log(`📊 Closing ${connections.size} active connections...`);
-  connections.forEach((connection) => {
-    connection.end();
-  });
-
-  // Destroy connections that don't close gracefully
-  setTimeout(() => {
-    connections.forEach((connection) => {
-      connection.destroy();
-    });
-  }, 5000);
-};
-
-/**
- * Close database connections
- */
-const closeDatabaseConnections = async (): Promise<void> => {
-  // TODO: Implement actual database connection cleanup
-  console.log('🔌 Closing database connections...');
-  return new Promise((resolve) => {
-    setTimeout(resolve, 100);
-  });
-};
-
-/**
- * Close Redis connections
- */
-const closeRedisConnections = async (): Promise<void> => {
-  // TODO: Implement actual Redis connection cleanup
-  console.log('🔌 Closing Redis connections...');
-  return new Promise((resolve) => {
-    setTimeout(resolve, 100);
-  });
-};
-
-/**
- * Close message queue connections
- */
-const closeMessageQueues = async (): Promise<void> => {
-  // TODO: Implement actual message queue cleanup
-  console.log('🔌 Closing message queue connections...');
-  return new Promise((resolve) => {
-    setTimeout(resolve, 100);
-  });
-};
-
-/**
- * Clean up temporary files
- */
-const cleanupTempFiles = async (): Promise<void> => {
-  console.log('🧹 Cleaning up temporary files...');
-  const tempDir = path.join(__dirname, '../../temp');
-  
-  if (fs.existsSync(tempDir)) {
-    try {
-      const files = fs.readdirSync(tempDir);
-      for (const file of files) {
-        const filePath = path.join(tempDir, file);
-        const stats = fs.statSync(filePath);
-        const ageInHours = (Date.now() - stats.mtimeMs) / (1000 * 60 * 60);
-        
-        // Delete files older than 24 hours
-        if (ageInHours > 24) {
-          fs.unlinkSync(filePath);
-        }
-      }
-    } catch (error) {
-      console.error('Error cleaning temp files:', error);
-    }
+    res.json(usage);
+  } catch (error) {
+    console.error('Error fetching usage:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
-};
+});
 
-/**
- * Setup process handlers
- */
-const setupProcessHandlers = (): void => {
-  // Graceful shutdown handlers
-  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+// ============= AI ENDPOINTS (Placeholder) =============
+// These need actual AI implementation
+app.post('/api/ai/vendor', async (req, res) => {
+  res.json({ success: true, message: 'AI vendor endpoint - needs implementation' });
+});
 
-  // Error handlers
-  process.on('uncaughtException', (error: Error) => {
-    console.error('❌ Uncaught Exception:', error);
-    console.error(error.stack);
-    
-    // Attempt graceful shutdown
-    gracefulShutdown('UNCAUGHT_EXCEPTION').finally(() => {
-      process.exit(1);
-    });
+app.post('/api/ai/emergency', async (req, res) => {
+  res.json({ success: true, message: 'AI emergency endpoint - needs implementation' });
+});
+
+app.post('/api/ai/voice', async (req, res) => {
+  res.json({ success: true, message: 'AI voice endpoint - needs implementation' });
+});
+
+app.post('/api/ai/memory', async (req, res) => {
+  res.json({ success: true, message: 'AI memory endpoint - needs implementation' });
+});
+
+app.post('/api/ai/knowledge', async (req, res) => {
+  res.json({ success: true, message: 'AI knowledge endpoint - needs implementation' });
+});
+
+app.post('/api/ai/decisions', async (req, res) => {
+  res.json({ success: true, message: 'AI decisions endpoint - needs implementation' });
+});
+
+app.post('/api/ai/analyze-email', async (req, res) => {
+  res.json({ success: true, analysis: 'Email analysis placeholder' });
+});
+
+app.post('/api/ai/generate-response', async (req, res) => {
+  res.json({ success: true, response: 'Generated response placeholder' });
+});
+
+app.post('/api/ai/analyze-message', async (req, res) => {
+  res.json({ success: true, analysis: 'Message analysis placeholder' });
+});
+
+app.post('/api/ai/transcribe-voicemail', async (req, res) => {
+  res.json({ success: true, transcript: 'Voicemail transcript placeholder' });
+});
+
+app.get('/api/ai-brain/status', async (req, res) => {
+  res.json({ success: true, status: 'operational' });
+});
+
+// ============= COMMUNICATION ENDPOINTS (Placeholder) =============
+app.post('/api/sms/send', async (req, res) => {
+  res.json({ success: true, message: 'SMS sent (placeholder)' });
+});
+
+app.post('/api/email/send', async (req, res) => {
+  res.json({ success: true, message: 'Email sent (placeholder)' });
+});
+
+app.post('/api/gmail/connect', async (req, res) => {
+  res.json({ success: true, connected: true });
+});
+
+app.get('/api/gmail/threads', async (req, res) => {
+  res.json({ success: true, threads: [] });
+});
+
+app.get('/api/gmail/check-new', async (req, res) => {
+  res.json({ success: true, newMessages: [] });
+});
+
+app.post('/api/gmail/send', async (req, res) => {
+  res.json({ success: true, message: 'Email sent via Gmail (placeholder)' });
+});
+
+// ============= VAPI ENDPOINTS (Placeholder) =============
+app.get('/api/vapi/voices', async (req, res) => {
+  res.json({ success: true, voices: [] });
+});
+
+app.post('/api/vapi/call', async (req, res) => {
+  res.json({ success: true, callId: 'placeholder-call-id' });
+});
+
+// ============= OTHER ENDPOINTS =============
+app.get('/api/calls/transcript/:id', async (req, res) => {
+  res.json({ success: true, transcript: 'Call transcript placeholder' });
+});
+
+app.post('/api/elevation/batch', async (req, res) => {
+  res.json({ success: true, elevations: [] });
+});
+
+app.get('/api/conversations/transcripts/:teamId', async (req, res) => {
+  res.json({ success: true, transcripts: [] });
+});
+
+// ============= FLOOR PLANS API =============
+app.get('/api/floor-plans/scale-presets', async (req, res) => {
+  res.json({
+    success: true,
+    presets: [
+      { id: 1, name: 'Standard', scale: 1.0 },
+      { id: 2, name: 'Large', scale: 1.5 }
+    ]
   });
+});
 
-  process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
-    console.error('❌ Unhandled Rejection at:', promise);
-    console.error('Reason:', reason);
-    
-    // In production, you might want to exit
-    if (NODE_ENV === 'production') {
-      gracefulShutdown('UNHANDLED_REJECTION').finally(() => {
-        process.exit(1);
-      });
-    }
-  });
+app.get('/api/floor-plans/jobs', async (req, res) => {
+  res.json({ success: true, jobs: [] });
+});
 
-  // Warning handler
-  process.on('warning', (warning: Error) => {
-    console.warn('⚠️  Warning:', warning.name);
-    console.warn(warning.message);
-    console.warn(warning.stack);
-  });
-};
+app.post('/api/floor-plans/upload', async (req, res) => {
+  res.json({ success: true, jobId: 'job-' + Date.now() });
+});
 
-/**
- * Setup clustering
- */
-const setupClustering = (): void => {
-  if (cluster.isPrimary) {
-    console.log(`🔧 Master process ${process.pid} is running`);
-    console.log(`👷 Spawning ${WORKER_COUNT} worker processes...`);
+app.get('/api/floor-plans/job/:jobId', async (req, res) => {
+  res.json({ success: true, status: 'completed' });
+});
 
-    // Fork workers
-    for (let i = 0; i < WORKER_COUNT; i++) {
-      cluster.fork();
-    }
-
-    // Handle worker events
-    cluster.on('exit', (worker, code, signal) => {
-      console.error(`❌ Worker ${worker.process.pid} died (${signal || code})`);
-      
-      // Restart worker
-      if (NODE_ENV === 'production') {
-        console.log('🔄 Restarting worker...');
-        cluster.fork();
-      }
-    });
-
-    cluster.on('online', (worker) => {
-      console.log(`✅ Worker ${worker.process.pid} is online`);
-    });
-
-    // Handle master process shutdown
-    setupProcessHandlers();
-  } else {
-    // Worker process
-    startServer();
-    setupProcessHandlers();
-  }
-};
-
-/**
- * Main execution
- */
-const main = (): void => {
-  console.log('🚀 Initializing HomeQuest API Server...');
-
-  if (USE_CLUSTER && NODE_ENV === 'production') {
-    setupClustering();
-  } else {
-    startServer();
-    setupProcessHandlers();
-  }
-};
-
-// Start the server
-main();
-
-// Export for testing
-export { server, gracefulShutdown };
+// Start server
+app.listen(PORT, () => {
+  console.log(`API Server running on port ${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
+});
