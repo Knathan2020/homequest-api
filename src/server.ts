@@ -54,25 +54,128 @@ app.get('/health', (req, res) => {
 // ============= PROJECTS API =============
 app.get('/api/projects', authenticateUser, async (req, res) => {
   try {
-    let query = supabase
-      .from('projects')
-      .select('*');
-
-    // If user is authenticated, filter by user_id
-    if (req.user) {
-      query = query.eq('user_id', req.user.id);
-    } else {
-      // No user authenticated, return empty array for security
+    // No user authenticated, return empty array for security
+    if (!req.user) {
+      console.log('❌ No authenticated user - returning empty array');
       return res.json({ success: true, data: [] });
     }
 
-    const { data: projects, error } = await query.order('created_at', { ascending: false });
+    console.log(`📊 Fetching projects for user: ${req.user.email} (ID: ${req.user.id})`);
 
-    if (error) throw error;
+    // Get the user's profile to check their team_id for filtering
+    const { data: userProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, company_name, team_id')
+      .eq('id', req.user.id)
+      .single();
 
-    res.json({ success: true, data: projects || [] });
+    if (profileError) {
+      console.error('Error fetching user profile:', profileError);
+    }
+
+    let projects = [];
+
+    // Check team_id first (newer method)
+    if (userProfile?.team_id) {
+      console.log(`🏢 User has team_id: ${userProfile.team_id}`);
+
+      // Get all projects for this team
+      const { data: teamProjects, error } = await supabase
+        .from('projects')
+        .select(`
+          *,
+          buildings:buildings(count),
+          construction_phases:construction_phases(
+            id,
+            phase,
+            status,
+            completion_percentage
+          )
+        `)
+        .eq('team_id', userProfile.team_id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      projects = teamProjects || [];
+      console.log(`✅ Found ${projects.length} team projects`);
+
+    } else if (userProfile?.company_name) {
+      console.log(`🏢 User has company_name: ${userProfile.company_name}`);
+
+      // Legacy: get all team projects by company name
+      const { data: teamUserIds, error: teamError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('company_name', userProfile.company_name);
+
+      if (!teamError && teamUserIds) {
+        const teamIds = teamUserIds.map(u => u.id);
+        console.log(`👥 Found ${teamIds.length} team members`);
+
+        // Get projects from all team members
+        const { data: teamProjects, error } = await supabase
+          .from('projects')
+          .select(`
+            *,
+            buildings:buildings(count),
+            construction_phases:construction_phases(
+              id,
+              phase,
+              status,
+              completion_percentage
+            )
+          `)
+          .in('user_id', teamIds)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        projects = teamProjects || [];
+        console.log(`✅ Found ${projects.length} team projects (by company_name)`);
+      }
+    } else {
+      console.log(`👤 User has no team - fetching personal projects only`);
+
+      // No team - just get user's own projects
+      const { data: userProjects, error } = await supabase
+        .from('projects')
+        .select(`
+          *,
+          buildings:buildings(count),
+          construction_phases:construction_phases(
+            id,
+            phase,
+            status,
+            completion_percentage
+          )
+        `)
+        .eq('user_id', req.user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      projects = userProjects || [];
+      console.log(`✅ Found ${projects.length} personal projects`);
+    }
+
+    // Process projects to add progress info
+    const processedProjects = (projects || []).map(project => {
+      const phases = project.construction_phases || [];
+      const totalProgress = phases.reduce((sum, phase) =>
+        sum + (phase.completion_percentage || 0), 0
+      );
+      const averageProgress = phases.length > 0 ? totalProgress / phases.length : 0;
+
+      return {
+        ...project,
+        progress: Math.round(averageProgress),
+        phaseCount: phases.length,
+        activePhase: phases.find(p => p.status === 'in_progress')?.phase || 'Planning'
+      };
+    });
+
+    console.log(`📤 Returning ${processedProjects.length} processed projects to client`);
+    res.json({ success: true, data: processedProjects });
   } catch (error) {
-    console.error('Error fetching projects:', error);
+    console.error('❌ Error fetching projects:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -100,11 +203,23 @@ app.post('/api/projects', authenticateUser, async (req, res) => {
       return res.status(401).json({ success: false, error: 'Authentication required' });
     }
 
-    // Add user_id to the project data
+    console.log(`📝 Creating project for user: ${req.user.email}`);
+
+    // Get user's profile to get team_id
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('team_id, company_name')
+      .eq('id', req.user.id)
+      .single();
+
+    // Add user_id AND team_id to the project data
     const projectData = {
       ...req.body,
-      user_id: req.user.id
+      user_id: req.user.id,
+      team_id: userProfile?.team_id || null
     };
+
+    console.log(`🏢 Creating project with team_id: ${projectData.team_id || 'none (personal project)'}`);
 
     const { data: project, error } = await supabase
       .from('projects')
