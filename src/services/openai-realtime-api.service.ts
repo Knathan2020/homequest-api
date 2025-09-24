@@ -13,7 +13,7 @@ const twilioClient = twilio(
 );
 
 const supabase = createClient(
-  process.env.SUPABASE_URL || 'https://fbwmkkskdrvaipmkddwm.supabase.co',
+  process.env.SUPABASE_URL || process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || ''
 );
 
