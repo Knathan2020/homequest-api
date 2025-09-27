@@ -5,8 +5,9 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon",
-    "build": "tsc --skipLibCheck || true",
+    "build": "rm -rf dist && tsc --skipLibCheck || true",
     "start": "node dist/server.js",
+    "render-build": "npm install && npm run build",
     "start:dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "lint": "eslint . --ext .ts",
     "test": "jest",
