@@ -345,6 +345,19 @@ app.delete('/api/projects/:id', async (req, res) => {
   }
 });
 
+// ============= ROUTE IMPORTS =============
+// Import route modules
+const builderPhonesRoutes = require('./routes/builder-phones.routes').default;
+const vendorBiddingRoutes = require('./routes/vendor-bidding.routes').default;
+const appointmentsRoutes = require('./routes/appointments.routes').default;
+const ragLearningRoutes = require('./routes/rag-learning.routes').default;
+
+// Register routes
+app.use('/api/builder-phones', builderPhonesRoutes);
+app.use('/api/vendor-bidding', vendorBiddingRoutes);
+app.use('/api/appointments', appointmentsRoutes);
+app.use('/api/rag-learning', ragLearningRoutes);
+
 // ============= BUILDINGS API =============
 app.get('/api/buildings', async (req, res) => {
   try {
