@@ -1,10 +1,17 @@
 // Builder Phone Numbers Management Routes
-// Each builder gets their own Twilio subaccount and phone number
+// Each builder gets their own Twilio phone number with VAPI AI integration
 
 import express, { Request, Response } from 'express';
 import twilioSubaccountsService from '../services/twilioSubaccounts.service';
+import phoneProvisioningService from '../services/phone-provisioning.service';
+import { createClient } from '@supabase/supabase-js';
 
 const router = express.Router();
+
+const supabase = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_KEY || ''
+);
 
 // Check if current user has a phone number
 router.get('/check/:userId', async (req: Request, res: Response) => {
@@ -34,39 +41,89 @@ router.get('/check/:userId', async (req: Request, res: Response) => {
   }
 });
 
-// Create a new phone number for builder
+// Create a new phone number for builder with VAPI integration
 router.post('/create', async (req: Request, res: Response) => {
   try {
     const { userId, userName, email, company, phoneNumber } = req.body;
-    
-    // Check if user already has a number
-    const hasPhone = await twilioSubaccountsService.hasPhoneNumber(userId);
-    if (hasPhone) {
+
+    console.log('📞 Creating phone number with VAPI for:', userName);
+
+    // Check if team exists for this user
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('team_id')
+      .eq('id', userId)
+      .single();
+
+    if (!profile?.team_id) {
       return res.status(400).json({
-        error: 'User already has a phone number assigned'
+        error: 'No team found for user. Please ensure user has a team.'
       });
     }
-    
-    // Create subaccount and buy phone number
-    const account = await twilioSubaccountsService.createTeamAccount({
-      teamId: userId, // Using userId as teamId for now
-      teamName: userName,
+
+    const teamId = profile.team_id;
+
+    // Check if team already has a phone
+    const hasPhone = await phoneProvisioningService.teamHasPhone(teamId);
+    if (hasPhone) {
+      // Get existing phone config
+      const phoneConfig = await phoneProvisioningService.getTeamPhoneConfig(teamId);
+
+      console.log('✅ Team already has phone:', phoneConfig.twilio_number);
+
+      return res.json({
+        success: true,
+        message: `Phone number ${phoneConfig.twilio_number} already assigned`,
+        account: {
+          phoneNumber: phoneConfig.twilio_number,
+          vapiPhoneId: phoneConfig.vapi_phone_id,
+          status: phoneConfig.status || 'active',
+          monthlyCost: 2.15 // $1.15 Twilio + $1 VAPI estimate
+        }
+      });
+    }
+
+    // Provision new phone with VAPI integration
+    console.log('🚀 Provisioning new phone with VAPI for team:', teamId);
+
+    const result = await phoneProvisioningService.provisionPhoneForTeam({
+      teamId: teamId,
+      teamName: company || userName,
       ownerEmail: email,
-      companyName: company,
-      contactPhone: phoneNumber
+      preferredAreaCode: phoneNumber?.substring(1, 4) // Extract area code if provided
     });
-    
+
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to provision phone');
+    }
+
+    console.log('✅ Phone provisioned with VAPI:', {
+      twilioNumber: result.twilioNumber,
+      vapiPhoneId: result.vapiPhoneId
+    });
+
+    // Update the teams table to ensure it has the phone info
+    await supabase
+      .from('teams')
+      .update({
+        twilio_phone_number: result.twilioNumber,
+        phone_system_active: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', teamId);
+
     res.json({
       success: true,
-      message: `Phone number ${account?.twilio_phone_number} assigned to ${userName}`,
+      message: `Phone ${result.twilioNumber} with AI voice assistant created!`,
       account: {
-        phoneNumber: account?.twilio_phone_number,
-        status: account?.status,
-        monthlyCost: account?.monthly_cost
+        phoneNumber: result.twilioNumber,
+        vapiPhoneId: result.vapiPhoneId,
+        status: 'active',
+        monthlyCost: 2.15 // $1.15 Twilio + $1 VAPI estimate
       }
     });
   } catch (error: any) {
-    console.error('Error creating builder phone:', error);
+    console.error('Error creating phone with VAPI:', error);
     res.status(500).json({
       error: 'Failed to create phone number',
       message: error.message

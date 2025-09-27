@@ -27,6 +27,13 @@ interface TeamPhoneConfig {
   preferredAreaCode?: string;
 }
 
+interface ProjectPhoneConfig {
+  projectId: string;
+  projectName: string;
+  teamId: string;
+  preferredAreaCode?: string;
+}
+
 class PhoneProvisioningService {
   private twilioClient: any;
   private vapiApiKey: string;

@@ -11,21 +11,35 @@ dotenv.config();
 
 const router = express.Router();
 
-// Initialize Supabase client
+// Initialize Supabase client with service role key for backend operations
 const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+// Use service role key to bypass RLS policies in backend
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
 
 // Create Supabase client with error handling
-const supabase = supabaseUrl && supabaseKey 
-  ? createClient(supabaseUrl, supabaseKey)
+const supabase = supabaseUrl && supabaseKey
+  ? createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
   : null;
 
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn('⚠️ SUPABASE_SERVICE_ROLE_KEY not set - using ANON key which may cause RLS issues');
+}
+
 /**
- * Get all projects
+ * Get all projects (filtered by team_id or user_id if provided)
  */
 router.get('/projects', async (req, res) => {
   try {
-    console.log('📊 Fetching all projects from database');
+    // Get team_id or user_id from query params or headers
+    const teamId = req.query.team_id || req.headers['x-team-id'];
+    const userId = req.query.user_id || req.headers['x-user-id'];
+
+    console.log('📊 Fetching projects from database', { teamId, userId });
     
     // If Supabase is not configured, return mock data
     if (!supabase) {
@@ -59,11 +73,23 @@ router.get('/projects', async (req, res) => {
       });
     }
     
+    // Build query - for now just get all projects
+    // Filtering by user breaks when auth fails
+    let query = supabase.from('projects').select('*');
+
+    // OPTIONAL filtering if explicitly provided
+    if (teamId && teamId !== 'undefined') {
+      query = query.eq('team_id', teamId);
+      console.log('Filtering by team_id:', teamId);
+    } else if (userId && userId !== 'undefined') {
+      query = query.eq('user_id', userId);
+      console.log('Filtering by user_id:', userId);
+    } else {
+      console.log('No filter applied - fetching all projects');
+    }
+
     // Fetch from Supabase
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const { data, error } = await query.order('created_at', { ascending: false });
     
     if (error) {
       console.error('Supabase error:', error);

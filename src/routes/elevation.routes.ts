@@ -8,7 +8,10 @@ import fetch from 'node-fetch';
 
 const router = Router();
 
-const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyAJ1n2j8Cw-RbPEs3tCCksAG4cNO0wuSEI';
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+if (!GOOGLE_MAPS_API_KEY) {
+  console.error('❌ GOOGLE_MAPS_API_KEY environment variable is not set');
+}
 
 /**
  * Get elevation data for multiple locations
