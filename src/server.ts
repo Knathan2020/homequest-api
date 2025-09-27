@@ -2,6 +2,22 @@ import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { routeMapper, logUnmappedRoutes } from './middleware/route-mapper';
+
+// Import critical routes
+import enhancedDetectionRoutes from './routes/enhanced-detection.routes';
+import intelligentAnalysisRoutes from './routes/intelligent-analysis.routes';
+import floorPlansRoutes from './routes/floor-plans.routes';
+import floorPlanPersistenceRoutes from './routes/floor-plan-persistence.routes';
+import documentsRoutes from './routes/documents.routes';
+import productionBlueprintRoutes from './routes/production-blueprint.routes';
+import twilioRoutes from './routes/twilio.routes';
+import nylasEmailRoutes from './routes/nylas-email.routes';
+import teamRoutes from './routes/team.routes';
+import userRoutes from './routes/user.routes';
+import ragRoutes from './routes/rag.routes';
+import elevationRoutes from './routes/elevation.routes';
+import vapiRoutes from './routes/vapi.routes';
 
 dotenv.config();
 
@@ -17,6 +33,10 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Add route mapper middleware BEFORE other routes
+app.use(routeMapper);
+app.use(logUnmappedRoutes);
 
 // Authentication middleware
 const authenticateUser = async (req, res, next) => {
@@ -636,8 +656,24 @@ app.get('/api/floor-plans/job/:jobId', async (req, res) => {
   res.json({ success: true, status: 'completed' });
 });
 
+// Register all imported routes
+app.use('/api', enhancedDetectionRoutes);
+app.use('/api', intelligentAnalysisRoutes);
+app.use('/api', floorPlansRoutes);
+app.use('/api', floorPlanPersistenceRoutes);
+app.use('/api', documentsRoutes);
+app.use('/api', productionBlueprintRoutes);
+app.use('/api', twilioRoutes);
+app.use('/api', nylasEmailRoutes);
+app.use('/api', teamRoutes);
+app.use('/api', userRoutes);
+app.use('/api', ragRoutes);
+app.use('/api', elevationRoutes);
+app.use('/api', vapiRoutes);
+
 // Start server
 app.listen(PORT, () => {
   console.log(`API Server running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`🚀 Routes registered: enhanced-detection, intelligent-analysis, floor-plans, documents, production-blueprint, twilio, nylas, team, user, rag, elevation, vapi`);
 });

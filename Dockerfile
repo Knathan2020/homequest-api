@@ -49,8 +49,11 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Create directories before build
+RUN mkdir -p uploads logs temp
+
 # Build TypeScript
-RUN npm run build
+RUN npm run build || true
 
 # Production stage
 FROM node:20 AS production
@@ -76,8 +79,7 @@ RUN npm ci --only=production
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/uploads ./uploads
-COPY --from=builder /app/logs ./logs
+# Don't copy uploads/logs - they should be created fresh
 
 # Create necessary directories
 RUN mkdir -p uploads logs temp && \

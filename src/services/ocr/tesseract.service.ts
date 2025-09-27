@@ -18,7 +18,7 @@ interface OCROptions {
   tessjs_create_pdf?: string;
 }
 
-interface OCRResult {
+export interface OCRResult {
   text: string;
   confidence: number;
   words: Array<{

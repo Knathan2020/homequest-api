@@ -180,7 +180,7 @@ export class RoomLabelingService {
     if (imagePath) {
       try {
         const ocrResult = await this.ocrService.extractText(imagePath);
-        textLabels = this.extractRoomLabelsFromText(ocrResult.text);
+        textLabels = this.extractRoomLabelsFromText(ocrResult.fullText || '');
       } catch (error) {
         console.log('OCR text extraction failed, using pattern matching only');
       }

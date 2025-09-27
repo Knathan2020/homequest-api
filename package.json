@@ -24,6 +24,7 @@
     "@elevenlabs/elevenlabs-js": "^2.13.0",
     "@google-cloud/vision": "^5.3.3",
     "@google/generative-ai": "^0.24.1",
+    "@jridgewell/trace-mapping": "^0.3.31",
     "@napi-rs/canvas": "^0.1.77",
     "@sendgrid/mail": "^8.1.5",
     "@supabase/supabase-js": "^2.58.0",
@@ -33,6 +34,7 @@
     "@types/express-ws": "^3.0.5",
     "@types/three": "^0.163.0",
     "@vapi-ai/web": "^2.3.10",
+    "abort-controller": "^3.0.0",
     "axios": "^1.12.1",
     "base64-arraybuffer": "^1.0.2",
     "bcryptjs": "^2.4.3",
@@ -79,6 +81,7 @@
     "tsconfig-paths": "^4.2.0",
     "twilio": "^5.8.2",
     "uuid": "^9.0.1",
+    "web-streams-polyfill": "^4.2.0",
     "winston": "^3.13.0",
     "winston-daily-rotate-file": "^5.0.0",
     "zod": "^3.25.76"
