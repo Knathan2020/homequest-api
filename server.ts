@@ -7,7 +7,14 @@ import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import floorPlanRoutes from './src/routes/floorPlans';
 import floorPlanPersistenceRoutes from './src/routes/floor-plan-persistence.routes';
-import workingRoutes from './src/routes/working-routes';
+// Import working routes with fallback
+let workingRoutes: any;
+try {
+  workingRoutes = require('./src/routes/working-routes').default || require('./src/routes/working-routes');
+} catch (err) {
+  console.error('Failed to load working routes:', err);
+  workingRoutes = null;
+}
 
 // Load environment variables
 dotenv.config();
@@ -83,8 +90,12 @@ app.use('/api/floor-plans', floorPlanRoutes);
 app.use('/api/floor-plans', floorPlanPersistenceRoutes);
 
 // Register all working API routes
-app.use('/api', workingRoutes);
-console.log('✅ All API routes registered successfully');
+if (workingRoutes) {
+  app.use('/api', workingRoutes);
+  console.log('✅ All API routes registered successfully');
+} else {
+  console.error('❌ Working routes not loaded - endpoints will return 404');
+}
 
 // DEPRECATED - Old Supabase upload endpoint (commented out)
 /*
