@@ -820,6 +820,41 @@ Provide updated analysis in the same JSON format.`;
     
     return (inputTokens * inputTokenCost) + (outputTokens * outputTokenCost);
   }
+
+  // Additional methods for claude-ai.controller compatibility
+  async queryWithContext(query: string, options: any = {}): Promise<any> {
+    // Fallback to analyzeFloorPlan
+    return this.analyzeFloorPlan({
+      imageBuffer: Buffer.from(''),
+      query,
+      ...options
+    } as any);
+  }
+
+  async analyzeConstructionImage(imagePath: string, options: any = {}): Promise<any> {
+    // Fallback to analyzeFloorPlan
+    return this.analyzeFloorPlan({
+      imageBuffer: Buffer.from(''),
+      imagePath,
+      ...options
+    } as any);
+  }
+
+  async storeDocument(doc: any): Promise<void> {
+    // Stub - not implemented yet
+    console.log('storeDocument called but not implemented', doc);
+  }
+
+  async addConstructionKnowledge(knowledge: any): Promise<void> {
+    // Stub - not implemented yet
+    console.log('addConstructionKnowledge called but not implemented', knowledge);
+  }
+
+  async retrieveRelevantDocuments(query: string, options: any = {}): Promise<any[]> {
+    // Stub - return empty array
+    console.log('retrieveRelevantDocuments called but not implemented', query, options);
+    return [];
+  }
 }
 
 // Export singleton instance

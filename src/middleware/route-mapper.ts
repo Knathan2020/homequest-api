@@ -66,7 +66,7 @@ export const routeMapper = (req: Request, res: Response, next: NextFunction) => 
   if (mappedPath) {
     console.log(`🔄 Route mapping: ${originalPath} → ${mappedPath}`);
     req.url = mappedPath + (req.url.slice(originalPath.length) || '');
-    req.path = mappedPath;
+    // req.path is read-only, so we only update req.url
   }
 
   // Also handle dynamic routes (with parameters)
@@ -77,7 +77,7 @@ export const routeMapper = (req: Request, res: Response, next: NextFunction) => 
       const newPath = replacement + dynamicPart;
       console.log(`🔄 Dynamic route mapping: ${originalPath} → ${newPath}`);
       req.url = newPath;
-      req.path = newPath;
+      // req.path is read-only, so we only update req.url
       break;
     }
   }
