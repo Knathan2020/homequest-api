@@ -8,6 +8,18 @@ import { v4 as uuidv4 } from 'uuid';
 import floorPlanRoutes from './src/routes/floorPlans';
 import floorPlanPersistenceRoutes from './src/routes/floor-plan-persistence.routes';
 
+// Import additional essential routes
+import ragLearningRoutes from './src/routes/rag-learning.routes';
+import vendorBiddingRoutes from './src/routes/vendor-bidding.routes';
+import projectsRoutes from './src/routes/projects.routes';
+import teamsRoutes from './src/routes/team.routes';
+import contactsRoutes from './src/routes/contacts.routes';
+import messagingRoutes from './src/routes/messaging.routes';
+import documentsRoutes from './src/routes/documents.routes';
+import productionBlueprintRoutes from './src/routes/production-blueprint.routes';
+import elevationRoutes from './src/routes/elevation.routes';
+import wallEditorRoutes from './src/routes/wall-editor.routes';
+
 // Load environment variables
 dotenv.config();
 
@@ -80,6 +92,18 @@ app.use('/api/floor-plans', floorPlanRoutes);
 
 // Add persistence routes (auto-save, load, update, delete)
 app.use('/api/floor-plans', floorPlanPersistenceRoutes);
+
+// Register additional essential routes
+app.use('/api/rag-learning', ragLearningRoutes);
+app.use('/api/vendor-bidding', vendorBiddingRoutes);
+app.use('/api/projects', projectsRoutes);
+app.use('/api/teams', teamsRoutes);
+app.use('/api/contacts', contactsRoutes);
+app.use('/api/messages', messagingRoutes);
+app.use('/api/documents', documentsRoutes);
+app.use('/api/production-blueprint', productionBlueprintRoutes);
+app.use('/api/elevation', elevationRoutes);
+app.use('/api/wall-editor', wallEditorRoutes);
 
 // DEPRECATED - Old Supabase upload endpoint (commented out)
 /*
