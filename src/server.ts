@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { routeMapper, logUnmappedRoutes } from './middleware/route-mapper';
+// import { routeMapper, logUnmappedRoutes } from './middleware/route-mapper'; // DISABLED - causing 404s
 
 // Import critical routes
 import enhancedDetectionRoutes from './routes/enhanced-detection.routes';
@@ -18,6 +18,12 @@ import userRoutes from './routes/user.routes';
 import ragRoutes from './routes/rag.routes';
 import elevationRoutes from './routes/elevation.routes';
 import vapiRoutes from './routes/vapi.routes';
+import ragLearningRoutes from './routes/rag-learning.routes';
+import vendorBiddingRoutes from './routes/vendor-bidding.routes';
+import projectsRoutes from './routes/projects.routes';
+import contactsRoutes from './routes/contacts.routes';
+import messagingRoutes from './routes/messaging.routes';
+import wallEditorRoutes from './routes/wall-editor.routes';
 
 dotenv.config();
 
@@ -34,9 +40,9 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Add route mapper middleware BEFORE other routes
-app.use(routeMapper);
-app.use(logUnmappedRoutes);
+// Route mapper disabled - was causing 404 errors
+// app.use(routeMapper);
+// app.use(logUnmappedRoutes);
 
 // Authentication middleware
 const authenticateUser = async (req, res, next) => {
@@ -670,6 +676,14 @@ app.use('/api', userRoutes);
 app.use('/api', ragRoutes);
 app.use('/api', elevationRoutes);
 app.use('/api', vapiRoutes);
+
+// Add missing critical routes
+app.use('/api', ragLearningRoutes);
+app.use('/api', vendorBiddingRoutes);
+app.use('/api', projectsRoutes);
+app.use('/api', contactsRoutes);
+app.use('/api', messagingRoutes);
+app.use('/api', wallEditorRoutes);
 
 // Start server
 app.listen(PORT, () => {
