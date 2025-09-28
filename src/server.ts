@@ -689,5 +689,10 @@ app.use('/api/wall-editor', wallEditorRoutes);
 app.listen(PORT, () => {
   console.log(`API Server running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log(`🚀 Routes registered: enhanced-detection, intelligent-analysis, floor-plans, documents, production-blueprint, twilio, nylas, team, user, rag, elevation, vapi`);
+  console.log(`🚀 Routes registered:`);
+  console.log(`  - /api/floor-plans (CAD upload, processing)`);
+  console.log(`  - /api/rag-learning (learning stats, manual edits)`);
+  console.log(`  - /api/blueprint (production blueprint processing)`);
+  console.log(`  - /api/projects, /api/teams, /api/contacts`);
+  console.log(`  - And more...`);
 });
