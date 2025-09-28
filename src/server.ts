@@ -662,28 +662,28 @@ app.get('/api/floor-plans/job/:jobId', async (req, res) => {
   res.json({ success: true, status: 'completed' });
 });
 
-// Register all imported routes
-app.use('/api', enhancedDetectionRoutes);
-app.use('/api', intelligentAnalysisRoutes);
-app.use('/api', floorPlansRoutes);
-app.use('/api', floorPlanPersistenceRoutes);
-app.use('/api', documentsRoutes);
-app.use('/api', productionBlueprintRoutes);
-app.use('/api', twilioRoutes);
-app.use('/api', nylasEmailRoutes);
-app.use('/api', teamRoutes);
-app.use('/api', userRoutes);
-app.use('/api', ragRoutes);
-app.use('/api', elevationRoutes);
-app.use('/api', vapiRoutes);
+// Register all imported routes with correct paths
+app.use('/api/enhanced', enhancedDetectionRoutes);
+app.use('/api/intelligent', intelligentAnalysisRoutes);
+app.use('/api/floor-plans', floorPlansRoutes);
+app.use('/api/floor-plans', floorPlanPersistenceRoutes);
+app.use('/api/documents', documentsRoutes);
+app.use('/api/blueprint', productionBlueprintRoutes);
+app.use('/api/twilio', twilioRoutes);
+app.use('/api/nylas', nylasEmailRoutes);
+app.use('/api/teams', teamRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/rag', ragRoutes);
+app.use('/api/elevation', elevationRoutes);
+app.use('/api/vapi', vapiRoutes);
 
-// Add missing critical routes
-app.use('/api', ragLearningRoutes);
-app.use('/api', vendorBiddingRoutes);
-app.use('/api', projectsRoutes);
-app.use('/api', contactsRoutes);
-app.use('/api', messagingRoutes);
-app.use('/api', wallEditorRoutes);
+// Add missing critical routes with correct paths
+app.use('/api/rag-learning', ragLearningRoutes);
+app.use('/api/vendor-bidding', vendorBiddingRoutes);
+app.use('/api/projects', projectsRoutes);
+app.use('/api/contacts', contactsRoutes);
+app.use('/api/messaging', messagingRoutes);
+app.use('/api/wall-editor', wallEditorRoutes);
 
 // Start server
 app.listen(PORT, () => {
