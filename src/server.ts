@@ -4,26 +4,75 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 // import { routeMapper, logUnmappedRoutes } from './middleware/route-mapper'; // DISABLED - causing 404s
 
-// Import critical routes
+// Import ALL routes - Complete API System
+// Core Construction & Processing
 import enhancedDetectionRoutes from './routes/enhanced-detection.routes';
 import intelligentAnalysisRoutes from './routes/intelligent-analysis.routes';
 import floorPlansRoutes from './routes/floor-plans.routes';
 import floorPlanPersistenceRoutes from './routes/floor-plan-persistence.routes';
+import floorPlan3DRoutes from './routes/floor-plan-3d.routes';
+import floorPlanStorageRoutes from './routes/floor-plan-storage.routes';
 import documentsRoutes from './routes/documents.routes';
 import productionBlueprintRoutes from './routes/production-blueprint.routes';
+import wallEditorRoutes from './routes/wall-editor.routes';
+
+// AI & Voice Systems
+import aiRoutes from './routes/ai.routes';
+import aiAssistantRoutes from './routes/ai-assistant';
+import aiCallRoutes from './routes/ai-call.routes';
+import billionaireAIRoutes from './routes/billionaire-ai.routes';
+import claudeAIRoutes from './routes/claude-ai.routes';
+import chatgptRealtimeVoiceRoutes from './routes/chatgpt-realtime-voice.routes';
+import chatgptVoiceRoutes from './routes/chatgpt-voice.routes';
+import elevenLabsRoutes from './routes/elevenlabs.routes';
+import retellRoutes from './routes/retell.routes';
+
+// Communication & Phone Systems
 import twilioRoutes from './routes/twilio.routes';
-import nylasEmailRoutes from './routes/nylas-email.routes';
-import teamRoutes from './routes/team.routes';
-import userRoutes from './routes/user.routes';
-import ragRoutes from './routes/rag.routes';
-import elevationRoutes from './routes/elevation.routes';
+import twilioVoiceRoutes from './routes/twilio-voice.routes';
+import twilioWebhooksRoutes from './routes/twilio-webhooks';
 import vapiRoutes from './routes/vapi.routes';
-import ragLearningRoutes from './routes/rag-learning.routes';
-import vendorBiddingRoutes from './routes/vendor-bidding.routes';
+import vapiWebhooksRoutes from './routes/vapi-webhooks.routes';
+import homequestCallsRoutes from './routes/homequest-calls';
+import simpleCallRoutes from './routes/simple-call.routes';
+import builderPhonesRoutes from './routes/builder-phones.routes';
+import phoneSystemRoutes from './routes/phone-system.routes';
+import conversationsRoutes from './routes/conversations';
+
+// Email Systems
+import nylasEmailRoutes from './routes/nylas-email.routes';
+import emailOAuthRoutes from './routes/email-oauth.routes';
+import autonomousCampaignsRoutes from './routes/autonomous-campaigns';
+import autonomousEmailRoutes from './routes/autonomous-email.routes';
+
+// Team & Project Management
+import teamRoutes from './routes/team.routes';
+import teamMembersRoutes from './routes/team-members.routes';
+import teamProvisioningRoutes from './routes/team-provisioning.routes';
 import projectsRoutes from './routes/projects.routes';
 import contactsRoutes from './routes/contacts.routes';
 import messagingRoutes from './routes/messaging.routes';
-import wallEditorRoutes from './routes/wall-editor.routes';
+import userRoutes from './routes/user.routes';
+
+// Business Logic
+import vendorBiddingRoutes from './routes/vendor-bidding.routes';
+import appointmentsRoutes from './routes/appointments.routes';
+import meetingInvitesRoutes from './routes/meeting-invites.routes';
+import builderBriefingRoutes from './routes/builder-briefing.routes';
+import usageRoutes from './routes/usage.routes';
+
+// RAG & Learning Systems
+import ragRoutes from './routes/rag.routes';
+import ragLearningRoutes from './routes/rag-learning.routes';
+import secureRAGRoutes from './routes/secure-rag.routes';
+
+// Real-time & WebSocket
+import realtimeAPIRoutes from './routes/realtime-api.routes';
+import realtimeWebsocketRoutes from './routes/realtime-websocket.routes';
+
+// Integrations & Proxies
+import elevationRoutes from './routes/elevation.routes';
+import gisProxyRoutes from './routes/gis-proxy';
 
 dotenv.config();
 
@@ -662,41 +711,126 @@ app.get('/api/floor-plans/job/:jobId', async (req, res) => {
   res.json({ success: true, status: 'completed' });
 });
 
-// Register all imported routes with correct paths
+// ===========================================
+// REGISTER ALL API ROUTES - COMPLETE SYSTEM
+// ===========================================
+
+// Core Construction & Processing Routes
 app.use('/api/enhanced', enhancedDetectionRoutes);
 app.use('/api/intelligent', intelligentAnalysisRoutes);
 app.use('/api/floor-plans', floorPlansRoutes);
 app.use('/api/floor-plans', floorPlanPersistenceRoutes);
+app.use('/api/floor-plan-3d', floorPlan3DRoutes);
+app.use('/api/floor-plan-storage', floorPlanStorageRoutes);
 app.use('/api/documents', documentsRoutes);
 app.use('/api/blueprint', productionBlueprintRoutes);
-app.use('/api/twilio', twilioRoutes);
-app.use('/api/nylas', nylasEmailRoutes);
-app.use('/api/teams', teamRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/rag', ragRoutes);
-app.use('/api/elevation', elevationRoutes);
-app.use('/api/vapi', vapiRoutes);
+app.use('/api/wall-editor', wallEditorRoutes);
 
-// Add missing critical routes with correct paths
-app.use('/api/rag-learning', ragLearningRoutes);
-app.use('/api/vendor-bidding', vendorBiddingRoutes);
+// AI & Voice Systems
+app.use('/api/ai', aiRoutes);
+app.use('/api/ai-assistant', aiAssistantRoutes);
+app.use('/api/ai-call', aiCallRoutes);
+app.use('/api/billionaire-ai', billionaireAIRoutes);
+app.use('/api/claude-ai', claudeAIRoutes);
+app.use('/api/chatgpt-realtime-voice', chatgptRealtimeVoiceRoutes);
+app.use('/api/chatgpt-voice', chatgptVoiceRoutes);
+app.use('/api/elevenlabs', elevenLabsRoutes);
+app.use('/api/retell', retellRoutes);
+
+// Communication & Phone Systems
+app.use('/api/twilio', twilioRoutes);
+app.use('/api/twilio-voice', twilioVoiceRoutes);
+app.use('/api/twilio-webhooks', twilioWebhooksRoutes);
+app.use('/api/vapi', vapiRoutes);
+app.use('/api/vapi-webhooks', vapiWebhooksRoutes);
+app.use('/api/homequest-calls', homequestCallsRoutes);
+app.use('/api/simple-call', simpleCallRoutes);
+app.use('/api/builder-phones', builderPhonesRoutes);
+app.use('/api/phone-system', phoneSystemRoutes);
+app.use('/api/conversations', conversationsRoutes);
+
+// Email Systems
+app.use('/api/nylas', nylasEmailRoutes);
+app.use('/api/email-oauth', emailOAuthRoutes);
+app.use('/api/autonomous-campaigns', autonomousCampaignsRoutes);
+app.use('/api/autonomous-email', autonomousEmailRoutes);
+
+// Team & Project Management
+app.use('/api/teams', teamRoutes);
+app.use('/api/team-members', teamMembersRoutes);
+app.use('/api/team-provisioning', teamProvisioningRoutes);
 app.use('/api/projects', projectsRoutes);
 app.use('/api/contacts', contactsRoutes);
 app.use('/api/messaging', messagingRoutes);
-app.use('/api/wall-editor', wallEditorRoutes);
+app.use('/api/users', userRoutes);
 
-// Add route aliases for backward compatibility
-app.use('/api/analyze-floorplan', floorPlansRoutes); // Maps analyze-floorplan to floor-plans routes
-app.use('/api/spatial', floorPlansRoutes); // Maps spatial endpoints to floor-plans routes
+// Business Logic & Workflows
+app.use('/api/vendor-bidding', vendorBiddingRoutes);
+app.use('/api/appointments', appointmentsRoutes);
+app.use('/api/meeting-invites', meetingInvitesRoutes);
+app.use('/api/builder-briefing', builderBriefingRoutes);
+app.use('/api/usage', usageRoutes);
+
+// RAG & Learning Systems
+app.use('/api/rag', ragRoutes);
+app.use('/api/rag-learning', ragLearningRoutes);
+app.use('/api/secure-rag', secureRAGRoutes);
+
+// Real-time & WebSocket
+app.use('/api/realtime', realtimeAPIRoutes);
+app.use('/api/websocket', realtimeWebsocketRoutes);
+
+// Integrations & Proxies
+app.use('/api/elevation', elevationRoutes);
+app.use('/api/gis', gisProxyRoutes);
+
+// Route Aliases for Backward Compatibility
+app.use('/api/analyze-floorplan', floorPlansRoutes);
+app.use('/api/spatial', floorPlansRoutes);
+app.use('/api/cubicasa', floorPlansRoutes);
+app.use('/api/floor-plan', floorPlansRoutes);
+app.use('/api/billionaire-call', aiCallRoutes);
+app.use('/api/realtime/call', realtimeAPIRoutes);
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`API Server running on port ${PORT}`);
+  console.log(`🚀 HomeQuest API Server - COMPLETE SYSTEM RUNNING`);
+  console.log(`Port: ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log(`🚀 Routes registered:`);
-  console.log(`  - /api/floor-plans (CAD upload, processing)`);
-  console.log(`  - /api/rag-learning (learning stats, manual edits)`);
-  console.log(`  - /api/blueprint (production blueprint processing)`);
-  console.log(`  - /api/projects, /api/teams, /api/contacts`);
-  console.log(`  - And more...`);
+  console.log('');
+  console.log('✅ ALL APIS REGISTERED:');
+  console.log('');
+  console.log('📐 Construction & Processing:');
+  console.log('  - floor-plans, floor-plan-3d, floor-plan-storage');
+  console.log('  - blueprint, wall-editor, documents');
+  console.log('  - enhanced, intelligent');
+  console.log('');
+  console.log('🤖 AI & Voice:');
+  console.log('  - ai, ai-assistant, ai-call, billionaire-ai');
+  console.log('  - claude-ai, chatgpt-voice, elevenlabs, retell');
+  console.log('');
+  console.log('📞 Communication:');
+  console.log('  - twilio, vapi, homequest-calls, simple-call');
+  console.log('  - builder-phones, phone-system, conversations');
+  console.log('');
+  console.log('📧 Email:');
+  console.log('  - nylas, email-oauth, autonomous-campaigns');
+  console.log('');
+  console.log('👥 Teams & Projects:');
+  console.log('  - projects, teams, contacts, messaging, users');
+  console.log('');
+  console.log('💼 Business:');
+  console.log('  - vendor-bidding, appointments, meeting-invites');
+  console.log('  - builder-briefing, usage');
+  console.log('');
+  console.log('🧠 Learning:');
+  console.log('  - rag, rag-learning, secure-rag');
+  console.log('');
+  console.log('🔌 Real-time:');
+  console.log('  - realtime, websocket');
+  console.log('');
+  console.log('🌍 Integrations:');
+  console.log('  - elevation, gis');
+  console.log('');
+  console.log(`Total APIs: 50+ endpoints ready!`);
 });
