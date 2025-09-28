@@ -685,6 +685,10 @@ app.use('/api/contacts', contactsRoutes);
 app.use('/api/messaging', messagingRoutes);
 app.use('/api/wall-editor', wallEditorRoutes);
 
+// Add route aliases for backward compatibility
+app.use('/api/analyze-floorplan', floorPlansRoutes); // Maps analyze-floorplan to floor-plans routes
+app.use('/api/spatial', floorPlansRoutes); // Maps spatial endpoints to floor-plans routes
+
 // Start server
 app.listen(PORT, () => {
   console.log(`API Server running on port ${PORT}`);
