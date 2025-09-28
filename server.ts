@@ -8,17 +8,17 @@ import { v4 as uuidv4 } from 'uuid';
 import floorPlanRoutes from './src/routes/floorPlans';
 import floorPlanPersistenceRoutes from './src/routes/floor-plan-persistence.routes';
 
-// Import additional essential routes
-import ragLearningRoutes from './src/routes/rag-learning.routes';
-import vendorBiddingRoutes from './src/routes/vendor-bidding.routes';
-import projectsRoutes from './src/routes/projects.routes';
-import teamsRoutes from './src/routes/team.routes';
-import contactsRoutes from './src/routes/contacts.routes';
-import messagingRoutes from './src/routes/messaging.routes';
-import documentsRoutes from './src/routes/documents.routes';
-import productionBlueprintRoutes from './src/routes/production-blueprint.routes';
-import elevationRoutes from './src/routes/elevation.routes';
-import wallEditorRoutes from './src/routes/wall-editor.routes';
+// Import additional essential routes - using require for compatibility
+const ragLearningRoutes = require('./src/routes/rag-learning.routes').default || require('./src/routes/rag-learning.routes');
+const vendorBiddingRoutes = require('./src/routes/vendor-bidding.routes').default || require('./src/routes/vendor-bidding.routes');
+const projectsRoutes = require('./src/routes/projects.routes').default || require('./src/routes/projects.routes');
+const teamsRoutes = require('./src/routes/team.routes').default || require('./src/routes/team.routes');
+const contactsRoutes = require('./src/routes/contacts.routes').default || require('./src/routes/contacts.routes');
+const messagingRoutes = require('./src/routes/messaging.routes').default || require('./src/routes/messaging.routes');
+const documentsRoutes = require('./src/routes/documents.routes').default || require('./src/routes/documents.routes');
+const productionBlueprintRoutes = require('./src/routes/production-blueprint.routes').default || require('./src/routes/production-blueprint.routes');
+const elevationRoutes = require('./src/routes/elevation.routes').default || require('./src/routes/elevation.routes');
+const wallEditorRoutes = require('./src/routes/wall-editor.routes').default || require('./src/routes/wall-editor.routes');
 
 // Load environment variables
 dotenv.config();
@@ -93,17 +93,40 @@ app.use('/api/floor-plans', floorPlanRoutes);
 // Add persistence routes (auto-save, load, update, delete)
 app.use('/api/floor-plans', floorPlanPersistenceRoutes);
 
-// Register additional essential routes
-app.use('/api/rag-learning', ragLearningRoutes);
-app.use('/api/vendor-bidding', vendorBiddingRoutes);
-app.use('/api/projects', projectsRoutes);
-app.use('/api/teams', teamsRoutes);
-app.use('/api/contacts', contactsRoutes);
-app.use('/api/messages', messagingRoutes);
-app.use('/api/documents', documentsRoutes);
-app.use('/api/production-blueprint', productionBlueprintRoutes);
-app.use('/api/elevation', elevationRoutes);
-app.use('/api/wall-editor', wallEditorRoutes);
+// Register additional essential routes with error handling
+try {
+  if (ragLearningRoutes) app.use('/api/rag-learning', ragLearningRoutes);
+  console.log('✅ RAG learning routes registered');
+} catch (err) {
+  console.error('❌ Failed to register RAG learning routes:', err);
+}
+
+try {
+  if (vendorBiddingRoutes) app.use('/api/vendor-bidding', vendorBiddingRoutes);
+  console.log('✅ Vendor bidding routes registered');
+} catch (err) {
+  console.error('❌ Failed to register vendor bidding routes:', err);
+}
+
+try {
+  if (projectsRoutes) app.use('/api/projects', projectsRoutes);
+  console.log('✅ Projects routes registered');
+} catch (err) {
+  console.error('❌ Failed to register projects routes:', err);
+}
+
+try {
+  if (teamsRoutes) app.use('/api/teams', teamsRoutes);
+  if (contactsRoutes) app.use('/api/contacts', contactsRoutes);
+  if (messagingRoutes) app.use('/api/messages', messagingRoutes);
+  if (documentsRoutes) app.use('/api/documents', documentsRoutes);
+  if (productionBlueprintRoutes) app.use('/api/production-blueprint', productionBlueprintRoutes);
+  if (elevationRoutes) app.use('/api/elevation', elevationRoutes);
+  if (wallEditorRoutes) app.use('/api/wall-editor', wallEditorRoutes);
+  console.log('✅ All additional routes registered');
+} catch (err) {
+  console.error('❌ Failed to register some routes:', err);
+}
 
 // DEPRECATED - Old Supabase upload endpoint (commented out)
 /*
