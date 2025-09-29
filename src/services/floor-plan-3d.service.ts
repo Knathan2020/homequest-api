@@ -835,6 +835,84 @@ export class FloorPlan3DService {
     if (error) throw error;
     return data || [];
   }
+
+  /**
+   * Get a specific model
+   */
+  async getModel(modelId: string): Promise<FloorPlan3DModel | null> {
+    const model = this.models.get(modelId);
+    if (model) return model;
+
+    if (!this.supabase) return null;
+
+    const { data, error } = await this.supabase
+      .from('floor_plan_3d_models')
+      .select('*')
+      .eq('id', modelId)
+      .single();
+
+    if (error) return null;
+    return data;
+  }
+
+  /**
+   * Update materials for a model
+   */
+  async updateMaterials(modelId: string, materials: any): Promise<FloorPlan3DModel | null> {
+    const model = this.models.get(modelId);
+    if (!model) return null;
+
+    model.materials = materials;
+    model.updatedAt = new Date().toISOString();
+
+    await this.saveToDatabase(model);
+    return model;
+  }
+
+  /**
+   * Add furniture to a model
+   */
+  async addFurniture(modelId: string, furnitureData: any): Promise<FloorPlan3DModel | null> {
+    const model = this.models.get(modelId);
+    if (!model) return null;
+
+    if (!model.furniture) model.furniture = [];
+    model.furniture.push(furnitureData);
+    model.updatedAt = new Date().toISOString();
+
+    await this.saveToDatabase(model);
+    return model;
+  }
+
+  /**
+   * Update heights for a model
+   */
+  async updateHeights(modelId: string, heights: any): Promise<FloorPlan3DModel | null> {
+    const model = this.models.get(modelId);
+    if (!model) return null;
+
+    model.metadata = { ...model.metadata, heights };
+    model.updatedAt = new Date().toISOString();
+
+    await this.saveToDatabase(model);
+    return model;
+  }
+
+  /**
+   * Delete a model
+   */
+  async deleteModel(modelId: string): Promise<boolean> {
+    this.models.delete(modelId);
+
+    if (!this.supabase) return true;
+
+    const { error } = await this.supabase
+      .from('floor_plan_3d_models')
+      .delete()
+      .eq('id', modelId);
+
+    return !error;
+  }
 }
 
 // Export singleton

@@ -108,7 +108,7 @@ router.post('/generate-voice', async (req: Request, res: Response) => {
         modelId: 'eleven_turbo_v2_5' as any,
         voiceSettings: {
           stability: 0.5,
-          similarity_boost: 0.75
+          similarityBoost: 0.75
         }
       }
     );

@@ -441,6 +441,36 @@ class TwilioSubaccountsService {
       return false;
     }
   }
+
+  // Get builder usage (alias for team usage)
+  async getBuilderUsage(teamId: string): Promise<any> {
+    return this.getTeamUsage(teamId);
+  }
+
+  // List builder accounts (alias for teams)
+  async listBuilderAccounts(): Promise<any[]> {
+    try {
+      const { data } = await supabase
+        .from('teams')
+        .select('*')
+        .not('twilio_subaccount_sid', 'is', null);
+
+      return data || [];
+    } catch (error) {
+      console.error('Error listing builder accounts:', error);
+      return [];
+    }
+  }
+
+  // Suspend builder account (alias for team)
+  async suspendBuilderAccount(teamId: string): Promise<boolean> {
+    return this.suspendTeamAccount(teamId);
+  }
+
+  // Reactivate builder account (alias for team)
+  async reactivateBuilderAccount(teamId: string): Promise<boolean> {
+    return this.reactivateTeamAccount(teamId);
+  }
 }
 
 // Create singleton instance
