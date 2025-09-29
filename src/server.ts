@@ -346,17 +346,17 @@ app.delete('/api/projects/:id', async (req, res) => {
 });
 
 // ============= ROUTE IMPORTS =============
-// Import route modules
-const builderPhonesRoutes = require('./routes/builder-phones.routes').default;
-const vendorBiddingRoutes = require('./routes/vendor-bidding.routes').default;
-const appointmentsRoutes = require('./routes/appointments.routes').default;
-const ragLearningRoutes = require('./routes/rag-learning.routes').default;
+// Import route modules (using different variable names to avoid conflicts)
+const builderPhonesRoutesModule = require('./routes/builder-phones.routes').default;
+const vendorBiddingRoutesModule = require('./routes/vendor-bidding.routes').default;
+const appointmentsRoutesModule = require('./routes/appointments.routes').default;
+const ragLearningRoutesModule = require('./routes/rag-learning.routes').default;
 
 // Register routes
-app.use('/api/builder-phones', builderPhonesRoutes);
-app.use('/api/vendor-bidding', vendorBiddingRoutes);
-app.use('/api/appointments', appointmentsRoutes);
-app.use('/api/rag-learning', ragLearningRoutes);
+app.use('/api/builder-phones', builderPhonesRoutesModule);
+app.use('/api/vendor-bidding', vendorBiddingRoutesModule);
+app.use('/api/appointments', appointmentsRoutesModule);
+app.use('/api/rag-learning', ragLearningRoutesModule);
 
 // ============= BUILDINGS API =============
 app.get('/api/buildings', async (req, res) => {
@@ -779,8 +779,7 @@ app.use('/api/messaging', messagingRoutes);
 app.use('/api/users', userRoutes);
 
 // Business Logic & Workflows
-app.use('/api/vendor-bidding', vendorBiddingRoutes);
-app.use('/api/appointments', appointmentsRoutes);
+// vendor-bidding and appointments already registered above
 app.use('/api/meeting-invites', meetingInvitesRoutes);
 app.use('/api/builder-briefing', builderBriefingRoutes);
 app.use('/api/usage', usageRoutes);
