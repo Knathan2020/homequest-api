@@ -32,11 +32,20 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Configure CORS
 app.use(cors({
   origin: [
-    'http://localhost:3000', 
-    'http://localhost:5173', 
+    // Local development
+    'http://localhost:3000',
+    'http://localhost:5173',
     'http://localhost:5174',
+
+    // GitHub Codespaces
     'https://cuddly-giggle-69p59v4xv5gw2rvw7-3000.app.github.dev',
-    'https://cuddly-giggle-69p59v4xv5gw2rvw7-4000.app.github.dev'
+    'https://cuddly-giggle-69p59v4xv5gw2rvw7-4000.app.github.dev',
+
+    // Vercel Production & Preview URLs
+    'https://construction-platform-sigma.vercel.app',
+    'https://construction-platform.vercel.app',
+    'https://construction-platform-*.vercel.app',
+    /^https:\/\/construction-platform-[a-z0-9]+-ken-whites-projects-[a-z0-9]+\.vercel\.app$/
   ],
   credentials: true
 }));
