@@ -39,17 +39,15 @@ router.post('/simple-call', async (req, res) => {
     
     // Initial greeting
     twiml.say({
-      voice: 'Polly.Joanna',
-      rate: '95%'
+      voice: 'Polly.Joanna'
     }, `Hello ${vendorName}! This is ${builderName} from ${companyName}.`);
     
     twiml.pause({ length: 1 });
     
     // Main message
     twiml.say({
-      voice: 'Polly.Joanna',
-      rate: '95%'
-    }, `I'm calling about a potential project at ${projectDetails.address}. 
+      voice: 'Polly.Joanna'
+    }, `I'm calling about a potential project at ${projectDetails.address}.
         We have a budget of ${projectDetails.budget} and we're looking for quality ${vendorCompany} services.`);
     
     twiml.pause({ length: 1 });
@@ -62,8 +60,7 @@ router.post('/simple-call', async (req, res) => {
     });
     
     gather.say({
-      voice: 'Polly.Joanna',
-      rate: '95%'
+      voice: 'Polly.Joanna'
     }, 'If you are interested in learning more, press 1. If you would like us to call back later, press 2.');
     
     // If no input, say goodbye

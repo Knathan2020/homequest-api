@@ -63,6 +63,8 @@ interface FloorPlan3DModel {
   walls: WallSegment[];
   doors: DoorProperties[];
   windows: WindowProperties[];
+  furniture?: any[];
+  materials?: any;
   metadata: {
     totalArea: number;
     totalVolume: number;
@@ -71,6 +73,8 @@ interface FloorPlan3DModel {
     roomCount: number;
     processingTime: number;
     confidence: number;
+    heights?: any;
+    [key: string]: any;
   };
   exportFormats?: {
     gltf?: string;
@@ -100,6 +104,7 @@ export class FloorPlan3DService {
   private supabase: SupabaseClient | null;
   private storageBasePath: string;
   private processingQueue: Map<string, any> = new Map();
+  private models: Map<string, FloorPlan3DModel> = new Map();
 
   constructor() {
     const supabaseUrl = process.env.SUPABASE_URL;
@@ -802,6 +807,11 @@ export class FloorPlan3DService {
       });
 
     if (error) throw error;
+  }
+
+  // Alias for saveModel3D
+  private async saveToDatabase(model: FloorPlan3DModel): Promise<void> {
+    return this.saveModel3D(model);
   }
 
   private async ensureStorageDirectory(): Promise<void> {

@@ -37,8 +37,17 @@ router.post('/call-simple', async (req: Request, res: Response) => {
 
     // Convert stream to buffer
     const chunks: Buffer[] = [];
-    for await (const chunk of audioStream) {
-      chunks.push(Buffer.from(chunk));
+    // Fix for async iterator
+    const stream = audioStream as any;
+    if (stream && typeof stream[Symbol.asyncIterator] === 'function') {
+      for await (const chunk of stream) {
+        chunks.push(Buffer.from(chunk));
+      }
+    } else if (stream && typeof stream.read === 'function') {
+      let chunk;
+      while ((chunk = stream.read()) !== null) {
+        chunks.push(Buffer.from(chunk));
+      }
     }
     const audioBuffer = Buffer.concat(chunks);
 
@@ -114,8 +123,17 @@ router.post('/generate-voice', async (req: Request, res: Response) => {
     );
 
     const chunks: Buffer[] = [];
-    for await (const chunk of audioStream) {
-      chunks.push(Buffer.from(chunk));
+    // Fix for async iterator
+    const stream = audioStream as any;
+    if (stream && typeof stream[Symbol.asyncIterator] === 'function') {
+      for await (const chunk of stream) {
+        chunks.push(Buffer.from(chunk));
+      }
+    } else if (stream && typeof stream.read === 'function') {
+      let chunk;
+      while ((chunk = stream.read()) !== null) {
+        chunks.push(Buffer.from(chunk));
+      }
     }
     const audioBuffer = Buffer.concat(chunks);
 

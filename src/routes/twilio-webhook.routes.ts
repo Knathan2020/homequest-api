@@ -54,13 +54,12 @@ router.post('/twilio/voice/:teamId', async (req: Request, res: Response) => {
     const twiml = new VoiceResponse();
     
     // Connect to VAPI's SIP endpoint with the assistant ID
-    twiml.dial().sip(
-      `sip:${team.vapi_assistant_id}@vapi.ai`,
-      {
-        statusCallback: `${process.env.WEBHOOK_BASE_URL}/api/twilio/status/${teamId}`,
-        statusCallbackEvent: ['completed']
-      }
-    );
+    const dial = twiml.dial();
+    dial.sip({
+      uri: `sip:${team.vapi_assistant_id}@vapi.ai`,
+      statusCallback: `${process.env.WEBHOOK_BASE_URL}/api/twilio/status/${teamId}`,
+      statusCallbackEvent: ['completed']
+    } as any);
 
     res.type('text/xml');
     res.send(twiml.toString());
@@ -174,12 +173,12 @@ router.post('/twilio/forward-vapi/:teamId', async (req: Request, res: Response) 
     const dial = twiml.dial();
     
     // Create a unique conference room for this call
-    dial.conference(`team-${teamId}-${Date.now()}`, {
+    dial.conference({
       startConferenceOnEnter: true,
       endConferenceOnExit: true,
       statusCallback: `${process.env.WEBHOOK_BASE_URL}/api/twilio/conference-status/${teamId}`,
       statusCallbackEvent: ['start', 'end', 'join', 'leave']
-    });
+    }, `team-${teamId}-${Date.now()}`);
 
     // In parallel, trigger VAPI to join the conference
     setTimeout(async () => {
