@@ -68,7 +68,8 @@ import secureRAGRoutes from './routes/secure-rag.routes';
 
 // Real-time & WebSocket
 import realtimeAPIRoutes from './routes/realtime-api.routes';
-import realtimeWebsocketRoutes from './routes/realtime-websocket.routes';
+// Temporarily disabled - requires express-ws setup
+// import realtimeWebsocketRoutes from './routes/realtime-websocket.routes';
 
 // Integrations & Proxies
 import elevationRoutes from './routes/elevation.routes';
@@ -777,7 +778,7 @@ app.use('/api/secure-rag', secureRAGRoutes);
 
 // Real-time & WebSocket
 app.use('/api/realtime', realtimeAPIRoutes);
-app.use('/api/websocket', realtimeWebsocketRoutes);
+// app.use('/api/websocket', realtimeWebsocketRoutes); // Disabled - requires express-ws
 
 // Integrations & Proxies
 app.use('/api/elevation', elevationRoutes);
