@@ -717,6 +717,7 @@ app.get('/api/floor-plans/job/:jobId', async (req, res) => {
 
 // Core Construction & Processing Routes
 app.use('/api/enhanced', enhancedDetectionRoutes);
+app.use('/api/enhanced-detection', enhancedDetectionRoutes); // Alias for frontend compatibility
 app.use('/api/intelligent', intelligentAnalysisRoutes);
 app.use('/api/floor-plans', floorPlansRoutes);
 app.use('/api/floor-plans', floorPlanPersistenceRoutes);
