@@ -218,7 +218,7 @@ class TwilioAIService extends EventEmitter {
         record: true,
         recordingStatusCallback: `${this.webhookBase}/recording`,
         machineDetection: 'DetectMessageEnd',
-        asyncAmd: 'true' as any, // Twilio SDK type issue
+        asyncAmd: true as any, // Twilio SDK type issue
         asyncAmdStatusCallback: `${this.webhookBase}/amd`
       });
 

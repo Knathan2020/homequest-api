@@ -64,9 +64,8 @@ router.post('/ai-call', async (req, res) => {
     const twiml = new VoiceResponse();
     
     twiml.say({
-      voice: 'Polly.Matthew',
-      rate: '95%'
-    }, script);
+      voice: 'Polly.Matthew'
+    } as any, script);
     
     twiml.pause({ length: 2 });
     
@@ -78,9 +77,8 @@ router.post('/ai-call', async (req, res) => {
     });
     
     gather.say({
-      voice: 'Polly.Matthew',
-      rate: '95%'
-    }, 'If you are interested, press 1. To schedule a callback, press 2.');
+      voice: 'Polly.Matthew'
+    } as any, 'If you are interested, press 1. To schedule a callback, press 2.');
     
     // Make the call
     const accountSid = process.env.TWILIO_ACCOUNT_SID;

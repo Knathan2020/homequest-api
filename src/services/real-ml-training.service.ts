@@ -8,6 +8,8 @@ interface VisionAnalysis {
   doors?: any[];
   windows?: any[];
   measurements?: any[];
+  mlEnhanced?: boolean;
+  modelVersion?: string;
 }
 
 interface TrainingData {

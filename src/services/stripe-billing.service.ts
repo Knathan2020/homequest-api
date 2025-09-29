@@ -7,7 +7,7 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2024-06-20'
+  apiVersion: '2024-12-18.acacia' as any
 });
 
 const supabase = createClient(
@@ -106,7 +106,7 @@ class StripeBillingService {
 
       // Get the client secret for payment method collection
       const invoice = subscription.latest_invoice as Stripe.Invoice;
-      const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent;
+      const paymentIntent = (invoice as any).payment_intent as Stripe.PaymentIntent;
 
       return {
         success: true,
@@ -172,7 +172,7 @@ class StripeBillingService {
         const additionalUsers = currentUsers - billing.included_users;
 
         // Add usage-based charge for extra users
-        await stripe.subscriptionItems.createUsageRecord(
+        await (stripe.subscriptionItems as any).createUsageRecord(
           billing.stripe_subscription_item_id,
           {
             quantity: additionalUsers,

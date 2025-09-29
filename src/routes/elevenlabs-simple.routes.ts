@@ -25,12 +25,12 @@ router.post('/call-simple', async (req: Request, res: Response) => {
       'pFZP5JQG7iQjIQuC4Bku', // Lily - very natural female voice
       {
         text: message,
-        model_id: 'eleven_turbo_v2_5',
-        voice_settings: {
+        modelId: 'eleven_turbo_v2_5' as any,
+        voiceSettings: {
           stability: 0.5,
-          similarity_boost: 0.75,
+          similarityBoost: 0.75,
           style: 0.4,
-          use_speaker_boost: true
+          useSpeakerBoost: true
         }
       }
     );
@@ -99,14 +99,14 @@ router.post('/generate-voice', async (req: Request, res: Response) => {
       name: v.name
     })));
 
-    const selectedVoiceId = voiceId || voices.voices[0].voice_id;
+    const selectedVoiceId = voiceId || (voices.voices[0] as any).voice_id || (voices.voices[0] as any).voiceId;
 
     const audioStream = await elevenlabs.textToSpeech.convert(
       selectedVoiceId,
       {
         text,
-        model_id: 'eleven_turbo_v2_5',
-        voice_settings: {
+        modelId: 'eleven_turbo_v2_5' as any,
+        voiceSettings: {
           stability: 0.5,
           similarity_boost: 0.75
         }

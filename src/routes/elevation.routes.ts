@@ -36,7 +36,7 @@ router.post('/batch', async (req: Request, res: Response) => {
     console.log(`📍 Fetching elevation for ${locations.length} points`);
     
     const response = await fetch(url);
-    const data = await response.json();
+    const data: any = await response.json();
     
     if (data.status === 'OK') {
       console.log(`✅ Received elevation data for ${data.results.length} points`);
@@ -83,7 +83,7 @@ router.post('/path', async (req: Request, res: Response) => {
     const url = `https://maps.googleapis.com/maps/api/elevation/json?path=${pathString}&samples=${samples}&key=${GOOGLE_MAPS_API_KEY}`;
     
     const response = await fetch(url);
-    const data = await response.json();
+    const data: any = await response.json();
     
     if (data.status === 'OK') {
       res.json({

@@ -17,6 +17,11 @@ interface TeamAccount {
   ownerEmail: string;
   companyName?: string;
   contactPhone?: string; // Team contact phone
+  location?: {
+    city?: string;
+    state?: string;
+    areaCode?: string;
+  };
 }
 
 interface TwilioTeamAccount {
@@ -85,17 +90,24 @@ class TwilioSubaccountsService {
       const subaccountClient = twilio(subaccount.sid, subaccountAuthToken);
 
       // Step 4: Buy a phone number for the subaccount
+      // Use team's location area code if provided, otherwise search for any available number
+      const searchParams: any = {
+        limit: 1,
+        voiceEnabled: true,
+        smsEnabled: true
+      };
+
+      // Add area code if provided in team location
+      if (team.location?.areaCode) {
+        searchParams.areaCode = team.location.areaCode;
+      } else if (team.location?.state) {
+        searchParams.inRegion = team.location.state;
+      }
+
       const availableNumbers = await this.masterClient
         .availablePhoneNumbers('US')
         .local
-        .list({
-          areaCode: 678, // Atlanta area code - change as needed
-          limit: 1,
-          capabilities: {
-            voice: true,
-            sms: true
-          }
-        });
+        .list(searchParams);
 
       if (availableNumbers.length === 0) {
         throw new Error('No phone numbers available in the requested area');

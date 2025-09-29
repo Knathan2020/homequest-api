@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import Joi from 'joi';
 import { z, ZodError, ZodSchema } from 'zod';
+import { validationResult } from 'express-validator';
 
 export type ValidationSchema = Joi.Schema | ZodSchema;
 
@@ -82,6 +83,19 @@ export const validate = (
   } else {
     return validateZod(schema as ZodSchema, property);
   }
+};
+
+// Express-validator middleware
+export const validationMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    res.status(400).json({
+      error: 'Validation error',
+      errors: errors.array()
+    });
+    return;
+  }
+  next();
 };
 
 export const commonSchemas = {
