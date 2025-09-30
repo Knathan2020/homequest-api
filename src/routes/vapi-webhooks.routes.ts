@@ -6,6 +6,7 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import aiReceptionistService from '../services/ai-receptionist.service';
+import weatherService from '../services/weather.service';
 
 const router = express.Router();
 
@@ -335,6 +336,44 @@ async function handleScheduleAppointment(req: any, res: any, call: any, params: 
     const appointmentTime = appointmentData.time || '10:00';
     const scheduledAt = `${appointmentDate}T${appointmentTime}:00Z`; // Add timezone
 
+    // Determine work type
+    const workType = appointmentType === 'site_visit' ? 'outdoor' : 'indoor';
+
+    // Check weather for outdoor work
+    let weatherWarnings: string[] = [];
+    let weatherRecommendation = '';
+    let alternativeDate: Date | undefined;
+
+    if (workType === 'outdoor' && projectAddress) {
+      try {
+        console.log('☁️ Checking weather for outdoor appointment...');
+        const scheduledDate = new Date(`${appointmentDate}T${appointmentTime}:00`);
+        const weatherCheck = await weatherService.checkSchedulingDate(
+          projectAddress,
+          scheduledDate,
+          'outdoor'
+        );
+
+        weatherWarnings = weatherCheck.warnings;
+        weatherRecommendation = weatherCheck.recommendation;
+        alternativeDate = weatherCheck.alternativeDate;
+
+        console.log('🌤️ Weather check result:', {
+          canProceed: weatherCheck.canProceed,
+          warnings: weatherWarnings,
+          recommendation: weatherRecommendation
+        });
+
+        // Add weather info to notes
+        if (weatherWarnings.length > 0) {
+          console.log('⚠️ Weather warnings detected for appointment');
+        }
+      } catch (weatherError) {
+        console.error('⚠️ Weather check failed:', weatherError);
+        weatherWarnings.push('Unable to check weather - please verify conditions before appointment');
+      }
+    }
+
     // Create the appointment
     const appointmentInsertData = {
       team_id: call.assistantId || '11111111-1111-1111-1111-111111111111',
@@ -345,8 +384,8 @@ async function handleScheduleAppointment(req: any, res: any, call: any, params: 
       attendee_name: customerName,
       attendee_phone: customerPhone || call.customer?.number,
       location_address: projectAddress,
-      work_type: appointmentType === 'site_visit' ? 'outdoor' : 'indoor',
-      notes: `Scheduled during AI call. ${notes || ''}`,
+      work_type: workType,
+      notes: `Scheduled during AI call. ${notes || ''}${weatherWarnings.length > 0 ? `\n\n⚠️ Weather: ${weatherWarnings.join('; ')}` : ''}`,
       source: 'ai_call',
       created_by_ai: true,
       ai_call_id: call.id,
@@ -398,8 +437,20 @@ async function handleScheduleAppointment(req: any, res: any, call: any, params: 
 
     console.log('✅ Appointment scheduled successfully:', appointment.id);
 
+    // Build response with weather info if applicable
+    let responseMessage = `Perfect! I've scheduled your ${appointmentType} for ${preferredDate} at ${preferredTime}. You'll receive a reminder before the appointment.`;
+
+    if (weatherWarnings.length > 0) {
+      responseMessage += `\n\nWeather note: ${weatherRecommendation}`;
+
+      if (alternativeDate && !weatherRecommendation.toLowerCase().includes('good') && !weatherRecommendation.toLowerCase().includes('excellent')) {
+        const altDateStr = alternativeDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        responseMessage += ` If you'd like, I can reschedule to ${altDateStr} when conditions will be better.`;
+      }
+    }
+
     res.json({
-      result: `Perfect! I've scheduled your ${appointmentType} for ${preferredDate} at ${preferredTime}. You'll receive a reminder before the appointment.`
+      result: responseMessage
     });
 
   } catch (error) {

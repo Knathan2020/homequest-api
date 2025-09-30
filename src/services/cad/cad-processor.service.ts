@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const execAsync = promisify(exec);
 
@@ -49,10 +50,24 @@ export interface CADProcessingResult {
 
 export class CADProcessorService {
   private tempDir: string;
-  
+  private supabase: SupabaseClient | null = null;
+
   constructor() {
     this.tempDir = path.join(process.cwd(), 'temp-cad-files');
     this.ensureTempDirectory();
+    this.initializeSupabase();
+  }
+
+  private initializeSupabase(): void {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+    if (supabaseUrl && supabaseKey) {
+      this.supabase = createClient(supabaseUrl, supabaseKey);
+      console.log('✅ Supabase initialized for CAD processor');
+    } else {
+      console.warn('⚠️ Supabase not configured - CAD files will use local storage');
+    }
   }
 
   private ensureTempDirectory(): void {
