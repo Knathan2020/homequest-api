@@ -5,6 +5,7 @@ import twilio from 'twilio';
 import { Twilio } from 'twilio';
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
+import { getAssistantIdByVoice } from '../config/vapi-assistants.config';
 
 // Initialize Supabase
 const supabase = createClient(
@@ -468,10 +469,22 @@ class TwilioSubaccountsService {
   private async importPhoneToVAPI(
     phoneNumber: string,
     teamName: string,
-    _teamId: string
+    teamId: string
   ): Promise<string | null> {
     try {
       const vapiApiKey = process.env.VAPI_API_KEY || '31344c5e-a977-4438-ad39-0e1c245be45f';
+
+      // Get team's selected voice
+      const { data: teamData } = await supabase
+        .from('teams')
+        .select('default_voice_id')
+        .eq('id', teamId)
+        .single();
+
+      const voiceId = teamData?.default_voice_id || 'kentrill'; // Default to Kentrill
+      const assistantId = getAssistantIdByVoice(voiceId);
+
+      console.log(`📞 Using voice: ${voiceId}, assistant: ${assistantId}`);
 
       // Step 1: Import phone number to VAPI
       const response = await axios.post(
@@ -480,7 +493,7 @@ class TwilioSubaccountsService {
           provider: 'twilio',
           number: phoneNumber,
           name: `${teamName} Business Line`,
-          assistantId: null, // Will use default assistant configured in VAPI
+          assistantId: assistantId, // Assign team's chosen assistant
           twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
           twilioAuthToken: process.env.TWILIO_AUTH_TOKEN
         },
