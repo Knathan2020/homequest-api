@@ -5,7 +5,8 @@ import twilio from 'twilio';
 import { Twilio } from 'twilio';
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
-import { getAssistantIdByVoice } from '../config/vapi-assistants.config';
+import { getAssistantByVoice } from '../config/vapi-assistants.config';
+import { getAssistantConfig } from '../config/vapi-assistant-template';
 
 // Initialize Supabase
 const supabase = createClient(
@@ -465,7 +466,7 @@ class TwilioSubaccountsService {
     return this.reactivateTeamAccount(teamId);
   }
 
-  // Import phone number to VAPI
+  // Import phone number to VAPI and create custom assistant
   private async importPhoneToVAPI(
     phoneNumber: string,
     teamName: string,
@@ -481,19 +482,39 @@ class TwilioSubaccountsService {
         .eq('id', teamId)
         .single();
 
-      const voiceId = teamData?.default_voice_id || 'kentrill'; // Default to Kentrill
-      const assistantId = getAssistantIdByVoice(voiceId);
+      const voiceId = teamData?.default_voice_id || 'hope';
+      const voiceConfig = getAssistantByVoice(voiceId);
 
-      console.log(`📞 Using voice: ${voiceId}, assistant: ${assistantId}`);
+      if (!voiceConfig) {
+        throw new Error(`Voice ${voiceId} not found`);
+      }
 
-      // Step 1: Import phone number to VAPI
-      const response = await axios.post(
+      console.log(`📞 Creating assistant with voice: ${voiceId}`);
+
+      // Step 1: Create assistant with full capabilities
+      const assistantConfig = getAssistantConfig(teamName, voiceConfig.elevenLabsVoiceId);
+      const assistantResponse = await axios.post(
+        'https://api.vapi.ai/assistant',
+        assistantConfig,
+        {
+          headers: {
+            'Authorization': `Bearer ${vapiApiKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const assistantId = assistantResponse.data.id;
+      console.log(`✅ Created assistant: ${assistantId}`);
+
+      // Step 2: Import phone number with the new assistant
+      const phoneResponse = await axios.post(
         'https://api.vapi.ai/phone-number',
         {
           provider: 'twilio',
           number: phoneNumber,
           name: `${teamName} Business Line`,
-          assistantId: assistantId, // Assign team's chosen assistant
+          assistantId: assistantId,
           twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
           twilioAuthToken: process.env.TWILIO_AUTH_TOKEN
         },
@@ -505,32 +526,14 @@ class TwilioSubaccountsService {
         }
       );
 
-      const phoneId = response.data.id;
-      console.log(`📞 Phone ${phoneNumber} imported to VAPI with ID: ${phoneId}`);
+      const phoneId = phoneResponse.data.id;
+      console.log(`✅ Phone ${phoneNumber} imported with ID: ${phoneId}`);
 
-      // Step 2: Configure webhook URL for call events
-      const webhookUrl = `${process.env.API_BASE_URL || 'https://homequest-api.onrender.com'}/api/vapi/webhook`;
-
-      try {
-        await axios.patch(
-          `https://api.vapi.ai/phone-number/${phoneId}`,
-          {
-            serverUrl: webhookUrl,
-            serverUrlSecret: process.env.VAPI_WEBHOOK_SECRET || null
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${vapiApiKey}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        console.log(`✅ VAPI webhook configured: ${webhookUrl}`);
-      } catch (webhookError: any) {
-        console.warn('⚠️ Failed to configure VAPI webhook:', webhookError.response?.data || webhookError.message);
-        // Don't fail the import if webhook config fails
-      }
+      // Step 3: Store assistant ID for future voice changes
+      await supabase
+        .from('teams')
+        .update({ vapi_assistant_id: assistantId })
+        .eq('id', teamId);
 
       return phoneId;
 

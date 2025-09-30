@@ -38,24 +38,31 @@ router.post('/vapi/webhooks/function-call', async (req, res) => {
     });
 
     switch (functionName) {
+      case 'getProjectInfo':
+        return await handleGetProjectInfo(req, res, call, parameters);
+
+      case 'lookupVendor':
+        return await handleLookupVendor(req, res, call, parameters);
+
       case 'transferCall':
         return await handleTransferCall(req, res, call, parameters);
-      
+
       case 'takeMessage':
         return await handleTakeMessage(req, res, call, parameters);
-      
+
       case 'scheduleCallback':
         return await handleScheduleCallback(req, res, call, parameters);
-      
+
       case 'checkAvailability':
         return await handleCheckAvailability(req, res, call, parameters);
 
       case 'schedule_appointment':
+      case 'scheduleAppointment':
         return await handleScheduleAppointment(req, res, call, parameters);
 
       default:
         console.log('⚠️ Unknown function call received:', functionName);
-        console.log('📋 Available functions: transferCall, takeMessage, scheduleCallback, checkAvailability, schedule_appointment');
+        console.log('📋 Available functions: getProjectInfo, lookupVendor, transferCall, takeMessage, scheduleCallback, checkAvailability, scheduleAppointment');
         res.json({
           result: 'I\'m not sure how to handle that request. Let me help you another way.'
         });
@@ -530,5 +537,190 @@ router.post('/vapi/webhooks/call-ended', async (req, res) => {
     res.status(500).json({ error: 'Failed to handle call end' });
   }
 });
+
+/**
+ * Get project information for the team
+ */
+async function handleGetProjectInfo(req: any, res: any, call: any, params: any) {
+  try {
+    const { projectName, projectId } = params;
+
+    // Get team ID from phone number
+    const { data: teamData } = await supabase
+      .from('teams')
+      .select('id, name')
+      .eq('twilio_phone_number', call.phoneNumberId)
+      .single();
+
+    if (!teamData) {
+      return res.json({
+        result: 'I apologize, I couldn\'t find information about this team.'
+      });
+    }
+
+    const teamId = teamData.id;
+
+    // Fetch projects
+    let projectQuery = supabase
+      .from('projects')
+      .select(`
+        *,
+        phases (
+          id,
+          name,
+          status,
+          start_date,
+          end_date,
+          budget,
+          spent
+        )
+      `)
+      .eq('team_id', teamId)
+      .in('status', ['active', 'in_progress', 'planning']);
+
+    if (projectId) {
+      projectQuery = projectQuery.eq('id', projectId);
+    } else if (projectName) {
+      projectQuery = projectQuery.ilike('name', `%${projectName}%`);
+    }
+
+    const { data: projects } = await projectQuery.limit(5);
+
+    // Fetch vendors for this team
+    const { data: vendors } = await supabase
+      .from('vendors')
+      .select('id, name, company, phone, email, category, status')
+      .eq('team_id', teamId)
+      .eq('status', 'active')
+      .limit(10);
+
+    // Fetch upcoming schedule
+    const today = new Date().toISOString().split('T')[0];
+    const { data: schedule } = await supabase
+      .from('scheduled_tasks')
+      .select('id, task_name, scheduled_date, assigned_to, status')
+      .eq('team_id', teamId)
+      .gte('scheduled_date', today)
+      .order('scheduled_date', { ascending: true })
+      .limit(10);
+
+    // Format the response
+    let response = `Here's what I found for ${teamData.name}:\n\n`;
+
+    if (projects && projects.length > 0) {
+      response += `**Active Projects (${projects.length}):**\n`;
+      projects.forEach(p => {
+        response += `- ${p.name} (${p.status})`;
+        if (p.address) response += ` at ${p.address}`;
+        response += `\n`;
+
+        if (p.phases && p.phases.length > 0) {
+          const activePhases = p.phases.filter((ph: any) => ph.status === 'in_progress');
+          if (activePhases.length > 0) {
+            response += `  Current phase: ${activePhases[0].name}\n`;
+          }
+        }
+      });
+      response += `\n`;
+    }
+
+    if (vendors && vendors.length > 0) {
+      response += `**Available Vendors (${vendors.length}):**\n`;
+      vendors.slice(0, 5).forEach(v => {
+        response += `- ${v.name}`;
+        if (v.company) response += ` (${v.company})`;
+        response += ` - ${v.category}`;
+        if (v.phone) response += ` - ${v.phone}`;
+        response += `\n`;
+      });
+      response += `\n`;
+    }
+
+    if (schedule && schedule.length > 0) {
+      response += `**Upcoming Schedule (${schedule.length} items):**\n`;
+      schedule.slice(0, 5).forEach(s => {
+        response += `- ${s.scheduled_date}: ${s.task_name}`;
+        if (s.assigned_to) response += ` (assigned to ${s.assigned_to})`;
+        response += `\n`;
+      });
+    }
+
+    res.json({ result: response });
+
+  } catch (error) {
+    console.error('Get project info error:', error);
+    res.json({
+      result: 'I apologize, I\'m having trouble accessing that information right now.'
+    });
+  }
+}
+
+/**
+ * Look up vendor contact information
+ */
+async function handleLookupVendor(req: any, res: any, call: any, params: any) {
+  try {
+    const { vendorName, category } = params;
+
+    // Get team ID from phone number
+    const { data: teamData } = await supabase
+      .from('teams')
+      .select('id')
+      .eq('twilio_phone_number', call.phoneNumberId)
+      .single();
+
+    if (!teamData) {
+      return res.json({
+        result: 'I couldn\'t find vendor information for this team.'
+      });
+    }
+
+    // Search for vendor
+    let query = supabase
+      .from('vendors')
+      .select('*')
+      .eq('team_id', teamData.id)
+      .eq('status', 'active');
+
+    if (vendorName) {
+      query = query.or(`name.ilike.%${vendorName}%,company.ilike.%${vendorName}%`);
+    }
+
+    if (category) {
+      query = query.eq('category', category);
+    }
+
+    const { data: vendors } = await query.limit(5);
+
+    if (!vendors || vendors.length === 0) {
+      return res.json({
+        result: `I couldn't find any vendors matching "${vendorName || category}". Would you like me to take a message or transfer you to someone who can help?`
+      });
+    }
+
+    let response = `I found ${vendors.length} vendor${vendors.length > 1 ? 's' : ''}:\n\n`;
+
+    vendors.forEach(v => {
+      response += `**${v.name}**`;
+      if (v.company) response += ` (${v.company})`;
+      response += `\n`;
+      response += `- Category: ${v.category}\n`;
+      if (v.phone) response += `- Phone: ${v.phone}\n`;
+      if (v.email) response += `- Email: ${v.email}\n`;
+      if (v.notes) response += `- Notes: ${v.notes}\n`;
+      response += `\n`;
+    });
+
+    response += `Would you like me to transfer you to any of these vendors or schedule an appointment?`;
+
+    res.json({ result: response });
+
+  } catch (error) {
+    console.error('Lookup vendor error:', error);
+    res.json({
+      result: 'I\'m having trouble looking up that vendor. Let me transfer you to someone who can help.'
+    });
+  }
+}
 
 export default router;
