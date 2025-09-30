@@ -4,6 +4,7 @@
 import twilio from 'twilio';
 import { Twilio } from 'twilio';
 import { createClient } from '@supabase/supabase-js';
+import axios from 'axios';
 
 // Initialize Supabase
 const supabase = createClient(
@@ -113,19 +114,29 @@ class TwilioSubaccountsService {
         throw new Error('No phone numbers available in the requested area');
       }
 
-      // For now, create phone number without webhooks (will configure later)
+      // Purchase phone number and configure webhooks
       const phoneNumber = await subaccountClient.incomingPhoneNumbers.create({
         phoneNumber: availableNumbers[0].phoneNumber,
         friendlyName: `${team.teamName}'s Business Line`
-        // Webhooks will be configured later with public URL
-        // voiceUrl: `${process.env.WEBHOOK_BASE_URL}/voice/${team.teamId}`,
-        // smsUrl: `${process.env.WEBHOOK_BASE_URL}/sms/${team.teamId}`,
-        // statusCallback: `${process.env.WEBHOOK_BASE_URL}/status/${team.teamId}`
       });
 
       console.log(`📞 Assigned phone number ${phoneNumber.phoneNumber} to ${team.teamName}`);
 
-      // Step 5: Store in database
+      // Step 5: Import to VAPI and configure AI assistant
+      let vapiPhoneId = null;
+      try {
+        vapiPhoneId = await this.importPhoneToVAPI(
+          phoneNumber.phoneNumber,
+          team.teamName,
+          team.teamId
+        );
+        console.log(`✅ Phone imported to VAPI with ID: ${vapiPhoneId}`);
+      } catch (vapiError) {
+        console.error('⚠️ Failed to import to VAPI:', vapiError);
+        // Continue even if VAPI import fails
+      }
+
+      // Step 6: Store in database
       const accountData: TwilioTeamAccount = {
         team_id: team.teamId,
         team_name: team.teamName,
@@ -149,7 +160,9 @@ class TwilioSubaccountsService {
           twilio_phone_number: phoneNumber.phoneNumber,
           twilio_subaccount_sid: subaccount.sid,
           twilio_subaccount_token: subaccountAuthToken,
-          twilio_phone_sid: phoneNumber.sid
+          twilio_phone_sid: phoneNumber.sid,
+          vapi_phone_id: vapiPhoneId,
+          phone_system_active: true
         })
         .eq('id', team.teamId)
         .select()
@@ -470,6 +483,69 @@ class TwilioSubaccountsService {
   // Reactivate builder account (alias for team)
   async reactivateBuilderAccount(teamId: string): Promise<boolean> {
     return this.reactivateTeamAccount(teamId);
+  }
+
+  // Import phone number to VAPI
+  private async importPhoneToVAPI(
+    phoneNumber: string,
+    teamName: string,
+    _teamId: string
+  ): Promise<string | null> {
+    try {
+      const vapiApiKey = process.env.VAPI_API_KEY || '31344c5e-a977-4438-ad39-0e1c245be45f';
+
+      // Step 1: Import phone number to VAPI
+      const response = await axios.post(
+        'https://api.vapi.ai/phone-number',
+        {
+          provider: 'twilio',
+          number: phoneNumber,
+          name: `${teamName} Business Line`,
+          assistantId: null, // Will use default assistant configured in VAPI
+          twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
+          twilioAuthToken: process.env.TWILIO_AUTH_TOKEN
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${vapiApiKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const phoneId = response.data.id;
+      console.log(`📞 Phone ${phoneNumber} imported to VAPI with ID: ${phoneId}`);
+
+      // Step 2: Configure webhook URL for call events
+      const webhookUrl = `${process.env.API_BASE_URL || 'https://homequest-api.onrender.com'}/api/vapi/webhook`;
+
+      try {
+        await axios.patch(
+          `https://api.vapi.ai/phone-number/${phoneId}`,
+          {
+            serverUrl: webhookUrl,
+            serverUrlSecret: process.env.VAPI_WEBHOOK_SECRET || null
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${vapiApiKey}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        console.log(`✅ VAPI webhook configured: ${webhookUrl}`);
+      } catch (webhookError: any) {
+        console.warn('⚠️ Failed to configure VAPI webhook:', webhookError.response?.data || webhookError.message);
+        // Don't fail the import if webhook config fails
+      }
+
+      return phoneId;
+
+    } catch (error: any) {
+      console.error('Error importing to VAPI:', error.response?.data || error.message);
+      throw error;
+    }
   }
 }
 
