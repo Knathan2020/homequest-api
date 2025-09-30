@@ -68,30 +68,16 @@ class TwilioSubaccountsService {
     }
   }
 
-  // Create a new subaccount for a team
+  // Create a new phone number for a team (using main account for VAPI compatibility)
   async createTeamAccount(team: TeamAccount): Promise<TwilioTeamAccount | null> {
     if (!this.isInitialized) {
       throw new Error('Twilio service not initialized');
     }
 
     try {
-      // Step 1: Create Twilio subaccount
-      const friendlyName = `${team.teamName} - ${team.companyName || 'Team'}`;
-      
-      const subaccount = await this.masterClient.api.v2010
-        .accounts
-        .create({ friendlyName });
+      console.log(`📱 Provisioning phone for ${team.teamName} on main Twilio account`);
 
-      console.log(`📱 Created subaccount for ${team.teamName}: ${subaccount.sid}`);
-
-      // Step 2: Get auth token for the subaccount
-      const subaccountAuthToken = subaccount.authToken;
-
-      // Step 3: Create a client for the subaccount
-      const subaccountClient = twilio(subaccount.sid, subaccountAuthToken);
-
-      // Step 4: Buy a phone number for the subaccount
-      // Use team's location area code if provided, otherwise search for any available number
+      // Step 1: Search for available phone number
       const searchParams: any = {
         limit: 1,
         voiceEnabled: true,
@@ -114,15 +100,15 @@ class TwilioSubaccountsService {
         throw new Error('No phone numbers available in the requested area');
       }
 
-      // Purchase phone number and configure webhooks
-      const phoneNumber = await subaccountClient.incomingPhoneNumbers.create({
+      // Step 2: Purchase phone number on main account
+      const phoneNumber = await this.masterClient.incomingPhoneNumbers.create({
         phoneNumber: availableNumbers[0].phoneNumber,
         friendlyName: `${team.teamName}'s Business Line`
       });
 
       console.log(`📞 Assigned phone number ${phoneNumber.phoneNumber} to ${team.teamName}`);
 
-      // Step 5: Import to VAPI and configure AI assistant
+      // Step 3: Import to VAPI and configure AI assistant
       let vapiPhoneId = null;
       try {
         vapiPhoneId = await this.importPhoneToVAPI(
@@ -136,17 +122,17 @@ class TwilioSubaccountsService {
         // Continue even if VAPI import fails
       }
 
-      // Step 6: Store in database
+      // Step 4: Store in database
       const accountData: TwilioTeamAccount = {
         team_id: team.teamId,
         team_name: team.teamName,
         owner_email: team.ownerEmail,
         company_name: team.companyName,
-        subaccount_sid: subaccount.sid,
-        subaccount_auth_token: subaccountAuthToken,
+        subaccount_sid: process.env.TWILIO_ACCOUNT_SID || '', // Using main account
+        subaccount_auth_token: process.env.TWILIO_AUTH_TOKEN || '', // Main account token
         twilio_phone_number: phoneNumber.phoneNumber,
         phone_number_sid: phoneNumber.sid,
-        friendly_name: friendlyName,
+        friendly_name: `${team.teamName}'s Business Line`,
         status: 'active',
         monthly_cost: 1.15, // Twilio phone number cost
         call_count: 0,
@@ -158,8 +144,8 @@ class TwilioSubaccountsService {
         .from('teams')
         .update({
           twilio_phone_number: phoneNumber.phoneNumber,
-          twilio_subaccount_sid: subaccount.sid,
-          twilio_subaccount_token: subaccountAuthToken,
+          twilio_subaccount_sid: process.env.TWILIO_ACCOUNT_SID, // Main account SID
+          twilio_subaccount_token: process.env.TWILIO_AUTH_TOKEN, // Main account token
           twilio_phone_sid: phoneNumber.sid,
           vapi_phone_id: vapiPhoneId,
           phone_system_active: true
@@ -174,8 +160,13 @@ class TwilioSubaccountsService {
         return accountData;
       }
 
-      // Step 6: Send welcome SMS to team
+      // Step 5: Send welcome SMS to team
       await this.sendWelcomeSMS(phoneNumber.phoneNumber, team.contactPhone || team.ownerEmail);
+
+      console.log(`✅ Phone provisioning complete for ${team.teamName}`);
+      console.log(`   - Phone: ${phoneNumber.phoneNumber}`);
+      console.log(`   - VAPI ID: ${vapiPhoneId}`);
+      console.log(`   - Cost: $${accountData.monthly_cost}/month`);
 
       return data;
     } catch (error) {
@@ -184,23 +175,11 @@ class TwilioSubaccountsService {
     }
   }
 
-  // Get team's Twilio client
+  // Get team's Twilio client (now using main account)
   async getTeamClient(teamId: string): Promise<Twilio | null> {
     try {
-      // Fetch team's account from database
-      const { data, error } = await supabase
-        .from('teams')
-        .select('*')
-        .eq('id', teamId)
-        .single();
-
-      if (error || !data || !data.twilio_subaccount_sid) {
-        console.error('No Twilio account found for team:', teamId);
-        return null;
-      }
-
-      // Create and return client for this subaccount
-      return twilio(data.twilio_subaccount_sid, data.twilio_subaccount_token);
+      // All teams now use the main Twilio account
+      return this.masterClient;
     } catch (error) {
       console.error('Error getting team client:', error);
       return null;
@@ -228,8 +207,8 @@ class TwilioSubaccountsService {
         throw new Error('No phone number assigned to this team');
       }
 
-      // Create client for team's subaccount
-      const teamClient = twilio(account.twilio_subaccount_sid, account.twilio_subaccount_token);
+      // Use main Twilio client
+      const teamClient = this.masterClient;
 
       // Create TwiML for the call
       const twimlUrl = `http://twimlets.com/echo?Twiml=${encodeURIComponent(`
@@ -292,7 +271,7 @@ class TwilioSubaccountsService {
         throw new Error('No phone number assigned to this team');
       }
 
-      const teamClient = twilio(account.twilio_subaccount_sid, account.twilio_subaccount_token);
+      const teamClient = this.masterClient;
 
       const sms = await teamClient.messages.create({
         body: message,
@@ -350,12 +329,12 @@ class TwilioSubaccountsService {
         .eq('id', teamId)
         .single();
 
-      if (!account || !account.twilio_subaccount_sid) {
+      if (!account || !account.twilio_phone_number) {
         return null;
       }
 
-      // Get usage from Twilio
-      const teamClient = twilio(account.twilio_subaccount_sid, account.twilio_subaccount_token);
+      // Get usage from Twilio main account
+      const teamClient = this.masterClient;
       
       const today = new Date();
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
