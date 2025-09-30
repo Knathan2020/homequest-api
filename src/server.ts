@@ -85,8 +85,46 @@ const supabaseUrl = process.env.SUPABASE_URL || 'https://fbwmkkskdrvaipmkddwm.su
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZid21ra3NrZHJ2YWlwbWtkZHdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE2ODI4MTcsImV4cCI6MjA2NzI1ODgxN30.-rBrI8a56Pc-5ROhiZaGtK6QwH1qrZOt7Osmj-lqeJc';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Middleware
-app.use(cors());
+// Middleware - CORS with dynamic origin checking
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // Allowed origins list
+    const allowedOrigins = [
+      // Local development
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:5174',
+
+      // GitHub Codespaces
+      'https://cuddly-giggle-69p59v4xv5gw2rvw7-3000.app.github.dev',
+      'https://cuddly-giggle-69p59v4xv5gw2rvw7-4000.app.github.dev',
+
+      // Vercel Production
+      'https://construction-platform-sigma.vercel.app',
+      'https://construction-platform.vercel.app'
+    ];
+
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Allow all Vercel preview deployments
+    if (origin.includes('vercel.app') && origin.startsWith('https://')) {
+      return callback(null, true);
+    }
+
+    // Reject other origins
+    console.warn(`⚠️  CORS blocked origin: ${origin}`);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
