@@ -29,24 +29,44 @@ const supabaseKey = process.env.SUPABASE_ANON_KEY || 'placeholder-key';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Configure CORS
+// Configure CORS with dynamic origin checking
 app.use(cors({
-  origin: [
-    // Local development
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://localhost:5174',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
 
-    // GitHub Codespaces
-    'https://cuddly-giggle-69p59v4xv5gw2rvw7-3000.app.github.dev',
-    'https://cuddly-giggle-69p59v4xv5gw2rvw7-4000.app.github.dev',
+    // Allowed origins list
+    const allowedOrigins = [
+      // Local development
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:5174',
 
-    // Vercel Production & Preview URLs
-    'https://construction-platform-sigma.vercel.app',
-    'https://construction-platform.vercel.app',
-    'https://construction-platform-*.vercel.app',
-    /^https:\/\/construction-platform-[a-z0-9]+-ken-whites-projects-[a-z0-9]+\.vercel\.app$/
-  ],
+      // GitHub Codespaces
+      'https://cuddly-giggle-69p59v4xv5gw2rvw7-3000.app.github.dev',
+      'https://cuddly-giggle-69p59v4xv5gw2rvw7-4000.app.github.dev',
+
+      // Vercel Production
+      'https://construction-platform-sigma.vercel.app',
+      'https://construction-platform.vercel.app'
+    ];
+
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Allow all Vercel preview deployments
+    if (origin.includes('vercel.app') && origin.startsWith('https://')) {
+      return callback(null, true);
+    }
+
+    // Reject other origins
+    console.warn(`⚠️  CORS blocked origin: ${origin}`);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 
