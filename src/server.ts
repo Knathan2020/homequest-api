@@ -196,16 +196,7 @@ app.get('/api/projects', authenticateUser, async (req, res) => {
       // Get all projects for this team
       const { data: teamProjects, error } = await supabase
         .from('projects')
-        .select(`
-          *,
-          buildings:buildings(count),
-          construction_phases:construction_phases(
-            id,
-            phase,
-            status,
-            completion_percentage
-          )
-        `)
+        .select('*')
         .eq('team_id', userProfile.team_id)
         .order('created_at', { ascending: false });
 
@@ -229,16 +220,7 @@ app.get('/api/projects', authenticateUser, async (req, res) => {
         // Get projects from all team members
         const { data: teamProjects, error } = await supabase
           .from('projects')
-          .select(`
-            *,
-            buildings:buildings(count),
-            construction_phases:construction_phases(
-              id,
-              phase,
-              status,
-              completion_percentage
-            )
-          `)
+          .select('*')
           .in('user_id', teamIds)
           .order('created_at', { ascending: false });
 
@@ -252,16 +234,7 @@ app.get('/api/projects', authenticateUser, async (req, res) => {
       // No team - just get user's own projects
       const { data: userProjects, error } = await supabase
         .from('projects')
-        .select(`
-          *,
-          buildings:buildings(count),
-          construction_phases:construction_phases(
-            id,
-            phase,
-            status,
-            completion_percentage
-          )
-        `)
+        .select('*')
         .eq('user_id', req.user.id)
         .order('created_at', { ascending: false });
 
