@@ -15,10 +15,9 @@ export class WebhookConfig {
 
   constructor() {
     // Use API_BASE_URL from environment
-    // In production, this will be: https://api.homequesttech.com
-    // In development, this is your GitHub Codespaces URL
-    this.baseUrl = process.env.API_BASE_URL || 'https://cuddly-giggle-69p59v4xv5gw2rvw7-4000.app.github.dev';
-    
+    // Default to Render production URL
+    this.baseUrl = process.env.API_BASE_URL || 'https://homequest-api-1.onrender.com';
+
     console.log(`📡 Webhook Base URL configured: ${this.baseUrl}`);
   }
 

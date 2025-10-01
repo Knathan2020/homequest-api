@@ -55,9 +55,9 @@ router.post('/provision-team', async (req, res) => {
       phoneNumber: availableNumbers[0].phoneNumber,
       friendlyName: `${companyName} Main Line`,
       // Set up webhooks
-      voiceUrl: `https://homequest-api.onrender.com/api/twilio/voice/${teamId}`,
+      voiceUrl: `https://homequest-api-1.onrender.com/api/twilio/voice/${teamId}`,
       voiceMethod: 'POST',
-      smsUrl: `https://homequest-api.onrender.com/api/twilio/sms/${teamId}`,
+      smsUrl: `https://homequest-api-1.onrender.com/api/twilio/sms/${teamId}`,
       smsMethod: 'POST'
     });
 
