@@ -188,4 +188,93 @@ router.get('/setup/team-phones/status', async (req, res) => {
   }
 });
 
+/**
+ * Add existing VAPI phone to team
+ */
+router.post('/setup/add-team-phone', async (req, res) => {
+  try {
+    const { userId, twilioNumber, vapiPhoneId } = req.body;
+
+    if (!userId || !twilioNumber || !vapiPhoneId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: userId, twilioNumber, vapiPhoneId'
+      });
+    }
+
+    // Get user's team
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('team_id, first_name, last_name')
+      .eq('id', userId)
+      .single();
+
+    if (!profile?.team_id) {
+      return res.status(404).json({
+        success: false,
+        error: 'No team found for user'
+      });
+    }
+
+    // Get team name
+    const { data: team } = await supabase
+      .from('teams')
+      .select('name, company_name')
+      .eq('id', profile.team_id)
+      .single();
+
+    // Check if phone already exists
+    const { data: existing } = await supabase
+      .from('team_phones')
+      .select('*')
+      .eq('team_id', profile.team_id);
+
+    if (existing && existing.length > 0) {
+      // Update existing
+      const { error } = await supabase
+        .from('team_phones')
+        .update({
+          vapi_phone_id: vapiPhoneId,
+          twilio_number: twilioNumber,
+          status: 'active'
+        })
+        .eq('team_id', profile.team_id);
+
+      if (error) throw error;
+
+      return res.json({
+        success: true,
+        message: 'Phone updated for team',
+        teamId: profile.team_id
+      });
+    } else {
+      // Insert new
+      const { error } = await supabase
+        .from('team_phones')
+        .insert({
+          team_id: profile.team_id,
+          team_name: team?.company_name || team?.name || 'Team',
+          owner_email: 'kentrill@yhshomes.com',
+          twilio_number: twilioNumber,
+          vapi_phone_id: vapiPhoneId,
+          default_voice_id: 'ewxUvnyvvOehYjKjUVKC',
+          status: 'active'
+        });
+
+      if (error) throw error;
+
+      return res.json({
+        success: true,
+        message: 'Phone added to team',
+        teamId: profile.team_id
+      });
+    }
+  } catch (error: any) {
+    console.error('Error adding phone:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 export default router;
