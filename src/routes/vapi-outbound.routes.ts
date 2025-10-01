@@ -14,7 +14,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY || ''
 );
 
-const VAPI_API_KEY = process.env.VAPI_API_KEY || '31344c5e-a977-4438-ad39-0e1c245be45f';
+const VAPI_API_KEY = process.env.VAPI_API_KEY;
 const VAPI_API_BASE = 'https://api.vapi.ai';
 
 /**

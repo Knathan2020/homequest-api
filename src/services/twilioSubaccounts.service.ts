@@ -473,7 +473,7 @@ class TwilioSubaccountsService {
     teamId: string
   ): Promise<string | null> {
     try {
-      const vapiApiKey = process.env.VAPI_API_KEY || '31344c5e-a977-4438-ad39-0e1c245be45f';
+      const vapiApiKey = process.env.VAPI_API_KEY;
 
       // Get team's selected voice
       const { data: teamData } = await supabase

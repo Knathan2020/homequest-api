@@ -17,7 +17,7 @@ const supabase = createClient(
 );
 
 // Initiate a Vapi AI call
-router.post('/vapi/call', async (req, res) => {
+router.post('/call', async (req, res) => {
   try {
     let {
       to,
@@ -121,7 +121,7 @@ router.post('/vapi/call', async (req, res) => {
 });
 
 // Get call status
-router.get('/vapi/call/:callId', async (req, res) => {
+router.get('/call/:callId', async (req, res) => {
   try {
     const { callId } = req.params;
     
@@ -147,7 +147,7 @@ router.get('/vapi/call/:callId', async (req, res) => {
 });
 
 // Hangup/End a call
-router.post('/vapi/hangup/:callId', async (req, res) => {
+router.post('/hangup/:callId', async (req, res) => {
   try {
     const { callId } = req.params;
     
@@ -164,7 +164,7 @@ router.post('/vapi/hangup/:callId', async (req, res) => {
 });
 
 // List recent calls
-router.get('/vapi/calls', async (req, res) => {
+router.get('/calls', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit as string) || 10;
     const calls = await vapiService.listCalls(limit);
@@ -182,13 +182,13 @@ router.get('/vapi/calls', async (req, res) => {
 });
 
 // Test webhook endpoint - GET request for debugging
-router.get('/vapi/webhook-test', async (req, res) => {
+router.get('/webhook-test', async (req, res) => {
   console.log('🧪 WEBHOOK TEST ENDPOINT HIT');
   res.json({ status: 'ok', message: 'Webhook endpoint is accessible', timestamp: new Date().toISOString() });
 });
 
 // Handle Vapi webhooks (including inbound calls)
-router.post('/vapi/webhook', async (req, res) => {
+router.post('/webhook', async (req, res) => {
   console.log('🔔 INBOUND WEBHOOK HIT from VAPI at', new Date().toISOString());
   console.log('Webhook headers:', req.headers);
   console.log('Webhook body:', JSON.stringify(req.body, null, 2));
@@ -793,7 +793,7 @@ router.post('/vapi/webhook', async (req, res) => {
 });
 
 // Configure inbound assistant for a phone number
-router.post('/vapi/inbound/configure', async (req, res) => {
+router.post('/inbound/configure', async (req, res) => {
   try {
     const {
       phoneNumberId,
@@ -827,7 +827,7 @@ router.post('/vapi/inbound/configure', async (req, res) => {
 });
 
 // Get inbound call statistics
-router.get('/vapi/inbound/stats', async (req, res) => {
+router.get('/inbound/stats', async (req, res) => {
   try {
     // Fetch inbound call stats from database
     // For now, return mock data
@@ -850,7 +850,7 @@ router.get('/vapi/inbound/stats', async (req, res) => {
 });
 
 // Get available voices
-router.get('/vapi/voices', (req, res) => {
+router.get('/voices', (req, res) => {
   try {
     const voices = getAllVoices();
     res.json({
@@ -866,7 +866,7 @@ router.get('/vapi/voices', (req, res) => {
 });
 
 // Get voice details by ID
-router.get('/vapi/voices/:voiceId', (req, res) => {
+router.get('/voices/:voiceId', (req, res) => {
   try {
     const { voiceId } = req.params;
     const voice = getVoiceById(voiceId);
@@ -891,7 +891,7 @@ router.get('/vapi/voices/:voiceId', (req, res) => {
 });
 
 // Quick test endpoint for Vapi setup
-router.get('/vapi/test', (req, res) => {
+router.get('/test', (req, res) => {
   const baseUrl = process.env.PUBLIC_URL || `https://${req.get('host')}`;
   
   res.json({
@@ -934,7 +934,7 @@ router.get('/vapi/test', (req, res) => {
 });
 
 // Get call transcripts for a specific call or all recent calls
-router.get('/vapi/transcripts/:callId?', async (req, res) => {
+router.get('/transcripts/:callId?', async (req, res) => {
   try {
     const { callId } = req.params;
     const { teamId } = req.query;
@@ -1005,7 +1005,7 @@ router.get('/vapi/transcripts/:callId?', async (req, res) => {
 });
 
 // Get live transcript segments for a specific call (for real-time updates)
-router.get('/vapi/transcripts/:callId/live', async (req, res) => {
+router.get('/transcripts/:callId/live', async (req, res) => {
   try {
     const { callId } = req.params;
     const { since } = req.query; // timestamp to get segments since
