@@ -187,6 +187,8 @@ app.get('/api/projects', authenticateUser, async (req, res) => {
       console.error('Error fetching user profile:', profileError);
     }
 
+    console.log(`👤 User profile:`, JSON.stringify(userProfile, null, 2));
+
     let projects = [];
 
     // Check team_id first (newer method)
