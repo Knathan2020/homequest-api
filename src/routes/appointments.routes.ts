@@ -18,7 +18,7 @@ const supabase = createClient(
 /**
  * Get all appointments for a team
  */
-router.get('/appointments', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { teamId, status, startDate, endDate } = req.query;
     
@@ -68,7 +68,7 @@ router.get('/appointments', async (req, res) => {
 /**
  * Get a single appointment
  */
-router.get('/appointments/:id', async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -104,7 +104,7 @@ router.get('/appointments/:id', async (req, res) => {
 /**
  * Create a new appointment
  */
-router.post('/appointments', async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const {
       teamId,
@@ -304,7 +304,7 @@ router.post('/appointments', async (req, res) => {
 /**
  * Update an appointment
  */
-router.put('/appointments/:id', async (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -358,7 +358,7 @@ router.put('/appointments/:id', async (req, res) => {
 /**
  * Cancel an appointment
  */
-router.post('/appointments/:id/cancel', async (req, res) => {
+router.post('/:id/cancel', async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -394,7 +394,7 @@ router.post('/appointments/:id/cancel', async (req, res) => {
 /**
  * Get available time slots for a user
  */
-router.get('/appointments/availability/:userId', async (req, res) => {
+router.get('/availability/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const { date, durationMinutes = 30 } = req.query;
@@ -518,7 +518,7 @@ router.get('/appointments/availability/:userId', async (req, res) => {
 /**
  * Set user availability
  */
-router.post('/appointments/availability', async (req, res) => {
+router.post('/availability', async (req, res) => {
   try {
     const {
       userId,
@@ -571,7 +571,7 @@ router.post('/appointments/availability', async (req, res) => {
 /**
  * Check weather for an appointment
  */
-router.get('/appointments/:id/weather', async (req, res) => {
+router.get('/:id/weather', async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -652,7 +652,7 @@ router.get('/appointments/:id/weather', async (req, res) => {
 /**
  * Auto-reschedule appointment due to weather
  */
-router.post('/appointments/:id/reschedule-weather', async (req, res) => {
+router.post('/:id/reschedule-weather', async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -746,7 +746,7 @@ router.post('/appointments/:id/reschedule-weather', async (req, res) => {
 /**
  * Check weather for upcoming appointments (batch check)
  */
-router.post('/appointments/check-weather-batch', async (req, res) => {
+router.post('/check-weather-batch', async (req, res) => {
   try {
     const { teamId, days = 7 } = req.body;
     
@@ -904,7 +904,7 @@ router.post('/check-weather', async (req, res) => {
 /**
  * Block time slots
  */
-router.post('/appointments/block', async (req, res) => {
+router.post('/block', async (req, res) => {
   try {
     const {
       userId,
