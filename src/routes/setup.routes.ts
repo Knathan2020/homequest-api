@@ -190,44 +190,69 @@ router.get('/setup/team-phones/status', async (req, res) => {
 
 /**
  * Add existing VAPI phone to team
+ * Accepts teamId directly or looks up from userId
  */
 router.post('/setup/add-team-phone', async (req, res) => {
   try {
-    const { userId, twilioNumber, vapiPhoneId } = req.body;
+    const { userId, teamId, teamName, ownerEmail, twilioNumber, vapiPhoneId } = req.body;
 
-    if (!userId || !twilioNumber || !vapiPhoneId) {
+    if (!twilioNumber || !vapiPhoneId) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: userId, twilioNumber, vapiPhoneId'
+        error: 'Missing required fields: twilioNumber, vapiPhoneId'
       });
     }
 
-    // Get user's team
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('team_id, first_name, last_name')
-      .eq('id', userId)
-      .single();
+    let finalTeamId = teamId;
+    let finalTeamName = teamName;
+    let finalOwnerEmail = ownerEmail;
 
-    if (!profile?.team_id) {
-      return res.status(404).json({
+    // If teamId not provided, look it up from userId
+    if (!finalTeamId && userId) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('team_id, first_name, last_name')
+        .eq('id', userId)
+        .single();
+
+      if (!profile?.team_id) {
+        return res.status(404).json({
+          success: false,
+          error: 'No team found for user'
+        });
+      }
+
+      finalTeamId = profile.team_id;
+
+      // Get team details if not provided
+      if (!finalTeamName || !finalOwnerEmail) {
+        const { data: team } = await supabase
+          .from('teams')
+          .select('name, company_name')
+          .eq('id', finalTeamId)
+          .single();
+
+        finalTeamName = finalTeamName || team?.company_name || team?.name || 'Team';
+      }
+    }
+
+    // Require either teamId or userId
+    if (!finalTeamId) {
+      return res.status(400).json({
         success: false,
-        error: 'No team found for user'
+        error: 'Either teamId or userId must be provided'
       });
     }
 
-    // Get team name
-    const { data: team } = await supabase
-      .from('teams')
-      .select('name, company_name')
-      .eq('id', profile.team_id)
-      .single();
+    // Set defaults only if not provided
+    finalTeamName = finalTeamName || 'Team';
+    finalOwnerEmail = finalOwnerEmail || 'admin@example.com';
 
     // Check if phone already exists
     const { data: existing } = await supabase
       .from('team_phones')
       .select('*')
-      .eq('team_id', profile.team_id);
+      .eq('team_id', finalTeamId);
 
     if (existing && existing.length > 0) {
       // Update existing
@@ -236,25 +261,27 @@ router.post('/setup/add-team-phone', async (req, res) => {
         .update({
           vapi_phone_id: vapiPhoneId,
           twilio_number: twilioNumber,
+          team_name: finalTeamName,
+          owner_email: finalOwnerEmail,
           status: 'active'
         })
-        .eq('team_id', profile.team_id);
+        .eq('team_id', finalTeamId);
 
       if (error) throw error;
 
       return res.json({
         success: true,
         message: 'Phone updated for team',
-        teamId: profile.team_id
+        teamId: finalTeamId
       });
     } else {
       // Insert new
       const { error } = await supabase
         .from('team_phones')
         .insert({
-          team_id: profile.team_id,
-          team_name: team?.company_name || team?.name || 'Team',
-          owner_email: 'kentrill@yhshomes.com',
+          team_id: finalTeamId,
+          team_name: finalTeamName,
+          owner_email: finalOwnerEmail,
           twilio_number: twilioNumber,
           vapi_phone_id: vapiPhoneId,
           default_voice_id: 'ewxUvnyvvOehYjKjUVKC',
@@ -266,7 +293,7 @@ router.post('/setup/add-team-phone', async (req, res) => {
       return res.json({
         success: true,
         message: 'Phone added to team',
-        teamId: profile.team_id
+        teamId: finalTeamId
       });
     }
   } catch (error: any) {
