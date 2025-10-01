@@ -120,11 +120,32 @@ router.post('/call', async (req, res) => {
   }
 });
 
+// Debug endpoint - check team phone
+router.get('/debug/team-phone/:teamId', async (req, res) => {
+  try {
+    const { teamId } = req.params;
+
+    const { data, error } = await supabase
+      .from('team_phones')
+      .select('*')
+      .eq('team_id', teamId);
+
+    res.json({
+      teamId,
+      hasServiceKey: !!process.env.SUPABASE_SERVICE_KEY,
+      data,
+      error
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get call status
 router.get('/call/:callId', async (req, res) => {
   try {
     const { callId } = req.params;
-    
+
     const call = await vapiService.getCallStatus(callId);
     
     if (call) {
