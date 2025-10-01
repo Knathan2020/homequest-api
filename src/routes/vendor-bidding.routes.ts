@@ -1327,6 +1327,29 @@ router.get('/projects/:projectId/bidding-details', async (req, res) => {
       return res.json(projectData);
     }
 
+    // Fetch room selections for this project
+    let roomSelections = null;
+    try {
+      const { data: selections, error: selectionsError } = await supabase
+        .from('room_selections')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('validation_status', 'validated')
+        .order('created_at', { ascending: false });
+
+      if (!selectionsError && selections && selections.length > 0) {
+        roomSelections = selections.map(sel => ({
+          id: sel.id,
+          document_name: sel.document_name,
+          room_mappings: sel.room_mappings,
+          created_at: sel.created_at
+        }));
+        console.log(`✅ Found ${roomSelections.length} room selections for project ${projectId}`);
+      }
+    } catch (selectionsError) {
+      console.warn('⚠️ Could not fetch room selections:', selectionsError);
+    }
+
     // Format the real project data for the frontend
     const projectData = {
       id: project.id,
@@ -1339,17 +1362,18 @@ router.get('/projects/:projectId/bidding-details', async (req, res) => {
       scope_of_work: project.scope || project.description || 'Scope of work to be determined',
       attachments: ['project-plans.pdf', 'site-survey.pdf', 'material-specifications.xlsx'], // TODO: Replace with real attachments when table is available
       budget_range: project.budget ? `$${project.budget.toLocaleString()}` : 'Budget TBD',
-      timeline_weeks: project.timeline_weeks || 
-        (project.start_date && project.end_date ? 
-          Math.ceil((new Date(project.end_date).getTime() - new Date(project.start_date).getTime()) / (1000 * 60 * 60 * 24 * 7)) 
+      timeline_weeks: project.timeline_weeks ||
+        (project.start_date && project.end_date ?
+          Math.ceil((new Date(project.end_date).getTime() - new Date(project.start_date).getTime()) / (1000 * 60 * 60 * 24 * 7))
           : null),
-      special_requirements: project.custom_fields?.special_requirements || 
+      special_requirements: project.custom_fields?.special_requirements ||
         project.phases?.filter((phase: any) => phase.special_requirements)
           .map((phase: any) => phase.special_requirements).flat() || [],
+      room_selections: roomSelections, // Add room selections to project data
       _real_data: true
     };
 
-    console.log(`📤 Returning real project data for: ${projectData.project_name}`);
+    console.log(`📤 Returning real project data for: ${projectData.project_name}${roomSelections ? ` with ${roomSelections.length} room selections` : ''}`);
     res.json(projectData);
     
   } catch (error) {

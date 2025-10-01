@@ -35,6 +35,7 @@ import vendorBiddingRoutes from './routes/vendor-bidding.routes';
 import setupDatabaseRoutes from './routes/setup-database.routes';
 import projectsRoutes from './routes/projects.routes';
 import builderBriefingRoutes from './routes/builder-briefing.routes';
+import roomSelectionsRoutes from './api/room-selections';
 // import floorPlan3DRoutes from './routes/floor-plan-3d.routes'; // Temporarily disabled for build
 // import roomRoutes from './routes/room.routes';
 // import processingRoutes from './routes/processing.routes';
@@ -316,6 +317,7 @@ export const createApp = (): Application => {
   app.use('/api/vendor-bidding', vendorBiddingRoutes); // Vendor bidding portal and project-specific bid management
   app.use('/api/database', setupDatabaseRoutes); // Database setup and maintenance
   app.use('/api', projectsRoutes); // Projects management routes
+  app.use('/api/selections', roomSelectionsRoutes); // Room selections upload and management
   app.use('/api/documents', require('./routes/documents.routes').default); // Document management and team sharing
 
   // Add explicit CORS middleware for Nylas and autonomous routes (GitHub Codespaces fix)

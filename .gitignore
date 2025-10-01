@@ -1,11 +1,19 @@
-node_modules/
-uploads/
-logs/
+# Environment variables - NEVER COMMIT THESE
+.env
+.env.local
+.env.*.local
+
+# Logs
 *.log
+logs/
+
+# Dependencies
+node_modules/
+
+# Build output
 dist/
-temp*/
-models/
-training*/
-*.pt
-data/
-rag-learning-data/
+
+# Uploads and temp files
+uploads/
+temp/
+tmp/
