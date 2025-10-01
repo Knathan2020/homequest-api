@@ -718,14 +718,9 @@ app.post('/api/gmail/send', async (req, res) => {
   res.json({ success: true, message: 'Email sent via Gmail (placeholder)' });
 });
 
-// ============= VAPI ENDPOINTS (Placeholder) =============
-app.get('/api/vapi/voices', async (req, res) => {
-  res.json({ success: true, voices: [] });
-});
-
-app.post('/api/vapi/call', async (req, res) => {
-  res.json({ success: true, callId: 'placeholder-call-id' });
-});
+// ============= VAPI ENDPOINTS =============
+// REMOVED PLACEHOLDERS - Real VAPI routes are loaded at line 797
+// These placeholders were blocking actual call functionality
 
 // ============= OTHER ENDPOINTS =============
 app.get('/api/calls/transcript/:id', async (req, res) => {
