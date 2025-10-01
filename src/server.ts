@@ -746,9 +746,11 @@ app.use('/api/contacts', contactsRoutes);
 app.use('/api/messaging', messagingRoutes);
 app.use('/api/users', userRoutes);
 
+// Appointments (moved up to isolate issue)
+app.use('/api/appointments', appointmentsRoutes);
+
 // Business Logic & Workflows
 app.use('/api/vendor-bidding', vendorBiddingRoutes);
-app.use('/api/appointments', appointmentsRoutes);
 app.use('/api/meeting-invites', meetingInvitesRoutes);
 app.use('/api/builder-briefing', builderBriefingRoutes);
 app.use('/api/usage', usageRoutes);
