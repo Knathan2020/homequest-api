@@ -384,12 +384,8 @@ app.delete('/api/projects/:id', async (req, res) => {
   }
 });
 
-// ============= ROUTE REGISTRATION =============
-// Register routes using the imported modules from top of file
-app.use('/api/builder-phones', builderPhonesRoutes);
-app.use('/api/vendor-bidding', vendorBiddingRoutes);
-app.use('/api/appointments', appointmentsRoutes);
-app.use('/api/rag-learning', ragLearningRoutes);
+// ============= EARLY ROUTE REGISTRATION MOVED TO MAIN SECTION BELOW =============
+// (builder-phones, vendor-bidding, appointments, rag-learning registered with other routes)
 
 // ============= BUILDINGS API =============
 app.get('/api/buildings', async (req, res) => {
@@ -751,7 +747,8 @@ app.use('/api/messaging', messagingRoutes);
 app.use('/api/users', userRoutes);
 
 // Business Logic & Workflows
-// vendor-bidding and appointments already registered above
+app.use('/api/vendor-bidding', vendorBiddingRoutes);
+app.use('/api/appointments', appointmentsRoutes);
 app.use('/api/meeting-invites', meetingInvitesRoutes);
 app.use('/api/builder-briefing', builderBriefingRoutes);
 app.use('/api/usage', usageRoutes);
