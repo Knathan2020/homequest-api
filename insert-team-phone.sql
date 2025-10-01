@@ -4,7 +4,7 @@
 INSERT INTO team_phones (
   team_id,
   team_name,
-  owner_email,
+  owner_email, 
   twilio_number,
   vapi_phone_id,
   status

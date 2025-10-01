@@ -84,7 +84,10 @@ const PORT = process.env.PORT || 3001;
 // Supabase setup
 const supabaseUrl = process.env.SUPABASE_URL || 'https://fbwmkkskdrvaipmkddwm.supabase.co';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZid21ra3NrZHJ2YWlwbWtkZHdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE2ODI4MTcsImV4cCI6MjA2NzI1ODgxN30.-rBrI8a56Pc-5ROhiZaGtK6QwH1qrZOt7Osmj-lqeJc';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Service role client to bypass RLS for authenticated operations
+const supabaseAdmin = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : supabase;
 
 // Middleware - CORS with dynamic origin checking
 app.use(cors({
@@ -310,7 +313,8 @@ app.post('/api/projects', authenticateUser, async (req, res) => {
 
     console.log(`🏢 Creating project with team_id: ${projectData.team_id || 'none (personal project)'}`);
 
-    const { data: project, error } = await supabase
+    // Use admin client to bypass RLS for insert
+    const { data: project, error } = await supabaseAdmin
       .from('projects')
       .insert([projectData])
       .select()
