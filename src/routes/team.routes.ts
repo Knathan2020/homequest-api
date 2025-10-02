@@ -94,16 +94,11 @@ router.get('/members', async (req, res) => {
       });
     }
 
-    // STEP 3: Update online status based on last_seen
-    const updatedMembers = members.map(member => ({
-      ...member,
-      is_online: member.last_seen &&
-        new Date(member.last_seen) > new Date(Date.now() - 5 * 60 * 1000)
-    }));
-
+    // STEP 3: Return members with online status
+    // Note: Online status can be calculated from last_activity if that column exists
     res.json({
       success: true,
-      data: updatedMembers
+      data: members
     });
 
   } catch (error: any) {
