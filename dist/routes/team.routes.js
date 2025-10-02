@@ -394,6 +394,7 @@ router.get('/:teamId/members', async (req, res) => {
         )
       `)
             .eq('team_id', teamId);
+        console.log('Supabase query result:', JSON.stringify({ members, error }, null, 2));
         if (error) {
             console.error('Error fetching team members:', error);
             return res.status(500).json({
