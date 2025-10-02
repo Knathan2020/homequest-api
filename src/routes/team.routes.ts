@@ -23,13 +23,6 @@ router.get('/members', async (req, res) => {
   try {
     const { teamId } = req.query;
 
-    if (!teamId) {
-      return res.status(400).json({
-        success: false,
-        error: 'teamId is required'
-      });
-    }
-
     if (!supabase || !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
       return res.status(500).json({
         success: false,
@@ -37,49 +30,55 @@ router.get('/members', async (req, res) => {
       });
     }
 
-    // STEP 1: Sync profiles to team_members if missing
-    // Get all profiles for this team
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, email, full_name, phone_number, role, team_id')
-      .eq('team_id', teamId);
+    // STEP 1: Sync profiles to team_members if missing (if teamId provided)
+    if (teamId) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, phone_number, role, team_id')
+        .eq('team_id', teamId);
 
-    if (!profilesError && profiles && profiles.length > 0) {
-      // For each profile, ensure there's a corresponding team_members record
-      for (const profile of profiles) {
-        const { data: existingMember } = await supabase
-          .from('team_members')
-          .select('id')
-          .eq('user_id', profile.id)
-          .eq('team_id', teamId)
-          .maybeSingle();
-
-        if (!existingMember) {
-          // Create team member record from profile
-          console.log(`🔄 Auto-syncing profile to team_members: ${profile.email}`);
-          await supabase
+      if (!profilesError && profiles && profiles.length > 0) {
+        // For each profile, ensure there's a corresponding team_members record
+        for (const profile of profiles) {
+          const { data: existingMember } = await supabase
             .from('team_members')
-            .insert({
-              team_id: teamId,
-              user_id: profile.id,
-              email: profile.email,
-              name: profile.full_name || profile.email?.split('@')[0] || 'Team Member',
-              phone_number: profile.phone_number || '',
-              role: profile.role || 'member',
-              department: 'Operations',
-              availability: 'available',
-              can_receive_transfers: true,
-              seniority_level: 1
-            });
+            .select('id')
+            .eq('user_id', profile.id)
+            .eq('team_id', teamId)
+            .maybeSingle();
+
+          if (!existingMember) {
+            // Create team member record from profile
+            console.log(`🔄 Auto-syncing profile to team_members: ${profile.email}`);
+            await supabase
+              .from('team_members')
+              .insert({
+                team_id: teamId,
+                user_id: profile.id,
+                email: profile.email,
+                name: profile.full_name || profile.email?.split('@')[0] || 'Team Member',
+                phone_number: profile.phone_number || '',
+                role: profile.role || 'member',
+                department: 'Operations',
+                availability: 'available',
+                can_receive_transfers: true,
+                seniority_level: 1
+              });
+          }
         }
       }
     }
 
     // STEP 2: Fetch all team members
-    const { data: members, error } = await supabase
+    let query = supabase
       .from('team_members')
-      .select('*')
-      .eq('team_id', teamId);
+      .select('*');
+
+    if (teamId) {
+      query = query.eq('team_id', teamId);
+    }
+
+    const { data: members, error } = await query;
 
     if (error) {
       throw error;
