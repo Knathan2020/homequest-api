@@ -4,8 +4,35 @@ import { createClient } from '@supabase/supabase-js';
 const router = express.Router();
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || '';
+// Use service role for all backend operations (bypasses RLS)
+const supabase = supabaseServiceKey ? createClient(supabaseUrl!, supabaseServiceKey) : createClient(supabaseUrl!, supabaseAnonKey!);
+
+// Helper function to get team_id from auth token
+const getTeamIdFromAuth = async (req: Request): Promise<string | null> => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return null;
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) return null;
+
+    // Get user's team_id from profiles
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('team_id')
+      .eq('id', user.id)
+      .single();
+
+    return profile?.team_id || null;
+  } catch (error) {
+    console.error('Error getting team_id from auth:', error);
+    return null;
+  }
+};
 
 // Helper function to detect contact category based on company/tags
 const detectCategory = (company: string, tags: string[] = []) => {
@@ -62,6 +89,12 @@ const enrichContactWithMetrics = (contact: any) => {
 // Get all contacts with advanced filtering
 router.get('/', async (req: Request, res: Response) => {
   try {
+    // Get team_id from auth
+    const teamId = await getTeamIdFromAuth(req);
+    if (!teamId) {
+      return res.status(401).json({ error: 'Unauthorized - no team_id found' });
+    }
+
     const {
       category,
       search,
@@ -73,7 +106,8 @@ router.get('/', async (req: Request, res: Response) => {
 
     let query = supabase
       .from('vendor_contacts')
-      .select('*');
+      .select('*')
+      .eq('team_id', teamId); // Filter by team
 
     // Apply filters
     if (search) {
@@ -92,13 +126,8 @@ router.get('/', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Failed to fetch contacts' });
     }
 
-    // Only use real database data - no mock data fallback
-    if (!contacts) {
-      contacts = [];
-    }
-
     // Enrich real database contacts with AI metrics
-    const enrichedContacts = contacts.map(enrichContactWithMetrics);
+    const enrichedContacts = (contacts || []).map(enrichContactWithMetrics);
 
     // Apply category filter
     const filteredContacts = category
