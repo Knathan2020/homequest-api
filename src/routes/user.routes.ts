@@ -131,7 +131,8 @@ router.put('/user/profile', async (req, res) => {
     if (firstName) updateData.first_name = firstName;
     if (lastName) updateData.last_name = lastName;
     if (phone || phoneNumber) updateData.phone_number = phone || phoneNumber;
-    if (department) updateData.role = department;
+    // Don't update role in profiles table - it's for user permissions (owner/admin/member)
+    // Department goes only to team_members table
 
     // Update profile
     const { data: updatedProfile, error: updateError } = await supabase
