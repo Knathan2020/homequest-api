@@ -1,0 +1,284 @@
+{
+  "id": "session_1757604653831_szbtmjj99",
+  "timestamp": "2025-09-11T15:30:53.831Z",
+  "imageHash": "9583ec19f960c4105e33c1b498e84aa0",
+  "walls": [
+    {
+      "id": "wall_h_0",
+      "type": "interior",
+      "source": "ai-detection",
+      "coordinates": {
+        "x1": 40,
+        "y1": 276,
+        "x2": 411,
+        "y2": 276
+      },
+      "thickness": 5,
+      "confidence": 0.6,
+      "isManual": false,
+      "isDeleted": false
+    },
+    {
+      "id": "wall_h_2",
+      "type": "interior",
+      "source": "ai-detection",
+      "coordinates": {
+        "x1": 332,
+        "y1": 436,
+        "x2": 379,
+        "y2": 436
+      },
+      "thickness": 5,
+      "confidence": 0.8,
+      "isManual": false,
+      "isDeleted": false
+    },
+    {
+      "id": "wall_h_3",
+      "type": "interior",
+      "source": "ai-detection",
+      "coordinates": {
+        "x1": 386.25,
+        "y1": 480,
+        "x2": 386.25,
+        "y2": 629
+      },
+      "thickness": 5,
+      "confidence": 0.6,
+      "isManual": false,
+      "isDeleted": false
+    },
+    {
+      "id": "wall_h_1",
+      "type": "interior",
+      "source": "ai-detection",
+      "coordinates": {
+        "x1": 228,
+        "y1": 553,
+        "x2": 228,
+        "y2": 595
+      },
+      "thickness": 5,
+      "confidence": 0.8,
+      "isManual": false,
+      "isDeleted": false
+    },
+    {
+      "id": "wall_h_2",
+      "type": "interior",
+      "source": "ai-detection",
+      "coordinates": {
+        "x1": 266,
+        "y1": 556,
+        "x2": 266,
+        "y2": 597
+      },
+      "thickness": 5,
+      "confidence": 0.6,
+      "isManual": false,
+      "isDeleted": false
+    },
+    {
+      "id": "wall_h_2",
+      "type": "interior",
+      "source": "ai-detection",
+      "coordinates": {
+        "x1": 261,
+        "y1": 596,
+        "x2": 317,
+        "y2": 596
+      },
+      "thickness": 5,
+      "confidence": 0.6,
+      "isManual": false,
+      "isDeleted": false
+    },
+    {
+      "id": "wall_h_2",
+      "type": "interior",
+      "source": "ai-detection",
+      "coordinates": {
+        "x1": 274,
+        "y1": 636,
+        "x2": 337,
+        "y2": 636
+      },
+      "thickness": 5,
+      "confidence": 0.6,
+      "isManual": false,
+      "isDeleted": false
+    },
+    {
+      "id": "wall_v_4",
+      "type": "interior",
+      "source": "ai-detection",
+      "coordinates": {
+        "x1": 307,
+        "y1": 529,
+        "x2": 307,
+        "y2": 587
+      },
+      "thickness": 5,
+      "confidence": 0.6,
+      "isManual": false,
+      "isDeleted": false
+    },
+    {
+      "id": "wall_v_1",
+      "type": "interior",
+      "source": "ai-detection",
+      "coordinates": {
+        "x1": 347,
+        "y1": 407,
+        "x2": 347,
+        "y2": 483
+      },
+      "thickness": 5,
+      "confidence": 0.6,
+      "isManual": false,
+      "isDeleted": false
+    }
+  ],
+  "rooms": [
+    {
+      "id": "room_1",
+      "name": "Room 1",
+      "type": "unknown",
+      "squareFootage": 33390,
+      "isExterior": false,
+      "vertices": [
+        {
+          "x": 40,
+          "y": 276
+        },
+        {
+          "x": 225.5,
+          "y": 276
+        },
+        {
+          "x": 225.5,
+          "y": 456
+        },
+        {
+          "x": 40,
+          "y": 456
+        }
+      ],
+      "source": "ai-detection",
+      "isManual": false,
+      "isDeleted": false
+    },
+    {
+      "id": "room_2",
+      "name": "Room 2",
+      "type": "unknown",
+      "squareFootage": 33390,
+      "isExterior": false,
+      "vertices": [
+        {
+          "x": 225.5,
+          "y": 276
+        },
+        {
+          "x": 411,
+          "y": 276
+        },
+        {
+          "x": 411,
+          "y": 456
+        },
+        {
+          "x": 225.5,
+          "y": 456
+        }
+      ],
+      "source": "ai-detection",
+      "isManual": false,
+      "isDeleted": false
+    },
+    {
+      "id": "room_3",
+      "name": "Room 3",
+      "type": "unknown",
+      "squareFootage": 33390,
+      "isExterior": false,
+      "vertices": [
+        {
+          "x": 40,
+          "y": 456
+        },
+        {
+          "x": 225.5,
+          "y": 456
+        },
+        {
+          "x": 225.5,
+          "y": 636
+        },
+        {
+          "x": 40,
+          "y": 636
+        }
+      ],
+      "source": "ai-detection",
+      "isManual": false,
+      "isDeleted": false
+    },
+    {
+      "id": "room_4",
+      "name": "Room 4",
+      "type": "unknown",
+      "squareFootage": 33390,
+      "isExterior": false,
+      "vertices": [
+        {
+          "x": 225.5,
+          "y": 456
+        },
+        {
+          "x": 411,
+          "y": 456
+        },
+        {
+          "x": 411,
+          "y": 636
+        },
+        {
+          "x": 225.5,
+          "y": 636
+        }
+      ],
+      "source": "ai-detection",
+      "isManual": false,
+      "isDeleted": false
+    }
+  ],
+  "doors": [
+    {
+      "id": "door_1",
+      "position": {
+        "x": 366.625,
+        "y": 518
+      },
+      "width": 39.36448272237297,
+      "orientation": "vertical",
+      "source": "ai-detection",
+      "isManual": false,
+      "isDeleted": false
+    }
+  ],
+  "windows": [],
+  "measurements": [],
+  "metadata": {
+    "totalWalls": 9,
+    "totalRooms": 4,
+    "totalDoors": 1,
+    "totalWindows": 0,
+    "totalMeasurements": 0,
+    "manualEdits": 0,
+    "deletions": 0,
+    "detectionMethods": [],
+    "aiWalls": null,
+    "processingTime": 510412117
+  }
+}

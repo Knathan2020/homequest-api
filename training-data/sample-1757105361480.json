@@ -1,0 +1,212 @@
+{
+  "imagePath": "/workspaces/codespaces-blank/construction-platform/homequest-api/temp-floor-plans/local_364_1757094241704.png",
+  "features": {
+    "walls": [
+      {
+        "start": {
+          "x": 403,
+          "y": 180
+        },
+        "end": {
+          "x": 558,
+          "y": 180
+        },
+        "thickness": 6,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 525,
+          "y": 170
+        },
+        "end": {
+          "x": 525,
+          "y": 526
+        },
+        "thickness": 6,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 787,
+          "y": 349
+        },
+        "end": {
+          "x": 1112,
+          "y": 349
+        },
+        "thickness": 10,
+        "style": "thin"
+      },
+      {
+        "start": {
+          "x": 797,
+          "y": 477
+        },
+        "end": {
+          "x": 1794,
+          "y": 477
+        },
+        "thickness": 10,
+        "style": "thin"
+      },
+      {
+        "start": {
+          "x": 293,
+          "y": 82
+        },
+        "end": {
+          "x": 293,
+          "y": 182
+        },
+        "thickness": 10,
+        "style": "thin"
+      },
+      {
+        "start": {
+          "x": 773,
+          "y": 171
+        },
+        "end": {
+          "x": 773,
+          "y": 262
+        },
+        "thickness": 10,
+        "style": "thin"
+      },
+      {
+        "start": {
+          "x": 1293,
+          "y": 477
+        },
+        "end": {
+          "x": 1293,
+          "y": 695
+        },
+        "thickness": 10,
+        "style": "thin"
+      }
+    ],
+    "rooms": [
+      {
+        "boundary": [
+          {
+            "x": 293,
+            "y": 82
+          },
+          {
+            "x": 1043.5,
+            "y": 82
+          },
+          {
+            "x": 1043.5,
+            "y": 388.5
+          },
+          {
+            "x": 293,
+            "y": 388.5
+          }
+        ],
+        "type": "unknown",
+        "area": 230028.25,
+        "features": {
+          "doorCount": 0,
+          "windowCount": 0,
+          "aspectRatio": 2.4486133768352367
+        }
+      },
+      {
+        "boundary": [
+          {
+            "x": 1043.5,
+            "y": 82
+          },
+          {
+            "x": 1794,
+            "y": 82
+          },
+          {
+            "x": 1794,
+            "y": 388.5
+          },
+          {
+            "x": 1043.5,
+            "y": 388.5
+          }
+        ],
+        "type": "unknown",
+        "area": 230028.25,
+        "features": {
+          "doorCount": 0,
+          "windowCount": 0,
+          "aspectRatio": 2.4486133768352367
+        }
+      },
+      {
+        "boundary": [
+          {
+            "x": 293,
+            "y": 388.5
+          },
+          {
+            "x": 1043.5,
+            "y": 388.5
+          },
+          {
+            "x": 1043.5,
+            "y": 695
+          },
+          {
+            "x": 293,
+            "y": 695
+          }
+        ],
+        "type": "unknown",
+        "area": 230028.25,
+        "features": {
+          "doorCount": 0,
+          "windowCount": 0,
+          "aspectRatio": 2.4486133768352367
+        }
+      },
+      {
+        "boundary": [
+          {
+            "x": 1043.5,
+            "y": 388.5
+          },
+          {
+            "x": 1794,
+            "y": 388.5
+          },
+          {
+            "x": 1794,
+            "y": 695
+          },
+          {
+            "x": 1043.5,
+            "y": 695
+          }
+        ],
+        "type": "unknown",
+        "area": 230028.25,
+        "features": {
+          "doorCount": 0,
+          "windowCount": 0,
+          "aspectRatio": 2.4486133768352367
+        }
+      }
+    ],
+    "imageFeatures": [
+      7,
+      4,
+      0,
+      0,
+      0,
+      2242,
+      230028.25,
+      1.75
+    ]
+  },
+  "timestamp": "2025-09-05T20:49:21.480Z"
+}

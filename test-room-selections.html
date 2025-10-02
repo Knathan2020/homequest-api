@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Room Selections Upload</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8">🏠 Test Room Selections Feature</h1>
+
+        <!-- Test Configuration -->
+        <div class="bg-gray-800 rounded-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Test Configuration</h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Project ID</label>
+                    <input type="text" id="project-id" value="test-project-123"
+                           class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Floor Plan ID (optional)</label>
+                    <input type="text" id="floor-plan-id" value="test-floor-plan-456"
+                           class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600">
+                </div>
+            </div>
+        </div>
+
+        <!-- Mock Floor Plan Rooms -->
+        <div class="bg-gray-800 rounded-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Floor Plan Rooms (Mock Data)</h2>
+            <div id="rooms-list" class="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                <div class="bg-gray-700 px-3 py-2 rounded">Master Bedroom</div>
+                <div class="bg-gray-700 px-3 py-2 rounded">Kitchen</div>
+                <div class="bg-gray-700 px-3 py-2 rounded">Living Room</div>
+                <div class="bg-gray-700 px-3 py-2 rounded">Bathroom 1</div>
+                <div class="bg-gray-700 px-3 py-2 rounded">Bathroom 2</div>
+                <div class="bg-gray-700 px-3 py-2 rounded">Garage</div>
+            </div>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="bg-gray-800 rounded-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Step 1: Upload Selection Document</h2>
+
+            <div id="upload-area"
+                 class="border-2 border-dashed border-blue-500 rounded-lg p-8 text-center cursor-pointer hover:bg-gray-700 transition-colors">
+                <div class="text-4xl mb-4">📄</div>
+                <p class="text-lg font-medium mb-2">Click to upload selections PDF</p>
+                <p class="text-sm text-gray-400">Or drag and drop (PDF or Image, max 10MB)</p>
+                <input type="file" id="file-input" accept=".pdf,image/*" class="hidden">
+            </div>
+
+            <div id="file-info" class="mt-4 hidden">
+                <div class="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
+                    <p class="font-medium">Selected file: <span id="file-name"></span></p>
+                    <p class="text-sm text-gray-400">Size: <span id="file-size"></span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Parsing Results -->
+        <div id="parsing-section" class="bg-gray-800 rounded-lg p-6 mb-6 hidden">
+            <h2 class="text-xl font-semibold mb-4">Step 2: AI Parsing Results</h2>
+            <div id="parsing-status" class="mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                    <span>Analyzing document with AI...</span>
+                </div>
+            </div>
+            <div id="parsing-results" class="hidden">
+                <pre id="parsed-data" class="bg-gray-900 p-4 rounded text-xs overflow-auto max-h-96"></pre>
+            </div>
+        </div>
+
+        <!-- Room Mappings -->
+        <div id="mapping-section" class="bg-gray-800 rounded-lg p-6 mb-6 hidden">
+            <h2 class="text-xl font-semibold mb-4">Step 3: Room Mappings</h2>
+            <div id="mappings-container" class="space-y-3"></div>
+        </div>
+
+        <!-- Actions -->
+        <div id="actions-section" class="bg-gray-800 rounded-lg p-6 mb-6 hidden">
+            <h2 class="text-xl font-semibold mb-4">Step 4: Save to Database</h2>
+            <button id="save-btn"
+                    class="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 rounded-lg font-semibold transition-all">
+                💾 Save Selections to Database
+            </button>
+        </div>
+
+        <!-- Results -->
+        <div id="results-section" class="bg-gray-800 rounded-lg p-6 hidden">
+            <h2 class="text-xl font-semibold mb-4">✅ Results</h2>
+            <pre id="results-data" class="bg-gray-900 p-4 rounded text-xs overflow-auto max-h-96"></pre>
+        </div>
+
+        <!-- Test Vendor Portal Link -->
+        <div id="vendor-portal-section" class="bg-gray-800 rounded-lg p-6 hidden">
+            <h2 class="text-xl font-semibold mb-4">Step 5: Test Vendor Portal</h2>
+            <p class="text-gray-400 mb-4">Open the vendor portal to see if selections appear:</p>
+            <a id="vendor-portal-link" href="#" target="_blank"
+               class="inline-block px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors">
+                🔗 Open Vendor Portal
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:4000/api';
+
+        let selectedFile = null;
+        let parsedData = null;
+        let roomMappings = [];
+
+        const mockRooms = [
+            { id: 'room-1', name: 'Master Bedroom', type: 'bedroom' },
+            { id: 'room-2', name: 'Kitchen', type: 'kitchen' },
+            { id: 'room-3', name: 'Living Room', type: 'living_room' },
+            { id: 'room-4', name: 'Bathroom 1', type: 'bathroom' },
+            { id: 'room-5', name: 'Bathroom 2', type: 'bathroom' },
+            { id: 'room-6', name: 'Garage', type: 'garage' }
+        ];
+
+        // File upload handling
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            selectedFile = file;
+
+            // Show file info
+            document.getElementById('file-name').textContent = file.name;
+            document.getElementById('file-size').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+            document.getElementById('file-info').classList.remove('hidden');
+
+            // Mock AI parsing (since we're testing API integration, not AI)
+            await mockParseFile(file);
+        });
+
+        async function mockParseFile(file) {
+            // Show parsing section
+            document.getElementById('parsing-section').classList.remove('hidden');
+
+            // Simulate parsing delay
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Mock parsed data
+            parsedData = {
+                rooms: [
+                    {
+                        room_name: "Master Bedroom",
+                        room_type: "bedroom",
+                        flooring: {
+                            type: "Hardwood",
+                            brand: "Armstrong",
+                            product: "Oak Plank Natural",
+                            color: "Natural",
+                            sku: "APK641",
+                            quantity: 250,
+                            unit: "sq ft",
+                            price_per_unit: 8.99
+                        },
+                        paint: {
+                            brand: "Sherwin Williams",
+                            color: "Sea Salt",
+                            sku: "SW6204",
+                            finish: "Eggshell"
+                        }
+                    },
+                    {
+                        room_name: "Kitchen",
+                        room_type: "kitchen",
+                        cabinetry: {
+                            style: "Shaker",
+                            color: "White",
+                            material: "Maple"
+                        },
+                        countertops: {
+                            material: "Quartz",
+                            color: "Carrara White",
+                            brand: "Caesarstone"
+                        }
+                    }
+                ],
+                metadata: {
+                    supplier: "Home Depot",
+                    date: "2025-03-01"
+                }
+            };
+
+            // Show results
+            document.getElementById('parsing-status').classList.add('hidden');
+            document.getElementById('parsing-results').classList.remove('hidden');
+            document.getElementById('parsed-data').textContent = JSON.stringify(parsedData, null, 2);
+
+            // Auto-match rooms
+            matchRooms();
+        }
+
+        function matchRooms() {
+            roomMappings = parsedData.rooms.map(pdfRoom => {
+                // Simple name matching
+                const match = mockRooms.find(r =>
+                    r.name.toLowerCase().includes(pdfRoom.room_name.toLowerCase()) ||
+                    pdfRoom.room_name.toLowerCase().includes(r.name.toLowerCase())
+                );
+
+                const { room_name, room_type, ...selections } = pdfRoom;
+
+                return {
+                    pdf_room: pdfRoom.room_name,
+                    floor_plan_room_id: match?.id || null,
+                    confidence: match ? 0.95 : 0,
+                    matched_by: match ? 'fuzzy' : 'manual',
+                    selections
+                };
+            });
+
+            // Show mappings
+            renderMappings();
+            document.getElementById('mapping-section').classList.remove('hidden');
+            document.getElementById('actions-section').classList.remove('hidden');
+        }
+
+        function renderMappings() {
+            const container = document.getElementById('mappings-container');
+            container.innerHTML = '';
+
+            roomMappings.forEach((mapping, index) => {
+                const div = document.createElement('div');
+                div.className = 'bg-gray-700 rounded-lg p-4';
+                div.innerHTML = `
+                    <div class="flex items-center gap-4 mb-2">
+                        <div class="flex-1">
+                            <p class="font-medium">${mapping.pdf_room}</p>
+                            <p class="text-xs text-gray-400">Confidence: ${(mapping.confidence * 100).toFixed(0)}%</p>
+                        </div>
+                        <div class="flex-1">
+                            <select class="w-full px-3 py-2 bg-gray-600 rounded border border-gray-500"
+                                    onchange="updateMapping(${index}, this.value)">
+                                <option value="">-- Select floor plan room --</option>
+                                ${mockRooms.map(r => `
+                                    <option value="${r.id}" ${r.id === mapping.floor_plan_room_id ? 'selected' : ''}>
+                                        ${r.name} (${r.type})
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    <details class="text-xs">
+                        <summary class="cursor-pointer text-blue-400">View selections</summary>
+                        <pre class="mt-2 bg-gray-800 p-2 rounded">${JSON.stringify(mapping.selections, null, 2)}</pre>
+                    </details>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        window.updateMapping = function(index, roomId) {
+            roomMappings[index].floor_plan_room_id = roomId || null;
+            roomMappings[index].matched_by = 'manual';
+            roomMappings[index].confidence = roomId ? 1.0 : 0;
+        };
+
+        // Save to database
+        document.getElementById('save-btn').addEventListener('click', async () => {
+            const projectId = document.getElementById('project-id').value;
+            const floorPlanId = document.getElementById('floor-plan-id').value;
+
+            try {
+                // Step 1: Upload file
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('project_id', projectId);
+                if (floorPlanId) formData.append('floor_plan_id', floorPlanId);
+
+                const uploadRes = await fetch(`${API_BASE}/selections/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!uploadRes.ok) throw new Error('Upload failed');
+                const { file_url } = await uploadRes.json();
+
+                console.log('✅ File uploaded:', file_url);
+
+                // Step 2: Save selections data
+                const saveRes = await fetch(`${API_BASE}/selections`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        floor_plan_id: floorPlanId || null,
+                        project_id: projectId,
+                        document_name: selectedFile.name,
+                        document_url: file_url,
+                        document_type: selectedFile.type.includes('pdf') ? 'pdf' : 'image',
+                        file_size: selectedFile.size,
+                        extracted_data: parsedData,
+                        room_mappings: roomMappings,
+                        ai_confidence: 0.95,
+                        validation_status: 'validated'
+                    })
+                });
+
+                if (!saveRes.ok) throw new Error('Save failed');
+                const result = await saveRes.json();
+
+                console.log('✅ Selections saved:', result);
+
+                // Show results
+                document.getElementById('results-section').classList.remove('hidden');
+                document.getElementById('results-data').textContent = JSON.stringify(result, null, 2);
+
+                // Show vendor portal link
+                const vendorLink = `/vendor-portal.html?project=${projectId}`;
+                document.getElementById('vendor-portal-link').href = vendorLink;
+                document.getElementById('vendor-portal-section').classList.remove('hidden');
+
+                alert('✅ Selections saved successfully!');
+
+            } catch (error) {
+                console.error('❌ Error:', error);
+                alert('❌ Error: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>

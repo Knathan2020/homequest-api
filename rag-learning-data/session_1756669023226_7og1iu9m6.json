@@ -1,0 +1,72 @@
+{
+  "id": "session_1756669023226_7og1iu9m6",
+  "timestamp": "2025-08-31T19:37:03.226Z",
+  "imageHash": "32bf4ea1-d68d-4753-8337-166be52c3b33",
+  "walls": [],
+  "rooms": [
+    {
+      "id": "room-1756669048935",
+      "name": "bath",
+      "type": "bedroom",
+      "squareFootage": 100,
+      "isExterior": false,
+      "center": {
+        "x": 447.5534893879642,
+        "y": 284.8325571854659
+      },
+      "source": "manual",
+      "isManual": true,
+      "isDeleted": false
+    }
+  ],
+  "doors": [],
+  "windows": [],
+  "measurements": [
+    {
+      "id": "label-room-1756669048935",
+      "type": "label-position",
+      "value": 0,
+      "unit": "position",
+      "location": {
+        "x": 1246.2205934398614,
+        "y": 983.143585335554
+      },
+      "source": "manual",
+      "isManual": true
+    },
+    {
+      "id": "label-room-1756669048935",
+      "type": "label-position",
+      "value": 0,
+      "unit": "position",
+      "location": {
+        "x": 1246.2205934398614,
+        "y": 983.143585335554
+      },
+      "source": "manual",
+      "isManual": true
+    },
+    {
+      "id": "label-room-1756669048935",
+      "type": "label-position",
+      "value": 0,
+      "unit": "position",
+      "location": {
+        "x": 1436.4789873370412,
+        "y": 1441.018181637558
+      },
+      "source": "manual",
+      "isManual": true
+    }
+  ],
+  "metadata": {
+    "totalWalls": 0,
+    "totalRooms": 1,
+    "totalDoors": 0,
+    "totalWindows": 0,
+    "totalMeasurements": 3,
+    "manualEdits": 4,
+    "deletions": 0,
+    "detectionMethods": []
+  }
+}

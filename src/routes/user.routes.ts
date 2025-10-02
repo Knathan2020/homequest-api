@@ -64,14 +64,18 @@ router.get('/user/profile', async (req, res) => {
     // Get team member info for department
     let department = null;
     if (profile?.team_id) {
-      const { data: teamMember } = await supabase
+      console.log('[GET PROFILE] Fetching department for user:', user.id, 'team:', profile.team_id);
+      const { data: teamMember, error: teamMemberError } = await supabase
         .from('team_members')
         .select('department')
         .eq('user_id', user.id)
         .eq('team_id', profile.team_id)
         .single();
 
+      console.log('[GET PROFILE] Team member data:', teamMember);
+      console.log('[GET PROFILE] Team member error:', teamMemberError);
       department = teamMember?.department;
+      console.log('[GET PROFILE] Department:', department);
     }
 
     res.json({
@@ -159,14 +163,21 @@ router.put('/user/profile', async (req, res) => {
     }
 
     // Also update or create team_members record if user has a team_id
-    if (updatedProfile?.team_id && (phone || phoneNumber || department)) {
+    if (updatedProfile?.team_id) {
+      console.log('[UPDATE PROFILE] Updating team_members for user:', user.id, 'team:', updatedProfile.team_id);
+      console.log('[UPDATE PROFILE] Phone:', phone || phoneNumber);
+      console.log('[UPDATE PROFILE] Department:', department);
+
       // Check if team member record exists
-      const { data: existingMember } = await supabase
+      const { data: existingMember, error: memberCheckError } = await supabase
         .from('team_members')
         .select('id')
         .eq('user_id', user.id)
         .eq('team_id', updatedProfile.team_id)
         .single();
+
+      console.log('[UPDATE PROFILE] Existing member:', existingMember);
+      console.log('[UPDATE PROFILE] Member check error:', memberCheckError);
 
       // Build name from available data
       let memberName = user.email?.split('@')[0] || 'Team Member';
@@ -183,27 +194,43 @@ router.put('/user/profile', async (req, res) => {
         user_id: user.id,
         name: memberName,
         email: user.email,
-        phone_number: phone || phoneNumber || '',
+        phone_number: phone || phoneNumber || updatedProfile.phone_number || '',
         department: department || 'Operations',
         role: department || 'Member',
         updated_at: new Date().toISOString()
       };
 
+      console.log('[UPDATE PROFILE] Team member data to save:', teamMemberData);
+
       if (existingMember) {
         // Update existing team member
-        await supabase
+        console.log('[UPDATE PROFILE] Updating existing member:', existingMember.id);
+        const { error: updateMemberError } = await supabase
           .from('team_members')
           .update(teamMemberData)
           .eq('id', existingMember.id);
+
+        if (updateMemberError) {
+          console.error('[UPDATE PROFILE] Error updating team member:', updateMemberError);
+        } else {
+          console.log('[UPDATE PROFILE] Successfully updated team member');
+        }
       } else {
         // Create new team member record
+        console.log('[UPDATE PROFILE] Creating new team member');
         teamMemberData.can_receive_transfers = true;
         teamMemberData.availability = 'available';
         teamMemberData.seniority_level = 1;
 
-        await supabase
+        const { error: insertMemberError } = await supabase
           .from('team_members')
           .insert([teamMemberData]);
+
+        if (insertMemberError) {
+          console.error('[UPDATE PROFILE] Error inserting team member:', insertMemberError);
+        } else {
+          console.log('[UPDATE PROFILE] Successfully created team member');
+        }
       }
     }
 

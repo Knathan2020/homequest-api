@@ -1,0 +1,57 @@
+{
+  "id": "session_1756657375484_d8vlmvss2",
+  "timestamp": "2025-08-31T16:22:55.484Z",
+  "imageHash": "32bf4ea1-d68d-4753-8337-166be52c3b33",
+  "walls": [],
+  "rooms": [],
+  "doors": [],
+  "windows": [],
+  "measurements": [
+    {
+      "id": "label-room_2",
+      "type": "label-position",
+      "value": 0,
+      "unit": "position",
+      "location": {
+        "x": 1718.162713630383,
+        "y": 845.0546359907413
+      },
+      "source": "manual",
+      "isManual": true
+    },
+    {
+      "id": "label-room_1",
+      "type": "label-position",
+      "value": 0,
+      "unit": "position",
+      "location": {
+        "x": 686.5684968374246,
+        "y": 692.42977055674
+      },
+      "source": "manual",
+      "isManual": true
+    },
+    {
+      "id": "label-room_1",
+      "type": "label-position",
+      "value": 0,
+      "unit": "position",
+      "location": {
+        "x": 686.5684968374246,
+        "y": 692.42977055674
+      },
+      "source": "manual",
+      "isManual": true
+    }
+  ],
+  "metadata": {
+    "totalWalls": 0,
+    "totalRooms": 0,
+    "totalDoors": 0,
+    "totalWindows": 0,
+    "totalMeasurements": 3,
+    "manualEdits": 3,
+    "deletions": 0,
+    "detectionMethods": []
+  }
+}

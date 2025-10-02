@@ -1,0 +1,41 @@
+{
+  "id": "session_1756657330699_dlmhr59o8",
+  "timestamp": "2025-08-31T16:22:10.699Z",
+  "imageHash": "32bf4ea1-d68d-4753-8337-166be52c3b33",
+  "walls": [],
+  "rooms": [
+    {
+      "id": "room_4",
+      "name": "BEDROOM",
+      "type": "bedroom",
+      "squareFootage": 100,
+      "isExterior": false,
+      "source": "manual",
+      "isManual": true,
+      "isDeleted": false
+    },
+    {
+      "id": "room_3",
+      "name": "LIVING",
+      "type": "living",
+      "squareFootage": 1000,
+      "isExterior": false,
+      "source": "manual",
+      "isManual": true,
+      "isDeleted": false
+    }
+  ],
+  "doors": [],
+  "windows": [],
+  "measurements": [],
+  "metadata": {
+    "totalWalls": 0,
+    "totalRooms": 2,
+    "totalDoors": 0,
+    "totalWindows": 0,
+    "totalMeasurements": 0,
+    "manualEdits": 2,
+    "deletions": 0,
+    "detectionMethods": []
+  }
+}

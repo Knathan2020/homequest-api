@@ -1,0 +1,140 @@
+{
+  "imagePath": "/workspaces/codespaces-blank/construction-platform/homequest-api/temp-floor-plans/local_2959_1757094241710.png",
+  "features": {
+    "walls": [
+      {
+        "start": {
+          "x": 510,
+          "y": 175
+        },
+        "end": {
+          "x": 510,
+          "y": 329
+        },
+        "thickness": 6,
+        "style": "standard"
+      }
+    ],
+    "rooms": [
+      {
+        "boundary": [
+          {
+            "x": 510,
+            "y": 175
+          },
+          {
+            "x": 510,
+            "y": 175
+          },
+          {
+            "x": 510,
+            "y": 252
+          },
+          {
+            "x": 510,
+            "y": 252
+          }
+        ],
+        "type": "bedroom",
+        "area": 0,
+        "features": {
+          "doorCount": 0,
+          "windowCount": 0,
+          "aspectRatio": 0
+        }
+      },
+      {
+        "boundary": [
+          {
+            "x": 510,
+            "y": 175
+          },
+          {
+            "x": 510,
+            "y": 175
+          },
+          {
+            "x": 510,
+            "y": 252
+          },
+          {
+            "x": 510,
+            "y": 252
+          }
+        ],
+        "type": "bedroom",
+        "area": 0,
+        "features": {
+          "doorCount": 0,
+          "windowCount": 0,
+          "aspectRatio": 0
+        }
+      },
+      {
+        "boundary": [
+          {
+            "x": 510,
+            "y": 252
+          },
+          {
+            "x": 510,
+            "y": 252
+          },
+          {
+            "x": 510,
+            "y": 329
+          },
+          {
+            "x": 510,
+            "y": 329
+          }
+        ],
+        "type": "bedroom",
+        "area": 0,
+        "features": {
+          "doorCount": 0,
+          "windowCount": 0,
+          "aspectRatio": 0
+        }
+      },
+      {
+        "boundary": [
+          {
+            "x": 510,
+            "y": 252
+          },
+          {
+            "x": 510,
+            "y": 252
+          },
+          {
+            "x": 510,
+            "y": 329
+          },
+          {
+            "x": 510,
+            "y": 329
+          }
+        ],
+        "type": "bedroom",
+        "area": 0,
+        "features": {
+          "doorCount": 0,
+          "windowCount": 0,
+          "aspectRatio": 0
+        }
+      }
+    ],
+    "imageFeatures": [
+      1,
+      4,
+      0,
+      0,
+      0,
+      154,
+      0,
+      0.25
+    ]
+  },
+  "timestamp": "2025-09-09T15:22:07.869Z"
+}

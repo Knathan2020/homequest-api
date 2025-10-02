@@ -1,0 +1,51 @@
+{
+  "id": "session_1756664258943_cgfqlmpr6",
+  "timestamp": "2025-08-31T18:17:38.943Z",
+  "imageHash": "32bf4ea1-d68d-4753-8337-166be52c3b33",
+  "walls": [],
+  "rooms": [
+    {
+      "id": "room_1",
+      "name": "KITCHEN",
+      "type": "kitchen",
+      "squareFootage": 500,
+      "isExterior": false,
+      "source": "manual",
+      "isManual": true,
+      "isDeleted": false
+    },
+    {
+      "id": "room_2",
+      "name": "BEDROOM",
+      "type": "bedroom",
+      "squareFootage": 300,
+      "isExterior": false,
+      "source": "manual",
+      "isManual": true,
+      "isDeleted": false
+    },
+    {
+      "id": "room_3",
+      "name": "LIVING",
+      "type": "living",
+      "squareFootage": 298.9575,
+      "isExterior": false,
+      "source": "manual",
+      "isManual": true,
+      "isDeleted": false
+    }
+  ],
+  "doors": [],
+  "windows": [],
+  "measurements": [],
+  "metadata": {
+    "totalWalls": 0,
+    "totalRooms": 3,
+    "totalDoors": 0,
+    "totalWindows": 0,
+    "totalMeasurements": 0,
+    "manualEdits": 3,
+    "deletions": 0,
+    "detectionMethods": []
+  }
+}

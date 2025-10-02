@@ -1,0 +1,67 @@
+{
+  "id": "session_1756675144012_vkw0kbjps",
+  "timestamp": "2025-08-31T21:19:04.012Z",
+  "imageHash": "32bf4ea1-d68d-4753-8337-166be52c3b33",
+  "walls": [
+    {
+      "id": "custom_wall_1756675154550",
+      "type": "manual",
+      "source": "manual",
+      "coordinates": {
+        "x1": 170,
+        "y1": 970,
+        "x2": 170,
+        "y2": 1470
+      },
+      "thickness": 10,
+      "confidence": 1,
+      "isManual": true,
+      "isDeleted": false
+    },
+    {
+      "id": "custom_wall_1756675161940",
+      "type": "manual",
+      "source": "manual",
+      "coordinates": {
+        "x1": 170,
+        "y1": 970,
+        "x2": 440,
+        "y2": 960
+      },
+      "thickness": 10,
+      "confidence": 1,
+      "isManual": true,
+      "isDeleted": false
+    }
+  ],
+  "rooms": [
+    {
+      "id": "room-1756675192004",
+      "name": "deck",
+      "type": "deck",
+      "squareFootage": 149,
+      "isExterior": true,
+      "center": {
+        "x": 436.0517635932465,
+        "y": 330.1253422538357
+      },
+      "source": "manual",
+      "isManual": true,
+      "isDeleted": false
+    }
+  ],
+  "doors": [],
+  "windows": [],
+  "measurements": [],
+  "metadata": {
+    "totalWalls": 2,
+    "totalRooms": 1,
+    "totalDoors": 0,
+    "totalWindows": 0,
+    "totalMeasurements": 0,
+    "manualEdits": 1,
+    "deletions": 0,
+    "detectionMethods": [],
+    "manualWalls": null
+  }
+}

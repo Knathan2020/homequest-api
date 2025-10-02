@@ -1,0 +1,356 @@
+{
+  "imagePath": "/workspaces/codespaces-blank/construction-platform/homequest-api/temp-floor-plans/local_3083_1757094241710.png",
+  "features": {
+    "walls": [
+      {
+        "start": {
+          "x": 350.75,
+          "y": 124
+        },
+        "end": {
+          "x": 350.75,
+          "y": 165
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 36,
+          "y": 182
+        },
+        "end": {
+          "x": 89,
+          "y": 182
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 27,
+          "y": 222
+        },
+        "end": {
+          "x": 414,
+          "y": 222
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 103.75,
+          "y": 146
+        },
+        "end": {
+          "x": 103.75,
+          "y": 578
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 96,
+          "y": 302
+        },
+        "end": {
+          "x": 153,
+          "y": 302
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 27,
+          "y": 342
+        },
+        "end": {
+          "x": 110,
+          "y": 342
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 36,
+          "y": 382
+        },
+        "end": {
+          "x": 115,
+          "y": 382
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 27,
+          "y": 422
+        },
+        "end": {
+          "x": 109,
+          "y": 422
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 27,
+          "y": 462
+        },
+        "end": {
+          "x": 120,
+          "y": 462
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 366,
+          "y": 462
+        },
+        "end": {
+          "x": 414,
+          "y": 462
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 29,
+          "y": 502
+        },
+        "end": {
+          "x": 119,
+          "y": 502
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 267,
+          "y": 542
+        },
+        "end": {
+          "x": 317,
+          "y": 542
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 67,
+          "y": 102
+        },
+        "end": {
+          "x": 67,
+          "y": 167
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 67,
+          "y": 312
+        },
+        "end": {
+          "x": 67,
+          "y": 362
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 67,
+          "y": 401
+        },
+        "end": {
+          "x": 67,
+          "y": 546
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 227,
+          "y": 186
+        },
+        "end": {
+          "x": 227,
+          "y": 234
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 267,
+          "y": 454
+        },
+        "end": {
+          "x": 267,
+          "y": 511
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 347,
+          "y": 262
+        },
+        "end": {
+          "x": 347,
+          "y": 320
+        },
+        "thickness": 5,
+        "style": "standard"
+      },
+      {
+        "start": {
+          "x": 387,
+          "y": 403
+        },
+        "end": {
+          "x": 387,
+          "y": 509
+        },
+        "thickness": 5,
+        "style": "standard"
+      }
+    ],
+    "rooms": [
+      {
+        "boundary": [
+          {
+            "x": 27,
+            "y": 102
+          },
+          {
+            "x": 220.5,
+            "y": 102
+          },
+          {
+            "x": 220.5,
+            "y": 340
+          },
+          {
+            "x": 27,
+            "y": 340
+          }
+        ],
+        "type": "unknown",
+        "area": 46053,
+        "features": {
+          "doorCount": 0,
+          "windowCount": 0,
+          "aspectRatio": 0.8130252100840336
+        }
+      },
+      {
+        "boundary": [
+          {
+            "x": 220.5,
+            "y": 102
+          },
+          {
+            "x": 414,
+            "y": 102
+          },
+          {
+            "x": 414,
+            "y": 340
+          },
+          {
+            "x": 220.5,
+            "y": 340
+          }
+        ],
+        "type": "unknown",
+        "area": 46053,
+        "features": {
+          "doorCount": 0,
+          "windowCount": 0,
+          "aspectRatio": 0.8130252100840336
+        }
+      },
+      {
+        "boundary": [
+          {
+            "x": 27,
+            "y": 340
+          },
+          {
+            "x": 220.5,
+            "y": 340
+          },
+          {
+            "x": 220.5,
+            "y": 578
+          },
+          {
+            "x": 27,
+            "y": 578
+          }
+        ],
+        "type": "unknown",
+        "area": 46053,
+        "features": {
+          "doorCount": 0,
+          "windowCount": 0,
+          "aspectRatio": 0.8130252100840336
+        }
+      },
+      {
+        "boundary": [
+          {
+            "x": 220.5,
+            "y": 340
+          },
+          {
+            "x": 414,
+            "y": 340
+          },
+          {
+            "x": 414,
+            "y": 578
+          },
+          {
+            "x": 220.5,
+            "y": 578
+          }
+        ],
+        "type": "unknown",
+        "area": 46053,
+        "features": {
+          "doorCount": 0,
+          "windowCount": 0,
+          "aspectRatio": 0.8130252100840336
+        }
+      }
+    ],
+    "imageFeatures": [
+      19,
+      4,
+      1,
+      0,
+      0,
+      2024,
+      46053,
+      4.75
+    ]
+  },
+  "timestamp": "2025-09-09T16:24:08.114Z"
+}

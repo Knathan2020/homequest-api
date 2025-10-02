@@ -1,0 +1,7 @@
+
+path: /workspaces/codespaces-blank/construction-platform/homequest-api/training-datasets/yolo
+train: images/train
+val: images/val
+
+nc: 4
+names: ["wall","door","window","room"]

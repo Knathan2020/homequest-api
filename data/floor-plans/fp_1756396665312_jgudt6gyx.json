@@ -1,0 +1,456 @@
+{
+  "project_id": "default-project",
+  "image_url": "test-floor-plan.png",
+  "walls": [
+    {
+      "x1": 0,
+      "y1": 0,
+      "x2": 100,
+      "y2": 0
+    },
+    {
+      "x1": 100,
+      "y1": 0,
+      "x2": 100,
+      "y2": 100
+    },
+    {
+      "x1": 100,
+      "y1": 100,
+      "x2": 0,
+      "y2": 100
+    },
+    {
+      "x1": 0,
+      "y1": 100,
+      "x2": 0,
+      "y2": 0
+    }
+  ],
+  "doors": [
+    {
+      "x": 50,
+      "y": 0,
+      "width": 20
+    }
+  ],
+  "windows": [],
+  "rooms": [
+    {
+      "name": "Room 1",
+      "area": 100
+    }
+  ],
+  "dimensions": {
+    "width": 100,
+    "height": 100
+  },
+  "metadata": {
+    "detected_at": "2025-08-28T15:57:44.883Z",
+    "version": 8,
+    "detection_method": "manual-test",
+    "last_edited": "2025-08-28T23:49:06.039Z"
+  },
+  "id": "fp_1756396665312_jgudt6gyx",
+  "updated_at": "2025-08-28T23:49:06.172Z",
+  "edits_history": [
+    {
+      "timestamp": "2025-08-28T23:34:53.619Z",
+      "changes": {
+        "id": "fp_1756396665312_jgudt6gyx",
+        "projectId": "default-project",
+        "walls": [
+          {
+            "x1": 0,
+            "y1": 0,
+            "x2": 100,
+            "y2": 0
+          },
+          {
+            "x1": 100,
+            "y1": 0,
+            "x2": 100,
+            "y2": 100
+          },
+          {
+            "x1": 100,
+            "y1": 100,
+            "x2": 0,
+            "y2": 100
+          },
+          {
+            "x1": 0,
+            "y1": 100,
+            "x2": 0,
+            "y2": 0
+          }
+        ],
+        "doors": [
+          {
+            "x": 50,
+            "y": 0,
+            "width": 20
+          }
+        ],
+        "windows": [],
+        "rooms": [
+          {
+            "name": "Room 1",
+            "area": 100
+          }
+        ],
+        "dimensions": {
+          "width": 100,
+          "height": 100
+        },
+        "metadata": {
+          "detected_at": "2025-08-28T15:57:44.883Z",
+          "version": 1,
+          "detection_method": "manual-test"
+        }
+      }
+    },
+    {
+      "timestamp": "2025-08-28T23:37:29.411Z",
+      "changes": {
+        "id": "fp_1756396665312_jgudt6gyx",
+        "projectId": "default-project",
+        "walls": [
+          {
+            "x1": 0,
+            "y1": 0,
+            "x2": 100,
+            "y2": 0
+          },
+          {
+            "x1": 100,
+            "y1": 0,
+            "x2": 100,
+            "y2": 100
+          },
+          {
+            "x1": 100,
+            "y1": 100,
+            "x2": 0,
+            "y2": 100
+          },
+          {
+            "x1": 0,
+            "y1": 100,
+            "x2": 0,
+            "y2": 0
+          }
+        ],
+        "doors": [
+          {
+            "x": 50,
+            "y": 0,
+            "width": 20
+          }
+        ],
+        "windows": [],
+        "rooms": [
+          {
+            "name": "Room 1",
+            "area": 100
+          }
+        ],
+        "dimensions": {
+          "width": 100,
+          "height": 100
+        },
+        "metadata": {
+          "detected_at": "2025-08-28T15:57:44.883Z",
+          "version": 2,
+          "detection_method": "manual-test",
+          "last_edited": "2025-08-28T23:34:53.619Z"
+        }
+      }
+    },
+    {
+      "timestamp": "2025-08-28T23:42:17.901Z",
+      "changes": {
+        "id": "fp_1756396665312_jgudt6gyx",
+        "projectId": "default-project",
+        "walls": [
+          {
+            "x1": 0,
+            "y1": 0,
+            "x2": 100,
+            "y2": 0
+          },
+          {
+            "x1": 100,
+            "y1": 0,
+            "x2": 100,
+            "y2": 100
+          },
+          {
+            "x1": 100,
+            "y1": 100,
+            "x2": 0,
+            "y2": 100
+          },
+          {
+            "x1": 0,
+            "y1": 100,
+            "x2": 0,
+            "y2": 0
+          }
+        ],
+        "doors": [
+          {
+            "x": 50,
+            "y": 0,
+            "width": 20
+          }
+        ],
+        "windows": [],
+        "rooms": [
+          {
+            "name": "Room 1",
+            "area": 100
+          }
+        ],
+        "dimensions": {
+          "width": 100,
+          "height": 100
+        },
+        "metadata": {
+          "detected_at": "2025-08-28T15:57:44.883Z",
+          "version": 3,
+          "detection_method": "manual-test",
+          "last_edited": "2025-08-28T23:37:29.411Z"
+        }
+      }
+    },
+    {
+      "timestamp": "2025-08-28T23:43:29.340Z",
+      "changes": {
+        "id": "fp_1756396665312_jgudt6gyx",
+        "projectId": "default-project",
+        "walls": [
+          {
+            "x1": 0,
+            "y1": 0,
+            "x2": 100,
+            "y2": 0
+          },
+          {
+            "x1": 100,
+            "y1": 0,
+            "x2": 100,
+            "y2": 100
+          },
+          {
+            "x1": 100,
+            "y1": 100,
+            "x2": 0,
+            "y2": 100
+          },
+          {
+            "x1": 0,
+            "y1": 100,
+            "x2": 0,
+            "y2": 0
+          }
+        ],
+        "doors": [
+          {
+            "x": 50,
+            "y": 0,
+            "width": 20
+          }
+        ],
+        "windows": [],
+        "rooms": [
+          {
+            "name": "Room 1",
+            "area": 100
+          }
+        ],
+        "dimensions": {
+          "width": 100,
+          "height": 100
+        },
+        "metadata": {
+          "detected_at": "2025-08-28T15:57:44.883Z",
+          "version": 4,
+          "detection_method": "manual-test",
+          "last_edited": "2025-08-28T23:42:17.901Z"
+        }
+      }
+    },
+    {
+      "timestamp": "2025-08-28T23:44:25.627Z",
+      "changes": {
+        "id": "fp_1756396665312_jgudt6gyx",
+        "projectId": "default-project",
+        "walls": [
+          {
+            "x1": 0,
+            "y1": 0,
+            "x2": 100,
+            "y2": 0
+          },
+          {
+            "x1": 100,
+            "y1": 0,
+            "x2": 100,
+            "y2": 100
+          },
+          {
+            "x1": 100,
+            "y1": 100,
+            "x2": 0,
+            "y2": 100
+          },
+          {
+            "x1": 0,
+            "y1": 100,
+            "x2": 0,
+            "y2": 0
+          }
+        ],
+        "doors": [
+          {
+            "x": 50,
+            "y": 0,
+            "width": 20
+          }
+        ],
+        "windows": [],
+        "rooms": [
+          {
+            "name": "Room 1",
+            "area": 100
+          }
+        ],
+        "dimensions": {
+          "width": 100,
+          "height": 100
+        },
+        "metadata": {
+          "detected_at": "2025-08-28T15:57:44.883Z",
+          "version": 5,
+          "detection_method": "manual-test",
+          "last_edited": "2025-08-28T23:43:29.340Z"
+        }
+      }
+    },
+    {
+      "timestamp": "2025-08-28T23:47:02.041Z",
+      "changes": {
+        "id": "fp_1756396665312_jgudt6gyx",
+        "projectId": "default-project",
+        "walls": [
+          {
+            "x1": 0,
+            "y1": 0,
+            "x2": 100,
+            "y2": 0
+          },
+          {
+            "x1": 100,
+            "y1": 0,
+            "x2": 100,
+            "y2": 100
+          },
+          {
+            "x1": 100,
+            "y1": 100,
+            "x2": 0,
+            "y2": 100
+          },
+          {
+            "x1": 0,
+            "y1": 100,
+            "x2": 0,
+            "y2": 0
+          }
+        ],
+        "doors": [
+          {
+            "x": 50,
+            "y": 0,
+            "width": 20
+          }
+        ],
+        "windows": [],
+        "rooms": [
+          {
+            "name": "Room 1",
+            "area": 100
+          }
+        ],
+        "dimensions": {
+          "width": 100,
+          "height": 100
+        },
+        "metadata": {
+          "detected_at": "2025-08-28T15:57:44.883Z",
+          "version": 6,
+          "detection_method": "manual-test",
+          "last_edited": "2025-08-28T23:44:25.627Z"
+        }
+      }
+    },
+    {
+      "timestamp": "2025-08-28T23:49:06.039Z",
+      "changes": {
+        "id": "fp_1756396665312_jgudt6gyx",
+        "projectId": "default-project",
+        "walls": [
+          {
+            "x1": 0,
+            "y1": 0,
+            "x2": 100,
+            "y2": 0
+          },
+          {
+            "x1": 100,
+            "y1": 0,
+            "x2": 100,
+            "y2": 100
+          },
+          {
+            "x1": 100,
+            "y1": 100,
+            "x2": 0,
+            "y2": 100
+          },
+          {
+            "x1": 0,
+            "y1": 100,
+            "x2": 0,
+            "y2": 0
+          }
+        ],
+        "doors": [
+          {
+            "x": 50,
+            "y": 0,
+            "width": 20
+          }
+        ],
+        "windows": [],
+        "rooms": [
+          {
+            "name": "Room 1",
+            "area": 100
+          }
+        ],
+        "dimensions": {
+          "width": 100,
+          "height": 100
+        },
+        "metadata": {
+          "detected_at": "2025-08-28T15:57:44.883Z",
+          "version": 7,
+          "detection_method": "manual-test",
+          "last_edited": "2025-08-28T23:47:02.041Z"
+        }
+      }
+    }
+  ]
+}
