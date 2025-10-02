@@ -17,97 +17,103 @@ const supabase = createClient(
 
 /**
  * Get all team members
+ * AUTO-SYNCS profile data to team_members if missing
  */
 router.get('/team/members', async (req, res) => {
   try {
     const { teamId } = req.query;
 
-    // Default fallback data for Ken White
-    const kenWhiteDefault = {
-      id: 'ken-white-001',
-      team_id: 'team-kenwhite',
-      email: 'kenwhite2015@gmail.com',
-      full_name: 'Ken White',
-      role: 'owner',
-      status: 'online',
-      title: 'CEO / Founder',
-      department: 'Leadership',
-      phone_number: '+1234567890',
-      avatar_url: null,
-      is_online: true,
-      last_seen: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    // If no teamId provided, return Ken White's team
-    if (!teamId || teamId === 'team-kenwhite') {
-      // Try to get from database first
-      if (supabase && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
-        const { data: members, error } = await supabase
-          .from('team_members')
-          .select('*')
-          .eq('team_id', teamId || 'team-kenwhite')
-          .order('role', { ascending: true })
-          .order('full_name', { ascending: true });
-
-        if (!error && members && members.length > 0) {
-          // Update online status based on last_seen (consider online if seen in last 5 minutes)
-          const updatedMembers = members.map(member => ({
-            ...member,
-            is_online: member.last_seen && 
-              new Date(member.last_seen) > new Date(Date.now() - 5 * 60 * 1000)
-          }));
-
-          return res.json({
-            success: true,
-            data: { members: updatedMembers }
-          });
-        }
-      }
-
-      // Return default Ken White data if database not available
-      console.log('📊 Returning default Ken White team data (database not configured)');
-      return res.json({
-        success: true,
-        data: { 
-          members: [kenWhiteDefault]
-        }
+    if (!teamId) {
+      return res.status(400).json({
+        success: false,
+        error: 'teamId is required'
       });
     }
 
-    // For other team IDs, return empty if database not available
+    if (!supabase || !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database not configured'
+      });
+    }
+
+    // STEP 1: Sync profiles to team_members if missing
+    // Get all profiles for this team
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, email, full_name, phone_number, role, team_id')
+      .eq('team_id', teamId);
+
+    if (!profilesError && profiles && profiles.length > 0) {
+      // For each profile, ensure there's a corresponding team_members record
+      for (const profile of profiles) {
+        const { data: existingMember } = await supabase
+          .from('team_members')
+          .select('id')
+          .eq('user_id', profile.id)
+          .eq('team_id', teamId)
+          .maybeSingle();
+
+        if (!existingMember) {
+          // Create team member record from profile
+          console.log(`🔄 Auto-syncing profile to team_members: ${profile.email}`);
+          await supabase
+            .from('team_members')
+            .insert({
+              team_id: teamId,
+              user_id: profile.id,
+              email: profile.email,
+              full_name: profile.full_name || profile.email?.split('@')[0] || 'Team Member',
+              phone_number: profile.phone_number || '',
+              role: profile.role || 'member',
+              department: 'Operations', // Default, user can update
+              status: 'active',
+              is_online: true,
+              last_seen: new Date().toISOString(),
+              can_receive_transfers: true,
+              availability: 'available',
+              seniority_level: 1
+            });
+        }
+      }
+    }
+
+    // STEP 2: Fetch all team members
+    const { data: members, error } = await supabase
+      .from('team_members')
+      .select('*')
+      .eq('team_id', teamId)
+      .order('role', { ascending: true })
+      .order('full_name', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    if (!members || members.length === 0) {
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
+    // STEP 3: Update online status based on last_seen
+    const updatedMembers = members.map(member => ({
+      ...member,
+      is_online: member.last_seen &&
+        new Date(member.last_seen) > new Date(Date.now() - 5 * 60 * 1000)
+    }));
+
     res.json({
       success: true,
-      data: { members: [] }
+      data: updatedMembers
     });
 
   } catch (error: any) {
     console.error('Error fetching team members:', error);
-    
-    // Return Ken White as fallback even on error
-    const kenWhiteDefault = {
-      id: 'ken-white-001',
-      team_id: 'team-kenwhite',
-      email: 'kenwhite2015@gmail.com',
-      full_name: 'Ken White',
-      role: 'owner',
-      status: 'online',
-      title: 'CEO / Founder',
-      department: 'Leadership',
-      phone_number: '+1234567890',
-      avatar_url: null,
-      is_online: true,
-      last_seen: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    res.json({
-      success: true,
-      data: { 
-        members: [kenWhiteDefault]
-      }
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch team members'
     });
   }
 });
