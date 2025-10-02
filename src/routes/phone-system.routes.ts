@@ -14,7 +14,7 @@ const router = Router();
 /**
  * Setup phone system for a team (buy number + create assistant)
  */
-router.post('/phone-system/setup', async (req: Request, res: Response) => {
+router.post('/setup', async (req: Request, res: Response) => {
   try {
     const { teamId, companyName, areaCode } = req.body;
 
@@ -118,7 +118,7 @@ router.post('/phone-system/setup', async (req: Request, res: Response) => {
 /**
  * Get phone system status for a team
  */
-router.get('/phone-system/status/:teamId', async (req: Request, res: Response) => {
+router.get('/status/:teamId', async (req: Request, res: Response) => {
   try {
     const { teamId } = req.params;
 
@@ -161,7 +161,7 @@ router.get('/phone-system/status/:teamId', async (req: Request, res: Response) =
 /**
  * Deactivate phone system for a team
  */
-router.post('/phone-system/deactivate', async (req: Request, res: Response) => {
+router.post('/deactivate', async (req: Request, res: Response) => {
   try {
     const { teamId } = req.body;
 
@@ -239,7 +239,7 @@ router.post('/phone-system/deactivate', async (req: Request, res: Response) => {
 /**
  * Get recent calls for a team
  */
-router.get('/phone-system/calls/:teamId', async (req: Request, res: Response) => {
+router.get('/calls/:teamId', async (req: Request, res: Response) => {
   try {
     const { teamId } = req.params;
     const { limit = 50, offset = 0 } = req.query;
@@ -277,7 +277,7 @@ router.get('/phone-system/calls/:teamId', async (req: Request, res: Response) =>
 /**
  * Get messages for a team
  */
-router.get('/phone-system/messages/:teamId', async (req: Request, res: Response) => {
+router.get('/messages/:teamId', async (req: Request, res: Response) => {
   try {
     const { teamId } = req.params;
     const { unreadOnly = false } = req.query;
@@ -315,7 +315,7 @@ router.get('/phone-system/messages/:teamId', async (req: Request, res: Response)
 /**
  * Mark message as read
  */
-router.patch('/phone-system/messages/:messageId/read', async (req: Request, res: Response) => {
+router.patch('/messages/:messageId/read', async (req: Request, res: Response) => {
   try {
     const { messageId } = req.params;
 
