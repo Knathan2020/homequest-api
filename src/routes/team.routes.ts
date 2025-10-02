@@ -445,7 +445,15 @@ router.get('/:teamId/members', async (req, res) => {
 
     const { data: members, error } = await supabase
       .from('team_members')
-      .select('*')
+      .select(`
+        *,
+        profile:profiles!team_members_user_id_fkey(
+          id,
+          email,
+          full_name,
+          phone_number
+        )
+      `)
       .eq('team_id', teamId);
 
     if (error) {
@@ -456,12 +464,14 @@ router.get('/:teamId/members', async (req, res) => {
       });
     }
 
-    // Transform database format to frontend format
+    // Transform database format to frontend format with profile data
     const transformedMembers = (members || []).map(member => ({
       id: member.id,
-      name: member.name,
-      phoneNumber: member.phone_number,
-      email: member.email,
+      userId: member.user_id,
+      teamId: member.team_id,
+      name: member.profile?.full_name || member.name || member.profile?.email?.split('@')[0] || 'Team Member',
+      phoneNumber: member.profile?.phone_number || member.phone_number,
+      email: member.profile?.email || member.email,
       role: member.role,
       department: member.department,
       availability: member.availability,
