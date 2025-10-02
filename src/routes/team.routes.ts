@@ -79,9 +79,7 @@ router.get('/members', async (req, res) => {
     const { data: members, error } = await supabase
       .from('team_members')
       .select('*')
-      .eq('team_id', teamId)
-      .order('role', { ascending: true })
-      .order('name', { ascending: true });
+      .eq('team_id', teamId);
 
     if (error) {
       throw error;
@@ -94,11 +92,12 @@ router.get('/members', async (req, res) => {
       });
     }
 
-    // STEP 3: Return members with online status
-    // Note: Online status can be calculated from last_activity if that column exists
+    // STEP 3: Return members
     res.json({
       success: true,
-      data: members
+      data: members,
+      count: members?.length || 0,
+      debug: members?.length > 0 ? Object.keys(members[0]) : []
     });
 
   } catch (error: any) {
@@ -464,8 +463,7 @@ router.get('/:teamId/members', async (req, res) => {
     const { data: members, error } = await supabase
       .from('team_members')
       .select('*')
-      .eq('team_id', teamId)
-      .order('name');
+      .eq('team_id', teamId);
 
     if (error) {
       console.error('Error fetching team members:', error);
