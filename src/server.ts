@@ -198,8 +198,8 @@ app.get('/api/projects', authenticateUser, async (req, res) => {
     if (userProfile?.team_id) {
       console.log(`🏢 User has team_id: ${userProfile.team_id}`);
 
-      // Get all projects for this team
-      const { data: teamProjects, error } = await supabase
+      // Get all projects for this team using service role (bypasses RLS)
+      const { data: teamProjects, error } = await supabaseAdmin
         .from('projects')
         .select('*')
         .eq('team_id', userProfile.team_id)
