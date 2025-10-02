@@ -61,12 +61,25 @@ router.get('/user/profile', async (req, res) => {
       console.error('Team fetch error:', teamError);
     }
 
+    // Get team member info for department
+    let department = null;
+    if (profile?.team_id) {
+      const { data: teamMember } = await supabase
+        .from('team_members')
+        .select('department')
+        .eq('user_id', user.id)
+        .eq('team_id', profile.team_id)
+        .single();
+
+      department = teamMember?.department;
+    }
+
     res.json({
       success: true,
       user: {
         id: user.id,
         email: user.email,
-        name: profile?.first_name && profile?.last_name 
+        name: profile?.first_name && profile?.last_name
           ? `${profile.first_name} ${profile.last_name}`
           : profile?.full_name || user.email,
         firstName: profile?.first_name,
@@ -78,7 +91,8 @@ router.get('/user/profile', async (req, res) => {
         companyId: team?.id,
         // Check both profile company_name (for individual users) and team company_name
         companyName: profile?.company_name || team?.company_name || team?.name,
-        companyPhone: team?.phone_number
+        companyPhone: team?.phone_number,
+        department: department
       }
     });
 
