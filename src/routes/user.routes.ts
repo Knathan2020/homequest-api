@@ -156,19 +156,26 @@ router.put('/user/profile', async (req, res) => {
         .eq('team_id', updatedProfile.team_id)
         .single();
 
+      // Build name from available data
+      let memberName = user.email?.split('@')[0] || 'Team Member';
+      if (updatedProfile.full_name) {
+        memberName = updatedProfile.full_name;
+      } else if (updatedProfile.first_name && updatedProfile.last_name) {
+        memberName = `${updatedProfile.first_name} ${updatedProfile.last_name}`;
+      } else if (updatedProfile.first_name) {
+        memberName = updatedProfile.first_name;
+      }
+
       const teamMemberData: any = {
         team_id: updatedProfile.team_id,
         user_id: user.id,
-        name: updatedProfile.full_name || updatedProfile.first_name + ' ' + updatedProfile.last_name || user.email,
+        name: memberName,
         email: user.email,
+        phone_number: phone || phoneNumber || '',
+        department: department || 'Operations',
+        role: department || 'Member',
         updated_at: new Date().toISOString()
       };
-
-      if (phone || phoneNumber) teamMemberData.phone_number = phone || phoneNumber;
-      if (department) {
-        teamMemberData.department = department;
-        teamMemberData.role = department;
-      }
 
       if (existingMember) {
         // Update existing team member
