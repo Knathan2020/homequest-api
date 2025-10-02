@@ -386,7 +386,7 @@ router.get('/:teamId/members', async (req, res) => {
             .from('team_members')
             .select(`
         *,
-        profile:profiles!team_members_user_id_fkey(
+        profiles!team_members_user_id_fkey(
           id,
           email,
           full_name,
@@ -406,9 +406,9 @@ router.get('/:teamId/members', async (req, res) => {
             id: member.id,
             userId: member.user_id,
             teamId: member.team_id,
-            name: member.profile?.full_name || member.name || member.profile?.email?.split('@')[0] || 'Team Member',
-            phoneNumber: member.profile?.phone_number || member.phone_number,
-            email: member.profile?.email || member.email,
+            name: member.profiles?.full_name || member.name || member.profiles?.email?.split('@')[0] || 'Team Member',
+            phoneNumber: member.profiles?.phone_number || member.phone_number,
+            email: member.profiles?.email || member.email,
             role: member.role,
             department: member.department,
             availability: member.availability,
