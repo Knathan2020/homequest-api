@@ -17,34 +17,41 @@ const supabase = createClient(
 /**
  * Get all team members
  */
-router.get('/team/:teamId/members', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const { teamId } = req.params;
-    
+    const { teamId } = req.query;
+
+    if (!teamId) {
+      return res.status(400).json({
+        success: false,
+        error: 'teamId is required'
+      });
+    }
+
     const { data, error } = await supabase
       .from('team_members')
       .select('*')
       .eq('team_id', teamId)
       .order('department', { ascending: true });
-    
+
     if (error) throw error;
-    
+
     // Group by department
-    const byDepartment = data.reduce((acc: any, member: any) => {
+    const byDepartment = (data || []).reduce((acc: any, member: any) => {
       if (!acc[member.department]) {
         acc[member.department] = [];
       }
       acc[member.department].push(member);
       return acc;
     }, {});
-    
+
     res.json({
       success: true,
-      members: data,
+      data: data || [],
       byDepartment,
-      total: data.length
+      total: data?.length || 0
     });
-    
+
   } catch (error: any) {
     res.status(500).json({
       success: false,
@@ -54,48 +61,68 @@ router.get('/team/:teamId/members', async (req, res) => {
 });
 
 /**
- * Add or update team member
+ * Add team member
  */
-router.post('/team/:teamId/members', async (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const { teamId } = req.params;
     const memberData = req.body;
-    
+
     // Validate required fields
-    if (!memberData.name || !memberData.phoneNumber || !memberData.role || !memberData.department) {
+    if (!memberData.team_id || !memberData.name || !memberData.phone_number || !memberData.role || !memberData.department) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: name, phoneNumber, role, department'
+        error: 'Missing required fields: team_id, name, phone_number, role, department'
       });
     }
-    
-    // Check if phone number already exists for another member
-    const { data: existing } = await supabase
+
+    const { data, error } = await supabase
       .from('team_members')
-      .select('id')
-      .eq('phone_number', memberData.phoneNumber)
-      .neq('team_id', teamId)
+      .insert([memberData])
+      .select()
       .single();
-    
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        error: 'Phone number already in use by another team'
-      });
-    }
-    
-    // Upsert member
-    const result = await aiReceptionistService.upsertTeamMember({
-      teamId,
-      ...memberData
-    });
-    
+
+    if (error) throw error;
+
     res.json({
       success: true,
-      message: 'Team member saved successfully',
-      ...result
+      message: 'Team member added successfully',
+      data
     });
-    
+
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Update team member
+ */
+router.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const memberData = req.body;
+
+    const { data, error } = await supabase
+      .from('team_members')
+      .update({
+        ...memberData,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      message: 'Team member updated successfully',
+      data
+    });
+
   } catch (error: any) {
     res.status(500).json({
       success: false,
@@ -147,26 +174,22 @@ router.patch('/team/:teamId/members/:memberId/availability', async (req, res) =>
 /**
  * Delete team member
  */
-router.delete('/team/:teamId/members/:memberId', async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const { teamId, memberId } = req.params;
-    
+    const { id } = req.params;
+
     const { error } = await supabase
       .from('team_members')
       .delete()
-      .eq('id', memberId)
-      .eq('team_id', teamId);
-    
+      .eq('id', id);
+
     if (error) throw error;
-    
-    // Update AI assistant
-    await aiReceptionistService.getTeamMembers(teamId);
-    
+
     res.json({
       success: true,
-      message: 'Team member removed'
+      message: 'Team member deleted successfully'
     });
-    
+
   } catch (error: any) {
     res.status(500).json({
       success: false,

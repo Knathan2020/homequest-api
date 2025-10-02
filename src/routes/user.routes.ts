@@ -118,22 +118,73 @@ router.put('/user/profile', async (req, res) => {
     const {
       firstName,
       lastName,
-      phoneNumber
+      phone,
+      phoneNumber,
+      department
     } = req.body;
 
+    // Prepare update object
+    const updateData: any = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (firstName) updateData.first_name = firstName;
+    if (lastName) updateData.last_name = lastName;
+    if (phone || phoneNumber) updateData.phone_number = phone || phoneNumber;
+    if (department) updateData.role = department;
+
     // Update profile
-    const { error: updateError } = await supabase
+    const { data: updatedProfile, error: updateError } = await supabase
       .from('profiles')
-      .update({
-        first_name: firstName,
-        last_name: lastName,
-        phone_number: phoneNumber,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', user.id);
+      .update(updateData)
+      .eq('id', user.id)
+      .select()
+      .single();
 
     if (updateError) {
       throw updateError;
+    }
+
+    // Also update or create team_members record if user has a team_id
+    if (updatedProfile?.team_id && (phone || phoneNumber || department)) {
+      // Check if team member record exists
+      const { data: existingMember } = await supabase
+        .from('team_members')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('team_id', updatedProfile.team_id)
+        .single();
+
+      const teamMemberData: any = {
+        team_id: updatedProfile.team_id,
+        user_id: user.id,
+        name: updatedProfile.full_name || updatedProfile.first_name + ' ' + updatedProfile.last_name || user.email,
+        email: user.email,
+        updated_at: new Date().toISOString()
+      };
+
+      if (phone || phoneNumber) teamMemberData.phone_number = phone || phoneNumber;
+      if (department) {
+        teamMemberData.department = department;
+        teamMemberData.role = department;
+      }
+
+      if (existingMember) {
+        // Update existing team member
+        await supabase
+          .from('team_members')
+          .update(teamMemberData)
+          .eq('id', existingMember.id);
+      } else {
+        // Create new team member record
+        teamMemberData.can_receive_transfers = true;
+        teamMemberData.availability = 'available';
+        teamMemberData.seniority_level = 1;
+
+        await supabase
+          .from('team_members')
+          .insert([teamMemberData]);
+      }
     }
 
     res.json({
