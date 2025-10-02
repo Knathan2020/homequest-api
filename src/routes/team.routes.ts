@@ -480,7 +480,7 @@ router.get('/:teamId/members', async (req, res) => {
 
     res.json({
       success: true,
-      members: transformedMembers
+      data: transformedMembers
     });
 
   } catch (error: any) {
