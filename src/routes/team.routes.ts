@@ -19,7 +19,7 @@ const supabase = createClient(
  * Get all team members
  * AUTO-SYNCS profile data to team_members if missing
  */
-router.get('/team/members', async (req, res) => {
+router.get('/members', async (req, res) => {
   try {
     const { teamId } = req.query;
 
