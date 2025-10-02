@@ -30,49 +30,21 @@ router.get('/members', async (req, res) => {
       });
     }
 
-    // STEP 1: Sync profiles to team_members if missing (if teamId provided)
-    if (teamId) {
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, email, full_name, phone_number, role, team_id')
-        .eq('team_id', teamId);
+    // Note: team_members table only stores membership info (role, permissions, department)
+    // Profile data (name, email, phone) comes from the profiles table via user_id
 
-      if (!profilesError && profiles && profiles.length > 0) {
-        // For each profile, ensure there's a corresponding team_members record
-        for (const profile of profiles) {
-          const { data: existingMember } = await supabase
-            .from('team_members')
-            .select('id')
-            .eq('user_id', profile.id)
-            .eq('team_id', teamId)
-            .maybeSingle();
-
-          if (!existingMember) {
-            // Create team member record from profile
-            console.log(`🔄 Auto-syncing profile to team_members: ${profile.email}`);
-            await supabase
-              .from('team_members')
-              .insert({
-                team_id: teamId,
-                user_id: profile.id,
-                email: profile.email,
-                name: profile.full_name || profile.email?.split('@')[0] || 'Team Member',
-                phone_number: profile.phone_number || '',
-                role: profile.role || 'member',
-                department: 'Operations',
-                availability: 'available',
-                can_receive_transfers: true,
-                seniority_level: 1
-              });
-          }
-        }
-      }
-    }
-
-    // STEP 2: Fetch all team members
+    // STEP 2: Fetch all team members with profile data
     let query = supabase
       .from('team_members')
-      .select('*');
+      .select(`
+        *,
+        profile:profiles!team_members_user_id_fkey(
+          id,
+          email,
+          full_name,
+          phone_number
+        )
+      `);
 
     if (teamId) {
       query = query.eq('team_id', teamId);
@@ -91,12 +63,24 @@ router.get('/members', async (req, res) => {
       });
     }
 
-    // STEP 3: Return members
+    // STEP 3: Transform to include profile data
+    const transformedMembers = members.map(member => ({
+      id: member.id,
+      userId: member.user_id,
+      teamId: member.team_id,
+      role: member.role,
+      department: member.department,
+      permissions: member.permissions,
+      joinedAt: member.joined_at,
+      name: member.profile?.full_name || member.profile?.email?.split('@')[0] || 'Team Member',
+      email: member.profile?.email,
+      phoneNumber: member.profile?.phone_number
+    }));
+
     res.json({
       success: true,
-      data: members,
-      count: members?.length || 0,
-      debug: members?.length > 0 ? Object.keys(members[0]) : []
+      data: transformedMembers,
+      count: transformedMembers.length
     });
 
   } catch (error: any) {
