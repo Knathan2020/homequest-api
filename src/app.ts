@@ -300,8 +300,8 @@ export const createApp = (): Application => {
   app.use('/api/elevenlabs-twilio', require('./routes/elevenlabs-twilio.routes').default); // ElevenLabs + Twilio real-time integration
   app.use('/api', require('./routes/team-signup.routes').default); // Team signup with phone provisioning
   app.use('/api', require('./routes/setup.routes').default); // Database setup and phone provisioning
-  app.use('/api', require('./routes/team-members.routes').default); // Team members management for AI routing
-  app.use('/api', require('./routes/team.routes').default); // Real team management with online status
+  app.use('/api/team-members', require('./routes/team-members.routes').default); // Team members management for AI routing
+  app.use('/api/team', require('./routes/team.routes').default); // Real team management with online status
   app.use('/api/usage', require('./routes/usage.routes').default); // Real-time usage statistics
   app.use('/api', require('./routes/projects-supabase.routes').default); // Projects management with Supabase
   app.use('/api', require('./routes/appointments.routes').default); // Appointments and scheduling system
