@@ -65,7 +65,6 @@ router.get('/members', async (req, res) => {
               email: profile.email,
               name: profile.full_name || profile.email?.split('@')[0] || 'Team Member',
               phone_number: profile.phone_number || '',
-              email: profile.email,
               role: profile.role || 'member',
               department: 'Operations', // Default, user can update
               availability: 'available',
