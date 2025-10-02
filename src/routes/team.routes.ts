@@ -63,15 +63,13 @@ router.get('/members', async (req, res) => {
               team_id: teamId,
               user_id: profile.id,
               email: profile.email,
-              full_name: profile.full_name || profile.email?.split('@')[0] || 'Team Member',
+              name: profile.full_name || profile.email?.split('@')[0] || 'Team Member',
               phone_number: profile.phone_number || '',
+              email: profile.email,
               role: profile.role || 'member',
               department: 'Operations', // Default, user can update
-              status: 'active',
-              is_online: true,
-              last_seen: new Date().toISOString(),
-              can_receive_transfers: true,
               availability: 'available',
+              can_receive_transfers: true,
               seniority_level: 1
             });
         }
@@ -84,7 +82,7 @@ router.get('/members', async (req, res) => {
       .select('*')
       .eq('team_id', teamId)
       .order('role', { ascending: true })
-      .order('full_name', { ascending: true });
+      .order('name', { ascending: true });
 
     if (error) {
       throw error;
