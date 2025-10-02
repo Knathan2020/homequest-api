@@ -79,11 +79,9 @@ router.get('/user/profile', async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
-        name: profile?.first_name && profile?.last_name
-          ? `${profile.first_name} ${profile.last_name}`
-          : profile?.full_name || user.email,
-        firstName: profile?.first_name,
-        lastName: profile?.last_name,
+        name: profile?.full_name || user.email,
+        firstName: profile?.full_name?.split(' ')[0] || null,
+        lastName: profile?.full_name?.split(' ').slice(1).join(' ') || null,
         fullName: profile?.full_name,
         phone: profile?.phone_number,
         role: profile?.role || 'builder',
