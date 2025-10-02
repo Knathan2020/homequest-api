@@ -63,11 +63,13 @@ router.get('/members', async (req, res) => {
               team_id: teamId,
               user_id: profile.id,
               email: profile.email,
-              full_name: profile.full_name || profile.email?.split('@')[0] || 'Team Member',
+              name: profile.full_name || profile.email?.split('@')[0] || 'Team Member',
               phone_number: profile.phone_number || '',
               role: profile.role || 'member',
-              department: 'Operations', // Default, user can update
-              status: 'active'
+              department: 'Operations',
+              availability: 'available',
+              can_receive_transfers: true,
+              seniority_level: 1
             });
         }
       }
@@ -79,7 +81,7 @@ router.get('/members', async (req, res) => {
       .select('*')
       .eq('team_id', teamId)
       .order('role', { ascending: true })
-      .order('full_name', { ascending: true });
+      .order('name', { ascending: true });
 
     if (error) {
       throw error;
@@ -463,7 +465,7 @@ router.get('/:teamId/members', async (req, res) => {
       .from('team_members')
       .select('*')
       .eq('team_id', teamId)
-      .order('full_name');
+      .order('name');
 
     if (error) {
       console.error('Error fetching team members:', error);
@@ -476,7 +478,7 @@ router.get('/:teamId/members', async (req, res) => {
     // Transform database format to frontend format
     const transformedMembers = (members || []).map(member => ({
       id: member.id,
-      name: member.full_name,
+      name: member.name,
       phoneNumber: member.phone_number,
       email: member.email,
       role: member.role,
@@ -542,12 +544,16 @@ router.post('/:teamId/members', async (req, res) => {
       .from('team_members')
       .insert({
         team_id: teamId,
-        full_name: name,
+        name,
         phone_number: phoneNumber,
         email,
         role,
         department,
-        status: 'active'
+        availability,
+        expertise,
+        seniority_level: 1,
+        can_receive_transfers: true,
+        max_daily_transfers: 20
       })
       .select()
       .single();
@@ -564,12 +570,13 @@ router.post('/:teamId/members', async (req, res) => {
       success: true,
       member: {
         id: member.id,
-        name: member.full_name,
+        name: member.name,
         phoneNumber: member.phone_number,
         email: member.email,
         role: member.role,
         department: member.department,
-        status: member.status
+        availability: member.availability,
+        expertise: member.expertise || []
       },
       message: 'Team member added successfully'
     });
@@ -626,12 +633,13 @@ router.patch('/:teamId/members/:memberId/availability', async (req, res) => {
       success: true,
       member: {
         id: member.id,
-        name: member.full_name,
+        name: member.name,
         phoneNumber: member.phone_number,
         email: member.email,
         role: member.role,
         department: member.department,
-        status: member.status
+        availability: member.availability,
+        expertise: member.expertise || []
       },
       message: 'Availability updated successfully'
     });
