@@ -85,19 +85,22 @@ router.post('/invite', async (req, res) => {
     }
 
     // Create team member record matching actual Supabase schema
+    // Actual columns: id, user_id, team_id, role, permissions, joined_at, invited_by, created_at, department
     const memberData: any = {
       team_id: teamId,
-      name: inviteData.fullName,
-      email: inviteData.email,
-      phone_number: inviteData.phoneNumber || 'pending', // Required field, will be updated on accept
       role: inviteData.role || 'Team Member',
       department: inviteData.department || 'Operations',
-      availability: 'offline', // Set to offline until they accept and are ready
-      seniority_level: inviteData.seniorityLevel || 1,
-      can_receive_transfers: inviteData.permissions?.canReceiveTransfers !== false,
-      voicemail_enabled: inviteData.permissions?.voicemailEnabled !== false,
-      sms_notifications: inviteData.permissions?.smsNotifications !== false,
-      email_notifications: inviteData.permissions?.emailNotifications !== false
+      permissions: {
+        email: inviteData.email,
+        fullName: inviteData.fullName,
+        phoneNumber: inviteData.phoneNumber,
+        canApproveEstimates: inviteData.permissions?.canApproveEstimates || false,
+        canScheduleWork: inviteData.permissions?.canScheduleWork || false,
+        canAccessFinancials: inviteData.permissions?.canAccessFinancials || false,
+        canManageTeam: inviteData.permissions?.canManageTeam || false,
+        canHandleComplaints: inviteData.permissions?.canHandleComplaints || false,
+        inviteStatus: 'pending'
+      }
     };
 
     const { data: member, error: memberError } = await supabase
@@ -165,12 +168,10 @@ router.post('/accept-invite', async (req, res) => {
     }
 
     // Get the team member record by token (ID)
-    // Note: team_members table doesn't have 'status' column, so check availability instead
     const { data: member, error: fetchError } = await supabase
       .from('team_members')
       .select('*')
       .eq('id', token)
-      .eq('availability', 'offline') // offline means pending acceptance
       .single();
 
     if (fetchError || !member) {
@@ -180,13 +181,25 @@ router.post('/accept-invite', async (req, res) => {
       });
     }
 
-    // Update member with phone number and make them available
-    const updateData: any = {
-      availability: 'available', // Change from offline to available
-      updated_at: new Date().toISOString()
+    // Check if invite is still pending
+    if (member.permissions?.inviteStatus !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invitation already accepted or expired'
+      });
+    }
+
+    // Update permissions with phone number and mark as accepted
+    const updatedPermissions = {
+      ...member.permissions,
+      phoneNumber: phoneNumber,
+      inviteStatus: 'accepted'
     };
 
-    if (phoneNumber && phoneNumber !== 'pending') updateData.phone_number = phoneNumber;
+    const updateData: any = {
+      permissions: updatedPermissions,
+      joined_at: new Date().toISOString()
+    };
 
     const { data: updatedMember, error: updateError } = await supabase
       .from('team_members')
@@ -198,14 +211,14 @@ router.post('/accept-invite', async (req, res) => {
     if (updateError) throw updateError;
 
     // If password provided, create auth user
-    if (password && member.email) {
+    if (password && member.permissions?.email) {
       try {
         const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-          email: member.email,
+          email: member.permissions.email,
           password: password,
           email_confirm: true,
           user_metadata: {
-            full_name: member.name,
+            full_name: member.permissions?.fullName || 'Team Member',
             team_id: member.team_id,
             team_member_id: member.id,
             role: member.role,
@@ -250,7 +263,7 @@ router.get('/invite/:token', async (req, res) => {
 
     const { data: member, error } = await supabase
       .from('team_members')
-      .select('id, email, name, role, department, availability')
+      .select('id, role, department, permissions')
       .eq('id', token)
       .single();
 
@@ -261,7 +274,7 @@ router.get('/invite/:token', async (req, res) => {
       });
     }
 
-    if (member.availability !== 'offline') {
+    if (member.permissions?.inviteStatus !== 'pending') {
       return res.status(400).json({
         success: false,
         error: 'Invitation already accepted or expired'
@@ -271,8 +284,8 @@ router.get('/invite/:token', async (req, res) => {
     res.json({
       success: true,
       data: {
-        email: member.email,
-        fullName: member.name,
+        email: member.permissions?.email,
+        fullName: member.permissions?.fullName,
         role: member.role,
         department: member.department
       }
