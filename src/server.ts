@@ -728,6 +728,7 @@ app.use('/api/retell', retellRoutes);
 
 // Communication & Phone Systems
 app.use('/api/twilio', twilioRoutes);
+app.use('/api/communications', require('./routes/communications-stats.routes').default);
 app.use('/api/twilio-voice', twilioVoiceRoutes);
 app.use('/api/twilio-webhooks', twilioWebhooksRoutes);
 app.use('/api/vapi', vapiRoutes);
