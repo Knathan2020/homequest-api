@@ -6,6 +6,7 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import aiReceptionistService from '../services/ai-receptionist.service';
+import resendEmailService from '../services/resend-email.service';
 
 const router = express.Router();
 
@@ -113,38 +114,31 @@ router.post('/invite', async (req, res) => {
 
     if (memberError) throw memberError;
 
-    // Send invitation email using Supabase Auth
-    const inviteUrl = `${process.env.FRONTEND_URL || process.env.ALLOWED_ORIGINS}/accept-invite?token=${member.id}`;
+    // Generate invitation URL with team member ID
+    const frontendUrl = process.env.FRONTEND_URL || process.env.ALLOWED_ORIGINS || 'https://construction-platform-rc3mhy39v-ken-whites-projects-cbf8a7e8.vercel.app';
+    const inviteUrl = `${frontendUrl}/accept-invite?token=${member.id}`;
 
+    // Send invitation email using Resend
     try {
-      // Use Supabase to send invite email
-      const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
-        inviteData.email,
-        {
-          data: {
-            full_name: inviteData.fullName,
-            team_id: teamId,
-            role: inviteData.role,
-            department: inviteData.department,
-            invited_by: req.body.invitedBy || 'admin'
-          },
-          redirectTo: inviteUrl
-        }
-      );
-
-      if (inviteError) {
-        console.error('Error sending invite email:', inviteError);
-        // Don't fail the request, just log the error
-      }
+      await resendEmailService.sendTeamInvite({
+        email: inviteData.email,
+        fullName: inviteData.fullName,
+        teamName: 'Your Team', // TODO: Get actual team name from database
+        role: inviteData.jobTitle || inviteData.role,
+        department: inviteData.department,
+        inviteUrl: inviteUrl
+      });
+      console.log('✅ Invitation email sent to:', inviteData.email);
     } catch (emailError) {
-      console.error('Error sending email:', emailError);
-      // Continue even if email fails
+      console.error('❌ Error sending invitation email:', emailError);
+      // Continue even if email fails - admin can share link manually
     }
 
     res.json({
       success: true,
       message: `Invitation sent to ${inviteData.email}`,
-      data: member
+      data: member,
+      inviteUrl: inviteUrl // Return URL in case email fails
     });
 
   } catch (error: any) {
