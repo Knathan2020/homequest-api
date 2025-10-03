@@ -737,20 +737,39 @@ router.post('/webhook', async (req, res) => {
                 transfer_status: 'initiated'
               });
 
-            // Return Vapi dynamic transfer response
-            console.log(`📞 Transferring to ${phoneNumber} (${selectedMember.name} - ${department})`);
+            // Use Vapi API to transfer the call
+            console.log(`📞 Transferring call ${call?.id} to ${phoneNumber} (${selectedMember.name} - ${department})`);
+
+            try {
+              // Call Vapi API to transfer the call
+              const vapiResponse = await fetch(`https://api.vapi.ai/call/${call?.id}`, {
+                method: 'PATCH',
+                headers: {
+                  'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  destination: {
+                    type: 'number',
+                    number: phoneNumber
+                  }
+                })
+              });
+
+              if (!vapiResponse.ok) {
+                console.error('Vapi transfer failed:', await vapiResponse.text());
+              }
+            } catch (error) {
+              console.error('Error calling Vapi API:', error);
+            }
 
             return res.json({
               results: [
                 {
                   toolCallId: functionCall.toolCallId,
-                  result: `Transferring you to ${selectedMember.name || department}`
+                  result: `Transferring you now to ${selectedMember.name || department}...`
                 }
-              ],
-              destination: {
-                type: "number",
-                number: phoneNumber
-              }
+              ]
             });
           } else {
             return res.json({
