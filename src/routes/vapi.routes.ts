@@ -681,15 +681,24 @@ router.post('/webhook', async (req, res) => {
 
         try {
           // Find available team members in the requested department
-          const { data: availableMembers } = await supabase
+          const { data: availableMembers, error: memberError } = await supabase
             .from('team_members')
-            .select('name, department, role, phone_number')
+            .select('*')
             .eq('team_id', teamId || '11111111-1111-1111-1111-111111111111')
-            .ilike('department', department)
-            .not('phone_number', 'is', null);
+            .ilike('department', department);
+
+          console.log('🔍 Transfer lookup:', { teamId, department, availableMembers, memberError });
 
           if (availableMembers && availableMembers.length > 0) {
-            const selectedMember = availableMembers[0];
+            // Find member with phone number (try both snake_case and camelCase)
+            const selectedMember = availableMembers.find(m => m.phone_number || m.phoneNumber) || availableMembers[0];
+            const phoneNumber = selectedMember.phone_number || selectedMember.phoneNumber;
+
+            if (!phoneNumber) {
+              return res.json({
+                result: `I apologize, but our ${department} team is currently unavailable. Let me take a message and have someone call you back as soon as possible.`
+              });
+            }
 
             // Log the transfer
             await supabase
@@ -700,7 +709,7 @@ router.post('/webhook', async (req, res) => {
                 from_type: 'ai',
                 to_department: department,
                 to_member: selectedMember.name,
-                to_phone: selectedMember.phone_number,
+                to_phone: phoneNumber,
                 reason,
                 caller_name: callerName,
                 urgency_level: urgency === 'urgent' ? 5 : urgency === 'high' ? 4 : urgency === 'normal' ? 2 : 1,
@@ -711,7 +720,7 @@ router.post('/webhook', async (req, res) => {
             return res.json({
               result: `Perfect! I'm transferring you to our ${department} department. ${selectedMember.name} will be with you shortly.`,
               forwardCall: {
-                phoneNumber: selectedMember.phone_number,
+                phoneNumber: phoneNumber,
                 message: `Transferring call from AI: ${reason}. Caller: ${callerName || 'Unknown'}`
               }
             });
