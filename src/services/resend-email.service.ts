@@ -27,9 +27,16 @@ class ResendEmailService {
 
   private loadTemplates() {
     try {
-      const templatePath = path.join(__dirname, '../templates/team-invite.html');
+      // Try production path first (dist/templates), then development path (src/templates)
+      let templatePath = path.join(__dirname, '../templates/team-invite.html');
+
+      if (!fs.existsSync(templatePath)) {
+        // Fallback to src directory for development or if templates aren't copied
+        templatePath = path.join(process.cwd(), 'src/templates/team-invite.html');
+      }
+
       this.teamInviteTemplate = fs.readFileSync(templatePath, 'utf-8');
-      console.log('✅ Email templates loaded');
+      console.log('✅ Email templates loaded from:', templatePath);
     } catch (error) {
       console.error('❌ Error loading email templates:', error);
     }
@@ -61,7 +68,7 @@ class ResendEmailService {
         html: html
       });
 
-      console.log('✅ Invitation email sent:', result.id);
+      console.log('✅ Invitation email sent:', result.data?.id || 'sent');
       return true;
     } catch (error) {
       console.error('❌ Error sending invitation email:', error);

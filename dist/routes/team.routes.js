@@ -382,6 +382,7 @@ router.get('/team/stats', async (req, res) => {
 router.get('/:teamId/members', async (req, res) => {
     try {
         const { teamId } = req.params;
+        console.log('🔍 GET /:teamId/members called with teamId:', teamId);
         // Get team members
         const { data: teamMembers, error: tmError } = await supabase
             .from('team_members')
@@ -394,18 +395,22 @@ router.get('/:teamId/members', async (req, res) => {
                 error: 'Failed to fetch team members'
             });
         }
+        console.log('📊 Team members count:', teamMembers?.length);
         // Get profiles for all user_ids
         const userIds = teamMembers?.map(tm => tm.user_id).filter(Boolean) || [];
+        console.log('👤 User IDs to fetch:', userIds);
         const { data: profiles, error: profileError } = await supabase
             .from('profiles')
             .select('id, email, full_name, phone_number')
             .in('id', userIds);
+        console.log('✅ Profiles fetched:', profiles?.length, profiles);
         if (profileError) {
             console.error('Error fetching profiles:', profileError);
         }
         // Merge team members with profiles
         const transformedMembers = (teamMembers || []).map(member => {
             const profile = profiles?.find(p => p.id === member.user_id);
+            console.log(`🔄 Transforming member ${member.user_id}, found profile:`, profile);
             return {
                 id: member.id,
                 userId: member.user_id,
@@ -419,6 +424,7 @@ router.get('/:teamId/members', async (req, res) => {
                 expertise: member.expertise || []
             };
         });
+        console.log('📤 Sending response with members:', transformedMembers);
         res.json({
             success: true,
             data: transformedMembers
