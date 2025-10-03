@@ -738,33 +738,44 @@ router.post('/webhook', async (req, res) => {
               });
 
             // Use Vapi API to transfer the call
+            console.log(`📞 DEBUG: Call object:`, JSON.stringify(call, null, 2));
             console.log(`📞 Transferring call ${call?.id} to ${phoneNumber} (${selectedMember.name} - ${department})`);
+
+            const transferUrl = `https://aws-us-west-2-production1-phone-call-websocket.vapi.ai/${call?.id}/control`;
+            const transferPayload = {
+              type: 'transfer',
+              destination: {
+                type: 'number',
+                number: phoneNumber
+              },
+              content: `Transferring you to ${selectedMember.name || department}`
+            };
+
+            console.log(`📞 Transfer URL: ${transferUrl}`);
+            console.log(`📞 Transfer payload:`, JSON.stringify(transferPayload, null, 2));
 
             try {
               // Call Vapi control API to transfer the call
-              const vapiResponse = await fetch(`https://aws-us-west-2-production1-phone-call-websocket.vapi.ai/${call?.id}/control`, {
+              const vapiResponse = await fetch(transferUrl, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
                   'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                  type: 'transfer',
-                  destination: {
-                    type: 'number',
-                    number: phoneNumber
-                  },
-                  content: `Transferring you to ${selectedMember.name || department}`
-                })
+                body: JSON.stringify(transferPayload)
               });
 
+              const responseText = await vapiResponse.text();
+              console.log(`📞 Vapi transfer response status: ${vapiResponse.status}`);
+              console.log(`📞 Vapi transfer response body:`, responseText);
+
               if (!vapiResponse.ok) {
-                console.error('Vapi transfer failed:', await vapiResponse.text());
+                console.error('❌ Vapi transfer failed:', responseText);
               } else {
                 console.log('✅ Transfer initiated successfully');
               }
             } catch (error) {
-              console.error('Error calling Vapi API:', error);
+              console.error('❌ Error calling Vapi API:', error);
             }
 
             return res.json({
