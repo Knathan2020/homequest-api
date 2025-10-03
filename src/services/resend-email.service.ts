@@ -61,8 +61,11 @@ class ResendEmailService {
         inviteUrl: data.inviteUrl
       });
 
+      // Use verified domain email from environment variable or default
+      const fromEmail = process.env.RESEND_FROM_EMAIL || 'HomeQuest Tech <noreply@homequesttech.com>';
+
       const result = await resend.emails.send({
-        from: 'HomeQuest Tech <onboarding@resend.dev>', // Change to your verified domain later
+        from: fromEmail,
         to: data.email,
         subject: `You're invited to join ${data.teamName} on HomeQuest`,
         html: html
