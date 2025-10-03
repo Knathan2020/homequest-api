@@ -162,6 +162,142 @@ router.post('/invite', async (req, res) => {
 });
 
 /**
+ * Accept invitation (user completes their profile)
+ */
+router.post('/accept-invite', async (req, res) => {
+  try {
+    const { token, phoneNumber, password } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invitation token is required'
+      });
+    }
+
+    // Get the team member record by token (ID)
+    const { data: member, error: fetchError } = await supabase
+      .from('team_members')
+      .select('*')
+      .eq('id', token)
+      .eq('status', 'pending')
+      .single();
+
+    if (fetchError || !member) {
+      return res.status(404).json({
+        success: false,
+        error: 'Invalid or expired invitation'
+      });
+    }
+
+    // Update member with phone number and activate
+    const updateData: any = {
+      status: 'active',
+      accepted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (phoneNumber) updateData.phone_number = phoneNumber;
+
+    const { data: updatedMember, error: updateError } = await supabase
+      .from('team_members')
+      .update(updateData)
+      .eq('id', token)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    // If password provided, create auth user
+    if (password && member.email) {
+      try {
+        const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+          email: member.email,
+          password: password,
+          email_confirm: true,
+          user_metadata: {
+            full_name: member.full_name,
+            team_id: member.team_id,
+            team_member_id: member.id,
+            role: member.role,
+            department: member.department
+          }
+        });
+
+        if (authError) {
+          console.error('Error creating auth user:', authError);
+        } else {
+          // Link auth user to team member
+          await supabase
+            .from('team_members')
+            .update({ user_id: authUser.user.id })
+            .eq('id', token);
+        }
+      } catch (authError) {
+        console.error('Auth error:', authError);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Invitation accepted successfully',
+      data: updatedMember
+    });
+
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Get invitation details (for frontend to pre-fill form)
+ */
+router.get('/invite/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const { data: member, error } = await supabase
+      .from('team_members')
+      .select('id, email, full_name, role, department, status')
+      .eq('id', token)
+      .single();
+
+    if (error || !member) {
+      return res.status(404).json({
+        success: false,
+        error: 'Invalid invitation'
+      });
+    }
+
+    if (member.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invitation already accepted or expired'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        email: member.email,
+        fullName: member.full_name,
+        role: member.role,
+        department: member.department
+      }
+    });
+
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * Add team member (direct, no email)
  */
 router.post('/', async (req, res) => {
