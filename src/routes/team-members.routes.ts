@@ -86,14 +86,16 @@ router.post('/invite', async (req, res) => {
 
     // Create team member record matching actual Supabase schema
     // Actual columns: id, user_id, team_id, role, permissions, joined_at, invited_by, created_at, department
+    // Valid roles: owner, admin, member, viewer
     const memberData: any = {
       team_id: teamId,
-      role: inviteData.role || 'Team Member',
+      role: inviteData.role || 'member', // Must be: owner, admin, member, or viewer
       department: inviteData.department || 'Operations',
       permissions: {
         email: inviteData.email,
         fullName: inviteData.fullName,
         phoneNumber: inviteData.phoneNumber,
+        jobTitle: inviteData.jobTitle, // Store original job title in permissions
         canApproveEstimates: inviteData.permissions?.canApproveEstimates || false,
         canScheduleWork: inviteData.permissions?.canScheduleWork || false,
         canAccessFinancials: inviteData.permissions?.canAccessFinancials || false,
