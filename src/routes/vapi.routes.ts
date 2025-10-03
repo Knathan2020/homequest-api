@@ -275,19 +275,27 @@ router.post('/webhook', async (req, res) => {
               console.log(`✅ Found company: "${companyName}" for phone ${phoneNumberId}`);
             }
             
-            // Fetch team members and their departments
+            // Fetch team members with profile data via user_id join
             const { data: membersData } = await supabase
               .from('team_members')
-              .select('*')
+              .select(`
+                *,
+                profiles:user_id (
+                  full_name,
+                  phone_number,
+                  email
+                )
+              `)
               .eq('team_id', teamId);
-            
+
             if (membersData && membersData.length > 0) {
-              // Extract member info from permissions JSON and standard columns
+              // Extract member info from profiles join or permissions fallback
               teamMembers = membersData.map(m => ({
-                name: m.permissions?.fullName || 'Unknown',
+                name: m.profiles?.full_name || m.permissions?.fullName || 'Unknown',
                 role: m.permissions?.jobTitle || m.role,
                 department: m.department,
-                phoneNumber: m.permissions?.phoneNumber || ''
+                phoneNumber: m.profiles?.phone_number || m.permissions?.phoneNumber || '',
+                email: m.profiles?.email || m.permissions?.email || ''
               }));
               departments = [...new Set(membersData.map(m => m.department).filter(Boolean))];
               console.log(`📋 Available departments: ${departments.join(', ')}`);
@@ -686,19 +694,26 @@ router.post('/webhook', async (req, res) => {
         const { department, reason, callerName, urgency = 'normal' } = functionCall.parameters;
 
         try {
-          // Find available team members in the requested department
+          // Find available team members in the requested department with profile data
           const { data: availableMembers, error: memberError } = await supabase
             .from('team_members')
-            .select('*')
+            .select(`
+              *,
+              profiles:user_id (
+                full_name,
+                phone_number,
+                email
+              )
+            `)
             .eq('team_id', teamId || '11111111-1111-1111-1111-111111111111')
             .ilike('department', department);
 
           console.log('🔍 Transfer lookup:', { teamId, department, availableMembers, memberError });
 
           if (availableMembers && availableMembers.length > 0) {
-            // Find member with phone number (check permissions JSON)
-            const selectedMember = availableMembers.find(m => m.permissions?.phoneNumber) || availableMembers[0];
-            const phoneNumber = selectedMember.permissions?.phoneNumber;
+            // Find member with phone number (check profiles first, then permissions)
+            const selectedMember = availableMembers.find(m => m.profiles?.phone_number || m.permissions?.phoneNumber) || availableMembers[0];
+            const phoneNumber = selectedMember.profiles?.phone_number || selectedMember.permissions?.phoneNumber;
 
             if (!phoneNumber) {
               return res.json({
