@@ -215,7 +215,11 @@ router.post('/webhook', async (req, res) => {
   console.log('Webhook body:', JSON.stringify(req.body, null, 2));
   
   try {
-    const { type, call, assistant } = req.body;
+    // Vapi sends different formats - handle both
+    const type = req.body.type || req.body.message?.type;
+    const call = req.body.call || req.body.message?.call;
+    const assistant = req.body.assistant;
+
     console.log('📞 Vapi webhook received:', type);
 
     // Log call type for better debugging
