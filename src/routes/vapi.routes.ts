@@ -368,29 +368,35 @@ router.post('/webhook', async (req, res) => {
         ${departments.length > 0 ? `Departments: ${departments.join(', ')}` : 'No departments configured yet'}
         ${teamMembers.length > 0 ? `\nTeam Members:\n${teamMembers.map(m => `- ${m.name}: ${m.role} (${m.department})`).join('\n')}` : '\nNo team members configured yet'}
 
-        📞 WHEN TO TRANSFER (after scheduling if needed):
-        - Billing questions → Billing department
-        - Existing project issues → Operations department
-        - Complex technical questions → Appropriate specialist
-        - Specific person requests → That person
-        - Urgent problems → Management
+        📞 CALL TRANSFER - IMPORTANT INSTRUCTIONS:
+        When caller says ANY of these phrases, you MUST use the transferToDepartment or transferToPerson function:
+        - "transfer me to [department/person]"
+        - "I need to speak with [department/person]"
+        - "connect me to [department/person]"
+        - "I want to talk to [department/person]"
+        - "can I speak with [department/person]"
+
+        HOW TO TRANSFER:
+        1. If they ask for a SPECIFIC PERSON (e.g., "Ken White") → Use transferToPerson function with personName parameter
+        2. If they ask for a DEPARTMENT (e.g., "billing") → Use transferToDepartment function with department parameter
+        3. NEVER use the dtmf function for transfers - ALWAYS use transferToDepartment or transferToPerson
+
+        TRANSFER EXAMPLES:
+        - "I need to talk to billing" → Call transferToDepartment({department: "billing", reason: "caller requested billing"})
+        - "Transfer me to Ken White" → Call transferToPerson({personName: "Ken White", reason: "caller requested Ken White"})
+        - "I want to speak with operations" → Call transferToDepartment({department: "operations", reason: "caller requested operations"})
 
         📝 WHEN TO TAKE MESSAGES:
-        - Department/person unavailable
+        - Department/person unavailable (only after checking availability)
         - After hours calls
         - Complex issues requiring follow-up
 
         CRITICAL DECISION TREE:
         1. Is this a scheduling request? → SCHEDULE FIRST, then transfer if they need more info
-        2. Do they need a specific person/department? → TRANSFER
+        2. Do they want to speak with a person/department? → USE transferToDepartment or transferToPerson function
         3. Is the person/department unavailable? → TAKE MESSAGE
 
-        EXAMPLE RESPONSES:
-        - "I'd like to schedule an estimate" → "Perfect! I can schedule that estimate for you right now. What's your name and phone number?"
-        - "I need to talk to billing" → "I'll connect you with our billing department right away."
-        - "Can someone come look at my roof?" → "I can schedule that inspection for you today. When works best for you?"
-
-        Remember: SCHEDULE FIRST when possible, but be ready to transfer or take messages as needed!`
+        Remember: ALWAYS use transferToDepartment or transferToPerson functions when caller asks to be connected to someone. NEVER use dtmf for transfers!`
             }
           ]
         },
