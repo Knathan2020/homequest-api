@@ -4,7 +4,7 @@
 INSERT INTO team_phones (
   team_id,
   team_name,
-  owner_email, 
+  owner_email,
   twilio_number,
   vapi_phone_id,
   status
@@ -16,9 +16,10 @@ INSERT INTO team_phones (
   '86d21bb9-4562-4fcf-a834-cbfdccc0de5f',
   'active'
 )
-ON CONFLICT (team_id)
+ON CONFLICT (vapi_phone_id)
 DO UPDATE SET
-  vapi_phone_id = EXCLUDED.vapi_phone_id,
+  team_id = EXCLUDED.team_id,
+  team_name = EXCLUDED.team_name,
   twilio_number = EXCLUDED.twilio_number,
   status = EXCLUDED.status,
   updated_at = NOW();

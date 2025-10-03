@@ -257,7 +257,7 @@ router.post('/webhook', async (req, res) => {
           const { data: teamPhone } = await supabase
             .from('team_phones')
             .select('team_id')
-            .eq('phone_number_id', phoneNumberId)
+            .eq('vapi_phone_id', phoneNumberId)
             .single();
           
           if (teamPhone?.team_id) {
@@ -293,7 +293,7 @@ router.post('/webhook', async (req, res) => {
           const { data: phoneConfig } = await supabase
             .from('phone_configs')
             .select('voice_id, transfer_phone')
-            .eq('phone_number_id', phoneNumberId)
+            .eq('vapi_phone_id', phoneNumberId)
             .single();
           
           if (phoneConfig?.voice_id) {
@@ -511,7 +511,7 @@ router.post('/webhook', async (req, res) => {
         const { data: teamPhone } = await supabase
           .from('team_phones')
           .select('team_id')
-          .eq('phone_number_id', call.phoneNumberId)
+          .eq('vapi_phone_id', call.phoneNumberId)
           .single();
         
         if (teamPhone?.team_id) {
