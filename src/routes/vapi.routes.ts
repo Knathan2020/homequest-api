@@ -683,7 +683,7 @@ router.post('/webhook', async (req, res) => {
           const { data: availableMembers, error: memberError } = await supabase
             .from('team_members')
             .select('*')
-            .eq('team_id', teamId || '11111111-1111-1111-1111-111111111111')
+            .eq('teamId', teamId || '11111111-1111-1111-1111-111111111111')
             .ilike('department', department);
 
           console.log('🔍 Transfer lookup:', { teamId, department, availableMembers, memberError });
