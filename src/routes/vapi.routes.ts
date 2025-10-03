@@ -737,12 +737,14 @@ router.post('/webhook', async (req, res) => {
                 transfer_status: 'initiated'
               });
 
-            // Return proper Vapi transfer response
+            // Return Vapi dynamic transfer response
+            console.log(`📞 Transferring to ${phoneNumber} (${selectedMember.name} - ${department})`);
+
             return res.json({
-              result: `Perfect! I'm transferring you to our ${department} department. ${selectedMember.name} will be with you shortly.`,
-              forwardCall: {
-                phoneNumber: phoneNumber,
-                message: `Transferring call from AI: ${reason}. Caller: ${callerName || 'Unknown'}`
+              destination: {
+                type: "number",
+                number: phoneNumber,
+                message: `Transferring you to ${selectedMember.name || department}`
               }
             });
           } else {
