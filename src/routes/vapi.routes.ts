@@ -741,10 +741,15 @@ router.post('/webhook', async (req, res) => {
             console.log(`📞 Transferring to ${phoneNumber} (${selectedMember.name} - ${department})`);
 
             return res.json({
+              results: [
+                {
+                  toolCallId: functionCall.toolCallId,
+                  result: `Transferring you to ${selectedMember.name || department}`
+                }
+              ],
               destination: {
                 type: "number",
-                number: phoneNumber,
-                message: `Transferring you to ${selectedMember.name || department}`
+                number: phoneNumber
               }
             });
           } else {
