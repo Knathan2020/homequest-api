@@ -326,10 +326,11 @@ router.post('/webhook', async (req, res) => {
         model: {
           provider: 'openai',
           model: 'gpt-4',
-          temperature: 0.7
-        },
-        firstMessage: `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${companyName}. How may I assist you?`,
-        systemPrompt: `You are a professional receptionist for ${companyName}, a construction company.
+          temperature: 0.7,
+          messages: [
+            {
+              role: 'system',
+              content: `You are a professional receptionist for ${companyName}, a construction company.
 
         🎯 PRIMARY FUNCTIONS (in order of priority):
         1. SCHEDULE APPOINTMENTS DIRECTLY (your main job!)
@@ -375,7 +376,11 @@ router.post('/webhook', async (req, res) => {
         - "I need to talk to billing" → "I'll connect you with our billing department right away."
         - "Can someone come look at my roof?" → "I can schedule that inspection for you today. When works best for you?"
 
-        Remember: SCHEDULE FIRST when possible, but be ready to transfer or take messages as needed!`,
+        Remember: SCHEDULE FIRST when possible, but be ready to transfer or take messages as needed!`
+            }
+          ]
+        },
+        firstMessage: `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${companyName}. How may I assist you?`,
         forwardingPhoneNumber: companyPhone,
         endCallFunctionEnabled: true,
         dialKeypadFunctionEnabled: true,
