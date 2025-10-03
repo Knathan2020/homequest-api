@@ -411,7 +411,7 @@ router.post('/webhook', async (req, res) => {
         firstMessage: `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${companyName}. How may I assist you?`,
         forwardingPhoneNumber: companyPhone,
         endCallFunctionEnabled: true,
-        dialKeypadFunctionEnabled: true,
+        dialKeypadFunctionEnabled: false,
         maxDurationSeconds: 600,
         silenceTimeoutSeconds: 30,
         responseDelaySeconds: 0.5,
