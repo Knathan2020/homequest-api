@@ -697,8 +697,13 @@ router.post('/webhook', async (req, res) => {
                 transfer_status: 'initiated'
               });
 
+            // Return proper Vapi transfer response
             return res.json({
-              result: `Perfect! I'm transferring you to our ${department} department. ${selectedMember.name} will be with you shortly. Please hold while I connect you to ${selectedMember.phone_number}.`
+              result: `Perfect! I'm transferring you to our ${department} department. ${selectedMember.name} will be with you shortly.`,
+              forwardCall: {
+                phoneNumber: selectedMember.phone_number,
+                message: `Transferring call from AI: ${reason}. Caller: ${callerName || 'Unknown'}`
+              }
             });
           } else {
             return res.json({
@@ -743,8 +748,13 @@ router.post('/webhook', async (req, res) => {
                 transfer_status: 'initiated'
               });
 
+            // Return proper Vapi transfer response
             return res.json({
-              result: `Great! I'm connecting you directly to ${teamMember.name} in our ${teamMember.department} department. Please hold while I transfer you to ${teamMember.phone_number}.`
+              result: `Great! I'm connecting you directly to ${teamMember.name} in our ${teamMember.department} department. Please hold.`,
+              forwardCall: {
+                phoneNumber: teamMember.phone_number,
+                message: `Transferring call from AI: ${reason}. Caller: ${callerName || 'Unknown'}`
+              }
             });
           } else {
             return res.json({
