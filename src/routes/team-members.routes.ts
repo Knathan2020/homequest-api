@@ -85,16 +85,13 @@ router.post('/invite', async (req, res) => {
     }
 
     // Create team member record
-    const memberData = {
+    const memberData: any = {
       team_id: teamId,
       email: inviteData.email,
       full_name: inviteData.fullName,
       name: inviteData.fullName, // Alias for compatibility
-      phone_number: inviteData.phoneNumber,
-      alternate_phone: inviteData.alternatePhone,
       role: inviteData.role,
       department: inviteData.department,
-      job_title: inviteData.jobTitle,
       status: 'pending', // Mark as pending until they accept
 
       // Permissions
@@ -104,10 +101,15 @@ router.post('/invite', async (req, res) => {
       can_manage_team: inviteData.permissions?.canManageTeam || false,
       can_handle_complaints: inviteData.permissions?.canHandleComplaints || false,
 
-      // Additional data (stored as JSON)
+      // Additional data
       availability: 'available',
       invited_at: new Date().toISOString()
     };
+
+    // Add optional fields if they exist in schema
+    if (inviteData.phoneNumber) memberData.phone_number = inviteData.phoneNumber;
+    if (inviteData.alternatePhone) memberData.alternate_phone = inviteData.alternatePhone;
+    if (inviteData.jobTitle) memberData.job_title = inviteData.jobTitle;
 
     const { data: member, error: memberError } = await supabase
       .from('team_members')
