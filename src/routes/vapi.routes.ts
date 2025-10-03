@@ -278,8 +278,8 @@ router.post('/webhook', async (req, res) => {
             // Fetch team members and their departments
             const { data: membersData } = await supabase
               .from('team_members')
-              .select('name, department, role, phone_number')
-              .eq('team_id', teamId);
+              .select('name, department, role, phoneNumber')
+              .eq('teamId', teamId);
             
             if (membersData && membersData.length > 0) {
               teamMembers = membersData;
