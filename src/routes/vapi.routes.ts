@@ -682,12 +682,11 @@ router.post('/webhook', async (req, res) => {
         try {
           // Find available team members in the requested department
           const { data: availableMembers } = await supabase
-            .from('available_team_members')
-            .select('*')
+            .from('team_members')
+            .select('name, department, role, phone_number')
             .eq('team_id', teamId || '11111111-1111-1111-1111-111111111111')
-            .eq('department', department.charAt(0).toUpperCase() + department.slice(1))
-            .eq('can_take_call', true)
-            .order('seniority_level', { ascending: false });
+            .ilike('department', department)
+            .not('phone_number', 'is', null);
 
           if (availableMembers && availableMembers.length > 0) {
             const selectedMember = availableMembers[0];
