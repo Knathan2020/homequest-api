@@ -741,23 +741,27 @@ router.post('/webhook', async (req, res) => {
             console.log(`📞 Transferring call ${call?.id} to ${phoneNumber} (${selectedMember.name} - ${department})`);
 
             try {
-              // Call Vapi API to transfer the call
-              const vapiResponse = await fetch(`https://api.vapi.ai/call/${call?.id}`, {
-                method: 'PATCH',
+              // Call Vapi control API to transfer the call
+              const vapiResponse = await fetch(`https://aws-us-west-2-production1-phone-call-websocket.vapi.ai/${call?.id}/control`, {
+                method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
                   'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
+                  type: 'transfer',
                   destination: {
                     type: 'number',
                     number: phoneNumber
-                  }
+                  },
+                  content: `Transferring you to ${selectedMember.name || department}`
                 })
               });
 
               if (!vapiResponse.ok) {
                 console.error('Vapi transfer failed:', await vapiResponse.text());
+              } else {
+                console.log('✅ Transfer initiated successfully');
               }
             } catch (error) {
               console.error('Error calling Vapi API:', error);
