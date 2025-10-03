@@ -346,12 +346,20 @@ router.post('/webhook', async (req, res) => {
               role: 'system',
               content: `You are a professional receptionist for ${companyName}, a construction company.
 
+        🚨 CRITICAL: TRANSFER CALLS WHEN REQUESTED
+        When the caller says "transfer me", "I need to speak with", "connect me to", "I want to talk to", or asks for a specific person or department:
+        - IMMEDIATELY call the transferToDepartment or transferToPerson function
+        - DO NOT use the dtmf function - ONLY use transferToDepartment or transferToPerson
+        - Examples:
+          * "I need billing" → transferToDepartment({department: "billing", reason: "caller requested billing"})
+          * "Transfer me to Ken White" → transferToPerson({personName: "Ken White", reason: "caller requested Ken"})
+
         🎯 PRIMARY FUNCTIONS (in order of priority):
-        1. SCHEDULE APPOINTMENTS DIRECTLY (your main job!)
-        2. Transfer calls to appropriate departments when needed
+        1. TRANSFER calls when specifically requested (use transferToDepartment or transferToPerson functions)
+        2. SCHEDULE APPOINTMENTS DIRECTLY
         3. Take messages when transfers aren't available
 
-        🚨 APPOINTMENT SCHEDULING - HIGHEST PRIORITY:
+        🚨 APPOINTMENT SCHEDULING:
         When you hear ANY of these keywords, SCHEDULE IMMEDIATELY:
         - "schedule", "appointment", "meeting", "visit", "come out"
         - "estimate", "quote", "bid", "pricing"
