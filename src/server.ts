@@ -421,14 +421,43 @@ app.post('/api/notifications', async (req, res) => {
 // ============= TEAM API =============
 app.get('/api/team/:teamId/members', async (req, res) => {
   try {
-    const { data: members, error } = await supabase
+    // Get team members
+    const { data: teamMembers, error: tmError } = await supabase
       .from('team_members')
       .select('*')
       .eq('team_id', req.params.teamId);
 
-    if (error) throw error;
+    if (tmError) throw tmError;
 
-    res.json({ success: true, data: members || [] });
+    // Get profiles for all user_ids
+    const userIds = teamMembers?.map(tm => tm.user_id).filter(Boolean) || [];
+    const { data: profiles, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, email, full_name, phone_number')
+      .in('id', userIds);
+
+    if (profileError) {
+      console.error('Error fetching profiles:', profileError);
+    }
+
+    // Merge team members with profiles
+    const transformedMembers = (teamMembers || []).map(member => {
+      const profile = profiles?.find(p => p.id === member.user_id);
+      return {
+        id: member.id,
+        userId: member.user_id,
+        teamId: member.team_id,
+        name: profile?.full_name || member.name || profile?.email?.split('@')[0] || 'Team Member',
+        phoneNumber: profile?.phone_number || member.phone_number,
+        email: profile?.email || member.email,
+        role: member.role,
+        department: member.department,
+        availability: member.availability,
+        expertise: member.expertise || []
+      };
+    });
+
+    res.json({ success: true, data: transformedMembers });
   } catch (error) {
     console.error('Error fetching team members:', error);
     res.status(500).json({ success: false, error: error.message });
