@@ -278,13 +278,20 @@ router.post('/webhook', async (req, res) => {
             // Fetch team members and their departments
             const { data: membersData } = await supabase
               .from('team_members')
-              .select('name, department, role, phoneNumber')
-              .eq('teamId', teamId);
+              .select('*')
+              .eq('team_id', teamId);
             
             if (membersData && membersData.length > 0) {
-              teamMembers = membersData;
-              departments = [...new Set(membersData.map(m => m.department))];
+              // Extract member info from permissions JSON and standard columns
+              teamMembers = membersData.map(m => ({
+                name: m.permissions?.fullName || 'Unknown',
+                role: m.permissions?.jobTitle || m.role,
+                department: m.department,
+                phoneNumber: m.permissions?.phoneNumber || ''
+              }));
+              departments = [...new Set(membersData.map(m => m.department).filter(Boolean))];
               console.log(`📋 Available departments: ${departments.join(', ')}`);
+              console.log(`👥 Team members:`, teamMembers);
             }
           }
           
@@ -683,15 +690,15 @@ router.post('/webhook', async (req, res) => {
           const { data: availableMembers, error: memberError } = await supabase
             .from('team_members')
             .select('*')
-            .eq('teamId', teamId || '11111111-1111-1111-1111-111111111111')
+            .eq('team_id', teamId || '11111111-1111-1111-1111-111111111111')
             .ilike('department', department);
 
           console.log('🔍 Transfer lookup:', { teamId, department, availableMembers, memberError });
 
           if (availableMembers && availableMembers.length > 0) {
-            // Find member with phone number (try both snake_case and camelCase)
-            const selectedMember = availableMembers.find(m => m.phone_number || m.phoneNumber) || availableMembers[0];
-            const phoneNumber = selectedMember.phone_number || selectedMember.phoneNumber;
+            // Find member with phone number (check permissions JSON)
+            const selectedMember = availableMembers.find(m => m.permissions?.phoneNumber) || availableMembers[0];
+            const phoneNumber = selectedMember.permissions?.phoneNumber;
 
             if (!phoneNumber) {
               return res.json({
