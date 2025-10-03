@@ -502,7 +502,7 @@ router.post('/webhook', async (req, res) => {
     
     // Handle function calls from the assistant
     if (type === 'function-call') {
-      const { functionCall, call } = req.body;
+      const { functionCall, call } = message;  // Get from message, not req.body
       console.log('🔧 Function call received:', functionCall.name, functionCall.parameters);
       
       // Get teamId from the phone number if available
@@ -605,7 +605,6 @@ router.post('/webhook', async (req, res) => {
           let appointment;
 
           console.log('Appointment API response status:', appointmentResponse.status);
-          console.log('Appointment API response headers:', Object.fromEntries(appointmentResponse.headers.entries()));
 
           try {
             if (!appointmentResponse.ok) {
@@ -697,7 +696,7 @@ router.post('/webhook', async (req, res) => {
             await supabase
               .from('call_transfers')
               .insert({
-                call_id: req.body.message?.call?.id || 'unknown',
+                call_id: call?.id || 'unknown',
                 team_id: teamId || '11111111-1111-1111-1111-111111111111',
                 from_type: 'ai',
                 to_department: department,
@@ -748,7 +747,7 @@ router.post('/webhook', async (req, res) => {
             await supabase
               .from('call_transfers')
               .insert({
-                call_id: req.body.message?.call?.id || 'unknown',
+                call_id: call?.id || 'unknown',
                 team_id: teamId || '11111111-1111-1111-1111-111111111111',
                 from_type: 'ai',
                 to_department: teamMember.department,
