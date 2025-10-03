@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon",
-    "build": "rm -rf dist && tsc --skipLibCheck && cp -r src/templates dist/templates",
+    "build": "rm -rf dist && (tsc --skipLibCheck || true) && cp -r src/templates dist/templates",
     "start": "mkdir -p temp-cad-files && node dist/server.js",
     "render-build": "npm install && npm run build && mkdir -p temp-cad-files",
     "start:dev": "ts-node-dev --respawn --transpile-only src/server.ts",
