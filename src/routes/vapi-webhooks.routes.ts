@@ -30,9 +30,9 @@ router.post('/vapi/webhooks/assistant-request', async (req, res) => {
 
     // Look up team by phone number
     const { data: phoneData } = await supabase
-      .from('vapi_phone_numbers')
-      .select('team_id, teams(name)')
-      .eq('phone_number', call.phoneNumber?.number)
+      .from('team_phones')
+      .select('team_id, team_name')
+      .eq('twilio_number', call.phoneNumber?.number)
       .single();
 
     if (!phoneData) {
@@ -41,7 +41,7 @@ router.post('/vapi/webhooks/assistant-request', async (req, res) => {
     }
 
     const teamId = phoneData.team_id;
-    const companyName = (phoneData.teams as any)?.name || 'Our Company';
+    const companyName = phoneData.team_name || 'Our Company';
 
     console.log('✅ Found team:', { teamId, companyName });
 
