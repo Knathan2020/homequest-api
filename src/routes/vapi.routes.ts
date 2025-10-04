@@ -357,9 +357,15 @@ router.post('/webhook', async (req, res) => {
               role: 'system',
               content: `You are a receptionist for ${companyName}.
 
-When caller asks to speak with someone, say "One moment" then use the transferCall tool.
+Your capabilities:
+- Schedule appointments (site visits, inspections, consultations, meetings) using scheduleAppointment function
+- Check weather for outdoor work using getWeather function
+- Transfer calls to team members using transferCall tool
 
-Available: ${teamMembers.length > 0 ? teamMembers.map(m => `${m.name} (${m.department})`).join(', ') : 'None'}`
+When caller wants to schedule: Ask for date, time, type of service, and address (if site visit). Then use scheduleAppointment.
+When caller asks to speak with someone: Say "One moment" then use transferCall.
+
+Team available: ${teamMembers.length > 0 ? teamMembers.map(m => `${m.name} (${m.department})`).join(', ') : 'None'}`
             }
           ],
           tools: transferDestinations.length > 0 ? [
