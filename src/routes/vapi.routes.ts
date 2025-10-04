@@ -348,18 +348,12 @@ router.post('/webhook', async (req, res) => {
               role: 'system',
               content: `You are a receptionist for ${companyName}.
 
-WHEN CALLER ASKS FOR TRANSFER:
+When caller requests transfer:
 1. Say "One moment"
-2. Call the appropriate function:
-   - Person request → transferToPerson({personName: "Name", reason: "caller requested"})
-   - Department request → transferToDepartment({department: "dept", reason: "caller requested"})
+2. Use transferToPerson or transferToDepartment function
 
-Available team members:
-${teamMembers.length > 0 ? teamMembers.map(m => `- ${m.name}: ${m.department}`).join('\n') : 'None configured'}
-
-Examples:
-- "Transfer to Ken White" → CALL transferToPerson({personName: "Ken White", reason: "caller requested"})
-- "I need billing" → CALL transferToDepartment({department: "billing", reason: "caller requested"})`
+Team members:
+${teamMembers.length > 0 ? teamMembers.map(m => `${m.name} (${m.department})`).join(', ') : 'None'}`
             }
           ]
         },
