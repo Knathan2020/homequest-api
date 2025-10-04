@@ -237,6 +237,8 @@ router.post('/webhook', async (req, res) => {
     // Handle inbound call webhook - SIMPLIFIED FOR TESTING
     if (type === 'assistant-request') {
       console.log('📥 Inbound call detected! Returning assistant config...');
+
+      try {
       
       // Determine which assistant to use based on the phone number called
       // You can look up the team/company based on the phoneNumberId
@@ -479,6 +481,17 @@ Examples:
       return res.json({
         assistant: inboundAssistant
       });
+      } catch (error) {
+        console.error('❌ Error creating assistant:', error);
+        return res.status(500).json({
+          assistant: {
+            name: 'Emergency Assistant',
+            voice: { provider: '11labs', voiceId: 'OYTbf65OHHFELVut7v2H' },
+            model: { provider: 'openai', model: 'gpt-4', temperature: 0.7, messages: [{ role: 'system', content: 'You are a helpful assistant.' }] },
+            firstMessage: 'Hello, how can I help you?'
+          }
+        });
+      }
     }
     
     // Handle function calls from the assistant
