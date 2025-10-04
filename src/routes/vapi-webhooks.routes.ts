@@ -26,8 +26,15 @@ router.post('/vapi/webhooks/function-call', async (req, res) => {
     const {
       call,
       functionCall,
-      messageResponse
+      messageResponse,
+      message
     } = req.body;
+
+    // Check if this is actually a function call or just a regular message
+    if (!functionCall) {
+      console.log('⚠️ No functionCall in webhook body - this is not a function call');
+      return res.json({ result: 'No function call data received' });
+    }
 
     const { name: functionName, parameters } = functionCall;
 
