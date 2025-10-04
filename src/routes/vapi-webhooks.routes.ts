@@ -134,13 +134,18 @@ Be friendly and professional.`
  */
 router.post('/vapi/webhooks/end-of-call', async (req, res) => {
   try {
+    console.log('🔥 RAW WEBHOOK BODY:', JSON.stringify(req.body, null, 2));
+    console.log('🔥 WEBHOOK KEYS:', Object.keys(req.body));
+
     const { call, messages, transcript } = req.body;
 
     console.log('📞 End of call received:', {
       callId: call?.id,
       teamId: call?.assistantId,
       customerNumber: call?.customer?.number,
-      messageCount: messages?.length
+      messageCount: messages?.length,
+      hasTranscript: !!transcript,
+      bodyKeys: Object.keys(req.body)
     });
 
     // Build full conversation
