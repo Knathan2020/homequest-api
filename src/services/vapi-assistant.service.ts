@@ -33,32 +33,49 @@ class VapiAssistantService {
     try {
       console.log(`🤖 Creating VAPI assistant for ${companyName}`);
 
+      // Fetch team members for transfer destinations
+      const { data: teamMembers } = await supabase
+        .from('team_members')
+        .select('name, phone_number, department')
+        .eq('team_id', teamId)
+        .not('phone_number', 'is', null);
+
+      const transferDestinations = (teamMembers || [])
+        .filter((m: any) => m.phone_number && m.phone_number.trim())
+        .map((m: any) => ({
+          type: 'number',
+          number: m.phone_number,
+          description: `${m.name} - ${m.department}`
+        }));
+
       const assistantConfig = {
         name: `${companyName} Receptionist`,
         firstMessage: `Good ${this.getTimeOfDay()}, ${companyName}. How may I assist you today?`,
         model: {
           provider: 'openai',
-          model: 'gpt-4',
+          model: 'gpt-3.5-turbo',
           temperature: 0.7,
-          systemPrompt: `You are a professional receptionist for ${companyName}, a construction company. 
-          
-          YOUR RESPONSIBILITIES:
-          - Greet callers professionally with ${companyName}'s name
-          - Determine the purpose of their call
-          - Ask for caller's name and company
-          - Route calls appropriately:
-            • For quotes or new business → Sales
-            • For project updates → Project Management
-            • For billing → Accounting
-            • For emergencies → Direct to on-call manager
-          - Take detailed messages when needed
-          - Be friendly, professional, and helpful
-          
-          IMPORTANT:
-          - Always mention ${companyName} in your greeting
-          - Keep responses concise and professional
-          - If unsure, ask clarifying questions
-          - Make callers feel valued and heard`
+          messages: [
+            {
+              role: 'system',
+              content: `You are a receptionist for ${companyName}.
+
+When someone wants to schedule an appointment:
+1. Collect: their name, phone number, preferred date/time, type of service (site visit/inspection/consultation/meeting), and address if needed
+2. Confirm the details back to them: "Perfect! I have you scheduled for [DATE] at [TIME] for [SERVICE TYPE]. We'll send you a confirmation text shortly."
+3. Ask if there's anything else you can help with
+
+For transfers: Use the transferCall tool to connect them to team members.
+
+Be friendly and professional.`
+            }
+          ],
+          tools: transferDestinations.length > 0 ? [
+            {
+              type: 'transferCall',
+              destinations: transferDestinations
+            }
+          ] : []
         },
         voice: {
           provider: '11labs',
@@ -77,44 +94,7 @@ class VapiAssistantService {
           model: 'nova-2',
           language: 'en'
         },
-        // Add scheduling and message-taking functions
-        functions: [
-          {
-            name: 'takeMessage',
-            description: 'Take a message for the team',
-            parameters: {
-              type: 'object',
-              properties: {
-                callerName: { type: 'string', description: 'Name of the caller' },
-                callerPhone: { type: 'string', description: 'Phone number of the caller' },
-                callerCompany: { type: 'string', description: 'Company of the caller' },
-                message: { type: 'string', description: 'The message content' },
-                urgency: { 
-                  type: 'string', 
-                  enum: ['low', 'normal', 'high', 'urgent'],
-                  default: 'normal'
-                }
-              },
-              required: ['callerName', 'callerPhone', 'message']
-            }
-          },
-          {
-            name: 'transferCall',
-            description: 'Transfer the call to a department or person',
-            parameters: {
-              type: 'object',
-              properties: {
-                department: { 
-                  type: 'string',
-                  enum: ['sales', 'support', 'billing', 'management', 'field'],
-                  description: 'Department to transfer to'
-                },
-                reason: { type: 'string', description: 'Reason for transfer' }
-              },
-              required: ['department']
-            }
-          }
-        ]
+        serverUrl: `${process.env.API_BASE_URL || 'https://homequest-api-1.onrender.com'}/api/vapi-webhooks/vapi/webhooks/end-of-call`
       };
 
       const response = await axios.post(
