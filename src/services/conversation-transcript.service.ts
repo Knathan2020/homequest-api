@@ -282,23 +282,71 @@ class ConversationTranscriptService {
    * Get recent transcripts for a team
    */
   async getRecentTranscripts(teamId: string, limit = 10): Promise<ConversationTranscript[]> {
-    const { data, error } = await supabase
-      .from('conversation_transcripts')
-      .select('*')
-      .eq('team_id', teamId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    // Fetch from both conversation_transcripts (vendor AI calls) and call_transcripts (Vapi phone calls)
+    const [conversationData, callData] = await Promise.all([
+      supabase
+        .from('conversation_transcripts')
+        .select('*')
+        .eq('team_id', teamId)
+        .order('created_at', { ascending: false })
+        .limit(limit),
 
-    if (error) {
-      console.error('Error fetching transcripts from Supabase:', error);
-      // Fallback to in-memory storage
-      return this.storedTranscripts
-        .filter(t => t.team_id === teamId)
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, limit);
+      // Fetch Vapi call transcripts
+      supabase
+        .from('call_transcripts')
+        .select('call_id, speaker, text, spoken_at, phone_number, created_at, team_id')
+        .eq('team_id', teamId)
+        .order('created_at', { ascending: false })
+        .limit(limit * 20) // Get more rows to group by call_id
+    ]);
+
+    const transcripts: ConversationTranscript[] = [];
+
+    // Add conversation transcripts
+    if (conversationData.data) {
+      transcripts.push(...conversationData.data);
     }
 
-    return data || [];
+    // Process call_transcripts - group by call_id and format
+    if (callData?.data) {
+      const groupedCalls = new Map<string, any[]>();
+      callData.data.forEach((row: any) => {
+        if (!groupedCalls.has(row.call_id)) {
+          groupedCalls.set(row.call_id, []);
+        }
+        groupedCalls.get(row.call_id)!.push(row);
+      });
+
+      // Convert each call to ConversationTranscript format
+      groupedCalls.forEach((messages, callId) => {
+        const firstMsg = messages[0];
+        transcripts.push({
+          id: callId,
+          session_id: callId,
+          call_sid: callId,
+          team_id: teamId,
+          vendor_name: firstMsg.phone_number || 'Unknown Caller',
+          vendor_company: 'Phone Call',
+          vendor_phone: firstMsg.phone_number || '',
+          builder_name: 'AI Receptionist',
+          company_name: 'HomeQuest',
+          project_details: {},
+          messages: messages.map(m => ({
+            role: m.speaker === 'user' ? 'user' : 'assistant',
+            content: m.text,
+            timestamp: m.spoken_at || m.created_at
+          })),
+          call_duration: 0,
+          call_status: 'successful',
+          created_at: firstMsg.created_at || firstMsg.spoken_at
+        });
+      });
+    }
+
+    // Sort all transcripts by date and limit
+    return transcripts
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, limit);
   }
 
   /**

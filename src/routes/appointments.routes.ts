@@ -1018,33 +1018,41 @@ router.post('/extract-from-call', async (req, res) => {
       }
     }
 
-    // Extract time if mentioned (handles "10:30 AM", "10 30 PM", "3:30", "10 30")
-    const timeMatch = transcript.match(/(\d{1,2})\s*:?\s*(\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?/i);
+    // Extract attendee name (look in User messages, avoiding "I'm sorry" from bot)
+    let extractedName = '';
+    const namePatterns = [
+      /User:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)\s+\d/i, // "User: Ken White 6 7 8"
+      /User:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i, // "User: Ken White"
+      /(?:my name is|this is|i'm|im)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i
+    ];
+
+    for (const pattern of namePatterns) {
+      const nameMatch = transcript.match(pattern);
+      if (nameMatch && nameMatch[1]) {
+        const name = nameMatch[1].trim();
+        // Skip false positives like "sorry", "welcome", etc.
+        if (name.length > 3 && !/(sorry|welcome|thank|please)/i.test(name)) {
+          extractedName = name;
+          console.log(`   Found name: "${extractedName}"`);
+          break;
+        }
+      }
+    }
+
+    // Extract time if mentioned (look for "at X" pattern to avoid phone numbers)
+    let timeMatch = transcript.match(/(?:at|@)\s+(\d{1,2})\s+(\d{2})\s*(am|pm|a\.m\.|p\.m\.)/i);
+    if (!timeMatch) {
+      // Try without AM/PM
+      timeMatch = transcript.match(/(?:at|@)\s+(\d{1,2})\s+(\d{2})(?!\s*\d)/i);
+    }
     if (timeMatch) {
-      extractedTime = timeMatch[0];
+      extractedTime = `${timeMatch[1]}:${timeMatch[2]}${timeMatch[3] ? ' ' + timeMatch[3] : ''}`;
     }
 
     // Extract date if mentioned
     const dateMatch = transcript.match(/(?:tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week)/i);
     if (dateMatch) {
       extractedDate = dateMatch[0];
-    }
-
-    // Extract attendee name (look for patterns like "My name is X", "This is X", or name before phone number)
-    let extractedName = '';
-    const namePatterns = [
-      /(?:my name is|this is|i'm|im)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-      /([A-Z][a-z]+\s+[A-Z][a-z]+)\.\s*(?:at|and my number)/i,
-      /([A-Z][a-z]+\s+[A-Z][a-z]+)\s*\.\s*\d{1}\s*\d{1}\s*\d{1}/i
-    ];
-
-    for (const pattern of namePatterns) {
-      const nameMatch = transcript.match(pattern);
-      if (nameMatch && nameMatch[1]) {
-        extractedName = nameMatch[1].trim();
-        console.log(`   Found name: "${extractedName}"`);
-        break;
-      }
     }
 
     if (hasSchedulingIntent) {
@@ -1102,15 +1110,79 @@ router.post('/extract-from-call', async (req, res) => {
         scheduledAt.setHours(9, 0, 0, 0);
       }
 
+      // Extract service type from transcript
+      const serviceType = /site visit/i.test(transcript) ? 'Site Visit' :
+                         /inspection/i.test(transcript) ? 'Inspection' :
+                         /consultation/i.test(transcript) ? 'Consultation' :
+                         /meeting/i.test(transcript) ? 'Meeting' :
+                         'Appointment';
+
+      // Extract address/location from transcript
+      let mentionedAddress = '';
+      const addressPatterns = [
+        /(?:at|address|located)\s+(?:is\s+)?(\d+\s+[A-Za-z][A-Za-z\s]+(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd|way|court|ct|circle|cir|place|pl))/i,
+        /(\d+\s+[A-Za-z][A-Za-z\s]+(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln))/i
+      ];
+
+      for (const pattern of addressPatterns) {
+        const match = transcript.match(pattern);
+        if (match) {
+          mentionedAddress = match[1].trim();
+          break;
+        }
+      }
+
+      // Look up closest matching project address if address was mentioned
+      let projectLocation = null;
+      let projectId = null;
+      if (mentionedAddress) {
+        const { data: projects } = await supabase
+          .from('projects')
+          .select('id, address, name')
+          .eq('team_id', teamId)
+          .ilike('address', `%${mentionedAddress.split(' ')[0]}%`); // Match street number
+
+        if (projects && projects.length > 0) {
+          // Use first match (could add fuzzy matching here)
+          projectLocation = projects[0].address;
+          projectId = projects[0].id;
+          console.log(`   📍 Matched address: "${mentionedAddress}" → "${projectLocation}"`);
+        } else {
+          projectLocation = mentionedAddress; // Use what they said if no match
+          console.log(`   📍 No project match, using mentioned: "${mentionedAddress}"`);
+        }
+      }
+
+      // Build title from service type and name
+      const appointmentTitle = extractedName
+        ? `${serviceType} - ${extractedName}`
+        : `${serviceType} - ${phoneNumber || 'Caller'}`;
+
+      // Build detailed notes
+      const notes = `📞 AI Call Appointment
+Service: ${serviceType}
+Customer: ${extractedName || 'Not provided'}
+Phone: ${phoneNumber || 'Not provided'}
+Requested Time: ${extractedDate || 'Not specified'} at ${extractedTime || 'Not specified'}
+${mentionedAddress ? `Mentioned Address: ${mentionedAddress}` : ''}
+${projectLocation && projectLocation !== mentionedAddress ? `Matched to Project: ${projectLocation}` : ''}
+
+Call ID: ${callId}
+View full transcript: Comms → Phones → Transcripts
+
+⚠️ Status: Tentative - Confirm details with customer`;
+
       const event = {
         team_id: teamId,
-        title: 'Follow-up - Discussed in Call',
+        title: appointmentTitle,
         scheduled_at: scheduledAt.toISOString(),
         duration_minutes: 60,
         attendee_name: extractedName || phoneNumber || 'Unknown Caller',
         attendee_phone: phoneNumber,
+        project_location: projectLocation,
+        project_id: projectId,
         work_type: 'mixed',
-        notes: `Schedule discussed in call. Transcript snippet: "${transcript.substring(0, 200)}..."`,
+        notes: notes,
         source: 'ai_call',
         created_by_ai: true,
         ai_call_id: callId,
