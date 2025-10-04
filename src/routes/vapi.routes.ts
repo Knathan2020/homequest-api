@@ -422,7 +422,7 @@ When caller says "transfer", "speak with", "connect", "talk to" + person/departm
         },
         firstMessage: `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${companyName}. How may I assist you?`,
         forwardingPhoneNumber: companyPhone,
-        endCallFunctionEnabled: true,
+        endCallFunctionEnabled: false,  // Disabled - AI was calling endCall instead of transferring
         dialKeypadFunctionEnabled: false,
         maxDurationSeconds: 600,
         silenceTimeoutSeconds: 30,
