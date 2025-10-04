@@ -797,6 +797,20 @@ Keep it natural, conversational, and authentic. You're not selling - you're hiri
 
       console.log(`📞 Processing transcript for call ${callId} with ${messages?.length || 0} messages`);
 
+      // Get team ID from phone number
+      let teamId = null;
+      if (call?.phoneNumberId) {
+        const { data: teamPhone } = await supabase
+          .from('team_phones')
+          .select('team_id')
+          .eq('vapi_phone_id', call.phoneNumberId)
+          .single();
+
+        if (teamPhone?.team_id) {
+          teamId = teamPhone.team_id;
+        }
+      }
+
       // Process individual messages if available
       if (messages && Array.isArray(messages)) {
         for (const message of messages) {
@@ -832,13 +846,22 @@ Keep it natural, conversational, and authentic. You're not selling - you're hiri
         }
       }
 
+      // Build full transcript text for AI processing
+      let fullTranscriptText = transcript;
+      if (!fullTranscriptText && messages && Array.isArray(messages)) {
+        fullTranscriptText = messages
+          .filter(m => m.role !== 'system')
+          .map(m => `${m.role === 'bot' ? 'AI' : 'User'}: ${m.message || m.content}`)
+          .join('\n');
+      }
+
       // Also store the full transcript as a single record
-      if (transcript) {
+      if (fullTranscriptText) {
         try {
           const fullTranscriptData = {
             call_id: callId,
             speaker: 'FULL_TRANSCRIPT',
-            text: transcript,
+            text: fullTranscriptText,
             spoken_at: new Date().toISOString(),
             confidence: null,
             start_time: null,
@@ -861,10 +884,62 @@ Keep it natural, conversational, and authentic. You're not selling - you're hiri
         }
       }
 
+      // 🎯 NEW: EXTRACT SCHEDULE FROM TRANSCRIPT
+      console.log('🤖 Attempting to extract schedule information from transcript...');
+      await this.extractScheduleFromTranscript(callId, fullTranscriptText, call, teamId);
+
       console.log(`🎉 Completed processing transcript for call ${callId}`);
 
     } catch (error) {
       console.error('❌ Error processing end-of-call report:', error);
+    }
+  }
+
+  // Extract schedule information from call transcript using AI
+  private async extractScheduleFromTranscript(callId: string, transcript: string, call: any, teamId: string | null): Promise<void> {
+    try {
+      if (!transcript || transcript.length < 20) {
+        console.log('⏭️ Transcript too short for schedule extraction');
+        return;
+      }
+
+      console.log('🔍 Analyzing transcript for schedule information...');
+
+      // Use schedule extractor endpoint in appointments routes (deployed on Render)
+      const scheduleExtractorUrl = `${process.env.API_BASE_URL || 'https://homequest-api-1.onrender.com'}/api/appointments/extract-from-call`;
+
+      const response = await fetch(scheduleExtractorUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          callId,
+          transcript,
+          teamId: teamId || '11111111-1111-1111-1111-111111111111',
+          phoneNumber: call?.customer?.number,
+          callDate: new Date().toISOString(),
+          participants: [call?.customer?.number || 'Unknown']
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.events && result.events.length > 0) {
+          console.log(`✅ Extracted ${result.events.length} schedule event(s) from call transcript`);
+
+          // Log what was extracted for debugging
+          result.events.forEach((event: any, index: number) => {
+            console.log(`   Event ${index + 1}: ${event.title} on ${event.scheduledAt} (confidence: ${event.confidence}%)`);
+          });
+        } else {
+          console.log('ℹ️ No schedule events found in transcript');
+        }
+      } else {
+        console.warn(`⚠️ Schedule extraction endpoint returned ${response.status}`);
+      }
+
+    } catch (error) {
+      console.error('❌ Error extracting schedule from transcript:', error);
+      // Don't throw - this is a best-effort enhancement
     }
   }
 }

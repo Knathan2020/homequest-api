@@ -913,14 +913,14 @@ router.post('/block', async (req, res) => {
       endAt,
       reason
     } = req.body;
-    
+
     if (!teamId || !startAt || !endAt) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields'
       });
     }
-    
+
     const { data, error } = await supabase
       .from('blocked_slots')
       .insert({
@@ -932,20 +932,158 @@ router.post('/block', async (req, res) => {
       })
       .select()
       .single();
-    
+
     if (error) throw error;
-    
+
     res.status(201).json({
       success: true,
       data,
       message: 'Time blocked successfully'
     });
-    
+
   } catch (error: any) {
     console.error('Error blocking time:', error);
     res.status(500).json({
       success: false,
       error: error.message
+    });
+  }
+});
+
+/**
+ * Extract schedule from call transcript (for Vapi webhook integration)
+ */
+router.post('/extract-from-call', async (req, res) => {
+  try {
+    const { callId, transcript, teamId, phoneNumber, callDate, participants } = req.body;
+
+    if (!transcript || !teamId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: transcript, teamId'
+      });
+    }
+
+    console.log(`📞 Extracting schedule from call transcript (${transcript.length} chars)...`);
+
+    // Basic pattern matching for scheduling keywords
+    const events: any[] = [];
+
+    const schedulingPatterns = [
+      /(?:meet|schedule|visit|inspection|appointment|come by|stop by).*?(?:tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|this week)/gi,
+      /(?:at|around)\s*(\d{1,2}):?(\d{2})?\s*(am|pm)/gi,
+      /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/g,
+      /(?:let'?s|can we|how about).*?(?:meet|schedule)/gi
+    ];
+
+    let hasSchedulingIntent = false;
+    let extractedTime = null;
+    let extractedDate = null;
+
+    // Check for scheduling intent
+    for (const pattern of schedulingPatterns) {
+      const match = transcript.match(pattern);
+      if (match) {
+        hasSchedulingIntent = true;
+        console.log(`   Found scheduling pattern: "${match[0]}"`);
+      }
+    }
+
+    // Extract time if mentioned
+    const timeMatch = transcript.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)/i);
+    if (timeMatch) {
+      extractedTime = timeMatch[0];
+    }
+
+    // Extract date if mentioned
+    const dateMatch = transcript.match(/(?:tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week)/i);
+    if (dateMatch) {
+      extractedDate = dateMatch[0];
+    }
+
+    if (hasSchedulingIntent) {
+      // Create a tentative appointment event
+      const scheduledAt = new Date(callDate || Date.now());
+
+      // Adjust date based on extracted info
+      if (extractedDate) {
+        if (extractedDate.toLowerCase() === 'tomorrow') {
+          scheduledAt.setDate(scheduledAt.getDate() + 1);
+        } else if (extractedDate.toLowerCase() === 'next week') {
+          scheduledAt.setDate(scheduledAt.getDate() + 7);
+        }
+        // TODO: Handle day names (monday, tuesday, etc.)
+      }
+
+      // Set time if extracted
+      if (extractedTime) {
+        const timeMatch = extractedTime.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)/i);
+        if (timeMatch) {
+          let hour = parseInt(timeMatch[1]);
+          const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+          const ampm = timeMatch[3].toLowerCase();
+
+          if (ampm === 'pm' && hour < 12) hour += 12;
+          if (ampm === 'am' && hour === 12) hour = 0;
+
+          scheduledAt.setHours(hour, minutes, 0, 0);
+        }
+      } else {
+        // Default to 9 AM if no time specified
+        scheduledAt.setHours(9, 0, 0, 0);
+      }
+
+      const event = {
+        team_id: teamId,
+        title: 'Follow-up - Discussed in Call',
+        scheduled_at: scheduledAt.toISOString(),
+        duration_minutes: 60,
+        attendee_name: phoneNumber || 'Unknown Caller',
+        attendee_phone: phoneNumber,
+        work_type: 'mixed',
+        notes: `Schedule discussed in call. Transcript snippet: "${transcript.substring(0, 200)}..."`,
+        source: 'ai_call',
+        created_by_ai: true,
+        ai_call_id: callId,
+        status: 'tentative'
+      };
+
+      // Save to database
+      const { data: savedEvent, error } = await supabase
+        .from('appointments')
+        .insert(event)
+        .select()
+        .single();
+
+      if (!error && savedEvent) {
+        events.push(savedEvent);
+        console.log(`✅ Created tentative appointment: ${savedEvent.title} on ${format(new Date(savedEvent.scheduled_at), 'PPp')}`);
+      } else {
+        console.error('❌ Error saving appointment:', error);
+      }
+    }
+
+    if (events.length > 0) {
+      return res.json({
+        success: true,
+        events,
+        count: events.length,
+        message: `Extracted ${events.length} schedule event(s) from call`
+      });
+    } else {
+      return res.json({
+        success: true,
+        events: [],
+        count: 0,
+        message: 'No clear scheduling intent detected in call'
+      });
+    }
+
+  } catch (error: any) {
+    console.error('Error extracting schedule from call:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to extract schedule from call'
     });
   }
 });
