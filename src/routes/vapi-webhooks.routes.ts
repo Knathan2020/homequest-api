@@ -100,14 +100,14 @@ CRITICAL RULES:
 
 Be friendly and professional.`
           }
-        ],
-        tools: transferDestinations.length > 0 ? [
-          {
-            type: 'transferCall',
-            destinations: transferDestinations
-          }
-        ] : []
+        ]
       },
+      tools: transferDestinations.length > 0 ? [
+        {
+          type: 'transferCall',
+          destinations: transferDestinations
+        }
+      ] : undefined,
       voice: {
         provider: '11labs',
         voiceId: 'OYTbf65OHHFELVut7v2H',
