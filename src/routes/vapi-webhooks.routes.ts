@@ -214,6 +214,12 @@ Convert relative dates (Monday, tomorrow, next week) to actual dates.`
     });
 
     const aiResult = await aiResponse.json();
+
+    if (!aiResult.choices || aiResult.choices.length === 0) {
+      console.error('❌ OpenAI API error:', aiResult);
+      return res.json({ success: false, error: 'OpenAI API failed', details: aiResult });
+    }
+
     const appt = JSON.parse(aiResult.choices[0].message.content);
 
     console.log('🤖 AI extracted:', appt);
