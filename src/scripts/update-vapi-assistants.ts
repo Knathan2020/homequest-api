@@ -31,7 +31,7 @@ VAPI automatically records and transcripts all calls.`
     ]
   },
   voice: {
-    provider: 'elevenlabs'
+    provider: '11labs'
   },
   functions: [
     {
@@ -53,24 +53,23 @@ VAPI automatically records and transcripts all calls.`
     },
     {
       name: 'transferCall',
-      description: 'Transfer the call to the builder or a staff member',
+      description: 'Transfer the call to a team member by name or department',
       parameters: {
         type: 'object',
         properties: {
-          phoneNumber: {
-            type: 'string',
-            description: 'Phone number to transfer to (E.164 format)'
-          },
           memberName: {
             type: 'string',
-            description: 'Name of person being transferred to'
+            description: 'Name of the person to transfer to'
+          },
+          department: {
+            type: 'string',
+            description: 'Department to transfer to (if name not known)'
           },
           reason: {
             type: 'string',
             description: 'Why the call is being transferred'
           }
-        },
-        required: ['phoneNumber']
+        }
       }
     },
     {
@@ -105,7 +104,7 @@ VAPI automatically records and transcripts all calls.`
       }
     }
   ],
-  serverUrl: `${API_BASE_URL}/api/vapi/webhook`,
+  serverUrl: `${API_BASE_URL}/api/vapi-webhooks/vapi/webhooks/function-call`,
   serverUrlSecret: process.env.VAPI_WEBHOOK_SECRET || null
 };
 
