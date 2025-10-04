@@ -7,9 +7,19 @@ interface VisionAnalysis {
   rooms?: any[];
   doors?: any[];
   windows?: any[];
-  measurements?: any[];
+  measurements?: any[] | {
+    scale?: number;
+    unit?: string;
+    dimensions?: Array<{
+      value: number;
+      unit: string;
+      position: { x: number; y: number };
+    }>;
+  };
   mlEnhanced?: boolean;
   modelVersion?: string;
+  processedSamples?: number;
+  overallConfidence?: number;
 }
 
 interface TrainingData {
