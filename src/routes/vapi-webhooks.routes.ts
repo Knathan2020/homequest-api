@@ -48,6 +48,12 @@ router.post('/vapi/webhooks/function-call', async (req, res) => {
       case 'transferCall':
         return await handleTransferCall(req, res, call, parameters);
 
+      case 'transferToPerson':
+        return await handleTransferCall(req, res, call, { memberName: parameters.personName, ...parameters });
+
+      case 'transferToDepartment':
+        return await handleTransferCall(req, res, call, parameters);
+
       case 'takeMessage':
         return await handleTakeMessage(req, res, call, parameters);
 
@@ -63,7 +69,7 @@ router.post('/vapi/webhooks/function-call', async (req, res) => {
 
       default:
         console.log('⚠️ Unknown function call received:', functionName);
-        console.log('📋 Available functions: getProjectInfo, lookupVendor, transferCall, takeMessage, scheduleCallback, checkAvailability, scheduleAppointment');
+        console.log('📋 Available functions: getProjectInfo, lookupVendor, transferCall, transferToPerson, transferToDepartment, takeMessage, scheduleCallback, checkAvailability, scheduleAppointment');
         res.json({
           result: 'I\'m not sure how to handle that request. Let me help you another way.'
         });
