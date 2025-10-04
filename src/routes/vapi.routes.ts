@@ -533,7 +533,7 @@ When caller says "transfer", "speak with", "connect", "talk to" + person/departm
             }
           }
         ],
-        serverUrl: `${process.env.WEBHOOK_BASE_URL || 'https://cuddly-giggle-69p59v4xv5gw2rvw7-4000.app.github.dev'}/api/vapi/webhook`
+        serverUrl: `${process.env.API_BASE_URL || 'https://homequest-api-1.onrender.com'}/api/vapi/webhooks/function-call`
       };
       
       // Return the assistant configuration for this inbound call
