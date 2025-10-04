@@ -43,6 +43,12 @@ router.post('/vapi/webhooks/function-call', async (req, res) => {
           case 'transferToDepartment':
             result = await handleTransferCallNew(call, parameters);
             break;
+          case 'scheduleAppointment':
+            result = await handleScheduleAppointment(call, parameters);
+            break;
+          case 'getWeather':
+            result = await handleGetWeather(parameters);
+            break;
           default:
             result = { error: 'Unknown function' };
         }
@@ -335,9 +341,9 @@ async function handleScheduleCallback(req: any, res: any, call: any, params: any
 }
 
 /**
- * Handle appointment scheduling
+ * Handle appointment scheduling (OLD - not used)
  */
-async function handleScheduleAppointment(req: any, res: any, call: any, params: any) {
+async function handleScheduleAppointmentOld(req: any, res: any, call: any, params: any) {
   try {
     const {
       appointmentType,
@@ -823,6 +829,117 @@ async function handleLookupVendor(req: any, res: any, call: any, params: any) {
     res.json({
       result: 'I\'m having trouble looking up that vendor. Let me transfer you to someone who can help.'
     });
+  }
+}
+
+/**
+ * Handle schedule appointment request
+ */
+async function handleScheduleAppointment(call: any, params: any) {
+  try {
+    const {
+      title,
+      attendeeName,
+      attendeePhone,
+      attendeeEmail,
+      serviceType,
+      workType,
+      preferredDate,
+      preferredTime,
+      duration = 60,
+      notes,
+      locationAddress
+    } = params;
+
+    // Combine date and time
+    const scheduledAt = `${preferredDate}T${preferredTime}:00Z`;
+
+    // Check weather for outdoor work
+    let weatherWarning = null;
+    if (workType === 'outdoor' && locationAddress) {
+      const weatherCheck = await weatherService.checkSchedulingDate(
+        locationAddress,
+        new Date(preferredDate),
+        workType
+      );
+      if (!weatherCheck.canProceed) {
+        weatherWarning = weatherCheck.recommendation;
+      }
+    }
+
+    // Create appointment in database
+    const { data: appointment, error } = await supabase
+      .from('appointments')
+      .insert({
+        team_id: call.assistantId,
+        title,
+        attendee_name: attendeeName,
+        attendee_phone: attendeePhone,
+        attendee_email: attendeeEmail,
+        service_type: serviceType,
+        work_type: workType,
+        scheduled_at: scheduledAt,
+        duration,
+        notes,
+        location_address: locationAddress,
+        status: 'scheduled',
+        created_via: 'phone_call',
+        call_id: call.id
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    let response = `Appointment scheduled for ${attendeeName} on ${preferredDate} at ${preferredTime} for ${serviceType}.`;
+
+    if (weatherWarning) {
+      response += ` Weather alert: ${weatherWarning}`;
+    }
+
+    return { success: true, appointment, message: response };
+
+  } catch (error: any) {
+    console.error('Schedule appointment error:', error);
+    return {
+      success: false,
+      error: error.message,
+      message: 'I had trouble scheduling that appointment. Let me get someone to help you.'
+    };
+  }
+}
+
+/**
+ * Handle weather check request
+ */
+async function handleGetWeather(params: any) {
+  try {
+    const { location, date } = params;
+
+    const weatherCheck = await weatherService.checkSchedulingDate(
+      location,
+      new Date(date),
+      'outdoor'
+    );
+
+    const response = weatherCheck.canProceed
+      ? `Weather looks good for outdoor work on ${date}. ${weatherCheck.recommendation}`
+      : `Weather not ideal for outdoor work on ${date}. ${weatherCheck.recommendation}` +
+        (weatherCheck.alternativeDate ? ` Better day: ${weatherCheck.alternativeDate.toDateString()}` : '');
+
+    return {
+      success: true,
+      weatherCheck,
+      message: response
+    };
+
+  } catch (error: any) {
+    console.error('Weather check error:', error);
+    return {
+      success: false,
+      error: error.message,
+      message: 'I had trouble checking the weather. Please try again.'
+    };
   }
 }
 

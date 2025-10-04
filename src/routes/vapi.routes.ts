@@ -380,7 +380,51 @@ Available: ${teamMembers.length > 0 ? teamMembers.map(m => `${m.name} (${m.depar
           provider: 'deepgram',
           model: 'nova-2',
           language: 'en'
-        }
+        },
+        serverUrl: `${process.env.API_BASE_URL || 'https://homequest-api-1.onrender.com'}/api/vapi-webhooks/vapi/webhooks/function-call`,
+        functions: [
+          {
+            name: 'scheduleAppointment',
+            description: 'Schedule an appointment with the customer. Automatically checks weather for outdoor work.',
+            parameters: {
+              type: 'object',
+              properties: {
+                title: { type: 'string', description: 'Title of the appointment' },
+                attendeeName: { type: 'string', description: 'Name of the customer' },
+                attendeePhone: { type: 'string', description: 'Phone number of the customer' },
+                attendeeEmail: { type: 'string', description: 'Email of the customer (optional)' },
+                serviceType: {
+                  type: 'string',
+                  description: 'Type of service needed',
+                  enum: ['inspection', 'consultation', 'site_visit', 'meeting']
+                },
+                workType: {
+                  type: 'string',
+                  description: 'Indoor or outdoor work',
+                  enum: ['indoor', 'outdoor', 'mixed']
+                },
+                preferredDate: { type: 'string', description: 'Preferred date in YYYY-MM-DD format' },
+                preferredTime: { type: 'string', description: 'Preferred time in HH:MM format (24hr)' },
+                duration: { type: 'number', description: 'Duration in minutes', default: 60 },
+                notes: { type: 'string', description: 'Additional notes' },
+                locationAddress: { type: 'string', description: 'Address for site visit' }
+              },
+              required: ['title', 'attendeeName', 'attendeePhone', 'serviceType', 'workType', 'preferredDate', 'preferredTime']
+            }
+          },
+          {
+            name: 'getWeather',
+            description: 'Get weather forecast for a location and date to check if outdoor work is safe',
+            parameters: {
+              type: 'object',
+              properties: {
+                location: { type: 'string', description: 'City or address' },
+                date: { type: 'string', description: 'Date to check in YYYY-MM-DD format' }
+              },
+              required: ['location', 'date']
+            }
+          }
+        ]
       };
       
       // Return the assistant configuration for this inbound call
