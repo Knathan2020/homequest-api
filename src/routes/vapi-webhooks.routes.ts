@@ -873,18 +873,19 @@ async function handleScheduleAppointment(call: any, params: any) {
       .insert({
         team_id: call.assistantId,
         title,
+        type: serviceType,
+        status: 'scheduled',
+        scheduled_at: scheduledAt,
+        duration_minutes: duration,
         attendee_name: attendeeName,
         attendee_phone: attendeePhone,
         attendee_email: attendeeEmail,
-        service_type: serviceType,
-        work_type: workType,
-        scheduled_at: scheduledAt,
-        duration,
+        location_type: workType === 'outdoor' ? 'site' : 'in_person',
+        location_details: locationAddress,
         notes,
-        location_address: locationAddress,
-        status: 'scheduled',
-        created_via: 'phone_call',
-        call_id: call.id
+        source: 'phone',
+        created_by_ai: true,
+        ai_call_id: call.id
       })
       .select()
       .single();
