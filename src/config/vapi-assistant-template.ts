@@ -47,15 +47,14 @@ All calls are automatically recorded and transcribed by VAPI.`
       },
       {
         name: 'transferCall',
-        description: 'Transfer call to builder or staff',
+        description: 'Transfer call to a team member by name or department',
         parameters: {
           type: 'object',
           properties: {
-            phoneNumber: { type: 'string', description: 'Phone number (E.164 format)' },
-            memberName: { type: 'string', description: 'Name of person' },
+            memberName: { type: 'string', description: 'Name of the person to transfer to' },
+            department: { type: 'string', description: 'Department to transfer to (if name not known)' },
             reason: { type: 'string', description: 'Reason for transfer' }
-          },
-          required: ['phoneNumber']
+          }
         }
       },
       {
