@@ -175,6 +175,24 @@ router.post('/vapi/webhooks/end-of-call', async (req, res) => {
 
     console.log('🗓️ Appointment mentioned - parsing with AI...');
 
+    // Look up team ID from phone number
+    const phoneNumber = call?.phoneNumber?.number || call?.phoneNumberId;
+    console.log('📱 Looking up team for phone:', phoneNumber);
+
+    const { data: phoneData } = await supabase
+      .from('team_phones')
+      .select('team_id, team_name')
+      .or(`twilio_number.eq.${phoneNumber},vapi_phone_id.eq.${phoneNumber}`)
+      .single();
+
+    if (!phoneData) {
+      console.error('❌ No team found for phone:', phoneNumber);
+      return res.json({ success: false, error: 'Team not found' });
+    }
+
+    const teamId = phoneData.team_id;
+    console.log('✅ Found team:', { teamId, teamName: phoneData.team_name });
+
     // Parse with OpenAI
     const openaiKey = process.env.OPENAI_API_KEY;
     if (!openaiKey) {
@@ -240,7 +258,7 @@ Convert relative dates (Monday, tomorrow, next week) to actual dates.`
     const { data: appointment, error } = await supabase
       .from('appointments')
       .insert({
-        team_id: call.assistantId,
+        team_id: teamId,
         title: appt.title || `${appt.serviceType} appointment`,
         type: appt.serviceType,
         status: 'scheduled',
