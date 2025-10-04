@@ -102,8 +102,7 @@ async function handleTransferCall(req: any, res: any, call: any, params: any) {
     let query = supabase
       .from('team_members')
       .select('*')
-      .eq('team_id', teamId)
-      .eq('availability', 'available');
+      .eq('team_id', teamId);
 
     if (memberName) {
       query = query.eq('name', memberName);
@@ -111,7 +110,7 @@ async function handleTransferCall(req: any, res: any, call: any, params: any) {
       query = query.eq('department', department);
     }
 
-    const { data: members } = await query.single();
+    const { data: members } = await query;
 
     if (members && members.length > 0) {
       const member = members[0];
