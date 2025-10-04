@@ -23,62 +23,60 @@ router.post('/vapi/webhooks/function-call', async (req, res) => {
     console.log('🔍 Webhook received - body keys:', Object.keys(req.body));
     console.log('🔍 Full webhook body:', JSON.stringify(req.body, null, 2));
 
-    const {
-      call,
-      functionCall,
-      messageResponse,
-      message
-    } = req.body;
+    const { message } = req.body;
 
-    // Check if this is actually a function call or just a regular message
+    // Handle new VAPI tool-calls format
+    if (message?.type === 'tool-calls') {
+      const { call, toolCallList } = message;
+      const results = [];
+
+      for (const toolCall of toolCallList || []) {
+        const { id, name: functionName, parameters } = toolCall;
+
+        console.log('📞 Tool call received:', { functionName, parameters, toolCallId: id });
+
+        let result;
+        switch (functionName) {
+          case 'transferToPerson':
+            result = await handleTransferCallNew(call, { memberName: parameters.personName, ...parameters });
+            break;
+          case 'transferToDepartment':
+            result = await handleTransferCallNew(call, parameters);
+            break;
+          default:
+            result = { error: 'Unknown function' };
+        }
+
+        results.push({
+          name: functionName,
+          toolCallId: id,
+          result: JSON.stringify(result)
+        });
+      }
+
+      return res.json({ results });
+    }
+
+    // Fallback for old format (keep for compatibility)
+    const { call, functionCall } = req.body;
     if (!functionCall) {
-      console.log('⚠️ No functionCall in webhook body - this is not a function call');
+      console.log('⚠️ No functionCall in webhook body');
       return res.json({ result: 'No function call data received' });
     }
 
     const { name: functionName, parameters } = functionCall;
 
-    console.log('📞 Vapi function call received:', {
-      functionName,
-      parameters,
-      callId: call?.id,
-      timestamp: new Date().toISOString()
-    });
-
     switch (functionName) {
-      case 'getProjectInfo':
-        return await handleGetProjectInfo(req, res, call, parameters);
-
-      case 'lookupVendor':
-        return await handleLookupVendor(req, res, call, parameters);
-
-      case 'transferCall':
-        return await handleTransferCall(req, res, call, parameters);
-
       case 'transferToPerson':
         return await handleTransferCall(req, res, call, { memberName: parameters.personName, ...parameters });
 
       case 'transferToDepartment':
         return await handleTransferCall(req, res, call, parameters);
 
-      case 'takeMessage':
-        return await handleTakeMessage(req, res, call, parameters);
-
-      case 'scheduleCallback':
-        return await handleScheduleCallback(req, res, call, parameters);
-
-      case 'checkAvailability':
-        return await handleCheckAvailability(req, res, call, parameters);
-
-      case 'schedule_appointment':
-      case 'scheduleAppointment':
-        return await handleScheduleAppointment(req, res, call, parameters);
-
       default:
         console.log('⚠️ Unknown function call received:', functionName);
-        console.log('📋 Available functions: getProjectInfo, lookupVendor, transferCall, transferToPerson, transferToDepartment, takeMessage, scheduleCallback, checkAvailability, scheduleAppointment');
         res.json({
-          result: 'I\'m not sure how to handle that request. Let me help you another way.'
+          result: 'I\'m not sure how to handle that request.'
         });
     }
     
@@ -91,7 +89,49 @@ router.post('/vapi/webhooks/function-call', async (req, res) => {
 });
 
 /**
- * Handle transfer request
+ * Handle transfer request - New format for tool-calls
+ */
+async function handleTransferCallNew(call: any, params: any) {
+  try {
+    const { department, memberName, reason } = params;
+    const teamId = call.assistantId;
+
+    // Find the team member to transfer to
+    let query = supabase
+      .from('team_members')
+      .select('*')
+      .eq('team_id', teamId);
+
+    if (memberName) {
+      query = query.eq('name', memberName);
+    } else if (department) {
+      query = query.eq('department', department);
+    }
+
+    const { data: members } = await query;
+
+    if (members && members.length > 0) {
+      const member = members[0];
+
+      // Return transfer destination
+      return {
+        destination: {
+          type: 'number',
+          number: member.phone_number,
+          message: `Transferring to ${member.name}`
+        }
+      };
+    } else {
+      return { error: `${memberName || department} not available` };
+    }
+  } catch (error) {
+    console.error('Transfer error:', error);
+    return { error: 'Transfer failed' };
+  }
+}
+
+/**
+ * Handle transfer request - Old format
  */
 async function handleTransferCall(req: any, res: any, call: any, params: any) {
   try {
