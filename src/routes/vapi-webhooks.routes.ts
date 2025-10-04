@@ -20,11 +20,14 @@ const supabase = createClient(
  */
 router.post('/vapi/webhooks/assistant-request', async (req, res) => {
   try {
-    const { call } = req.body;
+    const { call, phoneNumber } = req.body;
+
+    // Vapi sends phoneNumber at root level, not in call
+    const incomingNumber = phoneNumber?.number || call?.phoneNumber?.number;
 
     console.log('🤖 Assistant request received:', {
       callId: call?.id,
-      phoneNumber: call?.phoneNumber,
+      phoneNumber: incomingNumber,
       customer: call?.customer
     });
 
@@ -32,11 +35,11 @@ router.post('/vapi/webhooks/assistant-request', async (req, res) => {
     const { data: phoneData } = await supabase
       .from('team_phones')
       .select('team_id, team_name')
-      .eq('twilio_number', call.phoneNumber?.number)
+      .eq('twilio_number', incomingNumber)
       .single();
 
     if (!phoneData) {
-      console.error('❌ No team found for phone number:', call.phoneNumber?.number);
+      console.error('❌ No team found for phone number:', incomingNumber);
       return res.status(404).json({ error: 'Team not found' });
     }
 
