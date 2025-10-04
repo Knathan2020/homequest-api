@@ -16,6 +16,117 @@ const supabase = createClient(
 );
 
 /**
+ * Assistant request webhook - return inline assistant config for each call
+ */
+router.post('/vapi/webhooks/assistant-request', async (req, res) => {
+  try {
+    const { call } = req.body;
+
+    console.log('🤖 Assistant request received:', {
+      callId: call?.id,
+      phoneNumber: call?.phoneNumber,
+      customer: call?.customer
+    });
+
+    // Look up team by phone number
+    const { data: phoneData } = await supabase
+      .from('vapi_phone_numbers')
+      .select('team_id, teams(name)')
+      .eq('phone_number', call.phoneNumber?.number)
+      .single();
+
+    if (!phoneData) {
+      console.error('❌ No team found for phone number:', call.phoneNumber?.number);
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    const teamId = phoneData.team_id;
+    const companyName = phoneData.teams?.name || 'Our Company';
+
+    console.log('✅ Found team:', { teamId, companyName });
+
+    // Fetch team members for transfer destinations
+    const { data: teamMembers } = await supabase
+      .from('team_members')
+      .select('name, phone_number, department')
+      .eq('team_id', teamId)
+      .not('phone_number', 'is', null);
+
+    const transferDestinations = (teamMembers || [])
+      .filter((m: any) => m.phone_number && m.phone_number.trim())
+      .map((m: any) => ({
+        type: 'number',
+        number: m.phone_number,
+        description: `${m.name} - ${m.department}`
+      }));
+
+    console.log('📋 Transfer destinations:', transferDestinations.length);
+
+    // Get time of day for greeting
+    const hour = new Date().getHours();
+    const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+
+    // Return inline assistant
+    const assistant = {
+      name: `${companyName} Receptionist`,
+      firstMessage: `Good ${timeOfDay}, ${companyName}. How may I assist you today?`,
+      model: {
+        provider: 'openai',
+        model: 'gpt-3.5-turbo',
+        temperature: 0.7,
+        messages: [
+          {
+            role: 'system',
+            content: `You are a receptionist for ${companyName}.
+
+When someone wants to schedule an appointment:
+1. Collect: their name, phone number, preferred date/time, type of service (site visit/inspection/consultation/meeting), and address if needed
+2. Confirm the details back to them: "Perfect! I have you scheduled for [DATE] at [TIME] for [SERVICE TYPE]. We'll send you a confirmation text shortly."
+3. Ask if there's anything else you can help with
+
+For transfers: Use the transferCall tool to connect them to team members.
+
+Be friendly and professional.`
+          }
+        ],
+        tools: transferDestinations.length > 0 ? [
+          {
+            type: 'transferCall',
+            destinations: transferDestinations
+          }
+        ] : []
+      },
+      voice: {
+        provider: '11labs',
+        voiceId: 'OYTbf65OHHFELVut7v2H',
+        model: 'eleven_turbo_v2',
+        stability: 0.5,
+        similarityBoost: 0.75
+      },
+      endCallFunctionEnabled: true,
+      dialKeypadFunctionEnabled: true,
+      maxDurationSeconds: 600,
+      silenceTimeoutSeconds: 30,
+      responseDelaySeconds: 0.5,
+      transcriber: {
+        provider: 'deepgram',
+        model: 'nova-2',
+        language: 'en'
+      },
+      serverUrl: `${process.env.API_BASE_URL || 'https://homequest-api-1.onrender.com'}/api/vapi-webhooks/vapi/webhooks/end-of-call`,
+      serverUrlSecret: process.env.VAPI_SERVER_SECRET
+    };
+
+    console.log('✅ Returning assistant config for', companyName);
+    res.json({ assistant });
+
+  } catch (error: any) {
+    console.error('❌ Assistant request error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * Vapi webhook endpoint for function calls
  */
 /**
