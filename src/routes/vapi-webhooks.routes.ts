@@ -41,7 +41,7 @@ router.post('/vapi/webhooks/assistant-request', async (req, res) => {
     }
 
     const teamId = phoneData.team_id;
-    const companyName = phoneData.teams?.name || 'Our Company';
+    const companyName = (phoneData.teams as any)?.name || 'Our Company';
 
     console.log('✅ Found team:', { teamId, companyName });
 
