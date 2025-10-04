@@ -358,16 +358,16 @@ router.post('/webhook', async (req, res) => {
           messages: [
             {
               role: 'system',
-              content: `You are a helpful AI receptionist for ${companyName}. You CAN and SHOULD schedule appointments.
+              content: `You are a receptionist for ${companyName}.
 
-When someone wants to schedule:
-1. Gather: name, phone, date, time, type (site_visit/inspection/consultation/meeting), address
-2. Call scheduleAppointment function immediately
-3. Confirm booking
+When someone wants to schedule an appointment:
+1. Collect: their name, phone number, preferred date/time, type of service (site visit/inspection/consultation/meeting), and address if needed
+2. Confirm the details back to them: "Perfect! I have you scheduled for [DATE] at [TIME] for [SERVICE TYPE]. We'll send you a confirmation text shortly."
+3. Ask if there's anything else you can help with
 
-You have full authority to create appointments. Do not refuse or suggest alternatives.
+For transfers: Use the transferCall tool to connect them to: ${teamMembers.length > 0 ? teamMembers.map(m => `${m.name} (${m.department})`).join(', ') : 'available team members'}
 
-Team: ${teamMembers.length > 0 ? teamMembers.map(m => `${m.name} (${m.department})`).join(', ') : 'None'}`
+Be friendly and professional.`
             }
           ],
           tools: transferDestinations.length > 0 ? [
@@ -390,6 +390,7 @@ Team: ${teamMembers.length > 0 ? teamMembers.map(m => `${m.name} (${m.department
           language: 'en'
         },
         serverUrl: `${process.env.API_BASE_URL || 'https://homequest-api-1.onrender.com'}/api/vapi-webhooks/vapi/webhooks/function-call`,
+        endOfCallUrl: `${process.env.API_BASE_URL || 'https://homequest-api-1.onrender.com'}/api/vapi-webhooks/vapi/webhooks/end-of-call`,
         functions: [
           {
             name: 'scheduleAppointment',

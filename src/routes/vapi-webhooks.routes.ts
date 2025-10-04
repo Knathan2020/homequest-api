@@ -18,6 +18,141 @@ const supabase = createClient(
 /**
  * Vapi webhook endpoint for function calls
  */
+/**
+ * End of call webhook - auto-create appointments from transcript
+ */
+router.post('/vapi/webhooks/end-of-call', async (req, res) => {
+  try {
+    const { call, messages, transcript } = req.body;
+
+    console.log('📞 End of call received:', {
+      callId: call?.id,
+      teamId: call?.assistantId,
+      customerNumber: call?.customer?.number,
+      messageCount: messages?.length
+    });
+
+    // Build full conversation
+    let fullTranscript = '';
+    if (messages && Array.isArray(messages)) {
+      fullTranscript = messages
+        .map((m: any) => `${m.role === 'bot' ? 'Assistant' : 'Caller'}: ${m.message}`)
+        .join('\n');
+    } else if (transcript) {
+      fullTranscript = transcript;
+    }
+
+    console.log('📝 Full transcript:', fullTranscript);
+
+    // Check if mentions scheduling
+    const lower = fullTranscript.toLowerCase();
+    const wantsAppointment = lower.includes('schedule') ||
+                             lower.includes('appointment') ||
+                             lower.includes('site visit') ||
+                             lower.includes('inspection') ||
+                             lower.includes('book');
+
+    if (!wantsAppointment) {
+      console.log('ℹ️ No appointment mentioned in call');
+      return res.json({ success: true });
+    }
+
+    console.log('🗓️ Appointment mentioned - parsing with AI...');
+
+    // Parse with OpenAI
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) {
+      console.error('❌ No OPENAI_API_KEY');
+      return res.json({ success: false, error: 'No API key' });
+    }
+
+    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: `Extract appointment info from transcript. Today is ${new Date().toISOString().split('T')[0]}.
+Return JSON:
+{
+  "hasAppointment": true/false,
+  "attendeeName": "string",
+  "attendeePhone": "string or null",
+  "serviceType": "site_visit"|"inspection"|"consultation"|"meeting",
+  "workType": "indoor"|"outdoor"|"mixed",
+  "preferredDate": "YYYY-MM-DD",
+  "preferredTime": "HH:MM" (24hr),
+  "locationAddress": "string or null",
+  "title": "brief title",
+  "notes": "any additional info"
+}
+Convert relative dates (Monday, tomorrow, next week) to actual dates.`
+          },
+          {
+            role: 'user',
+            content: fullTranscript
+          }
+        ],
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    const aiResult = await aiResponse.json();
+    const appt = JSON.parse(aiResult.choices[0].message.content);
+
+    console.log('🤖 AI extracted:', appt);
+
+    if (!appt.hasAppointment || !appt.preferredDate || !appt.preferredTime) {
+      console.log('ℹ️ Incomplete appointment data');
+      return res.json({ success: true, message: 'Incomplete data' });
+    }
+
+    // Create appointment
+    const scheduledAt = `${appt.preferredDate}T${appt.preferredTime}:00Z`;
+
+    const { data: appointment, error } = await supabase
+      .from('appointments')
+      .insert({
+        team_id: call.assistantId,
+        title: appt.title || `${appt.serviceType} appointment`,
+        type: appt.serviceType,
+        status: 'scheduled',
+        scheduled_at: scheduledAt,
+        duration_minutes: 60,
+        attendee_name: appt.attendeeName,
+        attendee_phone: appt.attendeePhone || call.customer?.number,
+        location_type: appt.workType === 'outdoor' ? 'site' : 'in_person',
+        location_details: appt.locationAddress,
+        notes: appt.notes,
+        source: 'phone',
+        created_by_ai: true,
+        ai_call_id: call.id
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Database error:', error);
+      return res.json({ success: false, error: error.message });
+    }
+
+    console.log('✅ Appointment created from transcript:', appointment.id);
+
+    // TODO: Send SMS confirmation when texting is ready
+
+    res.json({ success: true, appointmentId: appointment.id });
+
+  } catch (error: any) {
+    console.error('❌ End of call error:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
 router.post('/vapi/webhooks/function-call', async (req, res) => {
   try {
     console.log('🔍 Webhook received - body keys:', Object.keys(req.body));
