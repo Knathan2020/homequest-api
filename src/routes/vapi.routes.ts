@@ -329,7 +329,16 @@ router.post('/webhook', async (req, res) => {
         companyName = 'our company';
         console.log('⚠️ No company name found, using generic greeting');
       }
-      
+
+      // Build transfer destinations from team members
+      const transferDestinations = teamMembers
+        .filter(m => m.phoneNumber && m.phoneNumber.trim())
+        .map(m => ({
+          type: 'number',
+          number: m.phoneNumber,
+          description: `${m.name} - ${m.department}`
+        }));
+
       const inboundAssistant = {
         name: `${companyName} Receptionist`,
         voice: {
@@ -348,14 +357,17 @@ router.post('/webhook', async (req, res) => {
               role: 'system',
               content: `You are a receptionist for ${companyName}.
 
-When caller requests transfer:
-1. Say "One moment"
-2. Use transferToPerson or transferToDepartment function
+When caller asks to speak with someone, say "One moment" then use the transferCall tool.
 
-Team members:
-${teamMembers.length > 0 ? teamMembers.map(m => `${m.name} (${m.department})`).join(', ') : 'None'}`
+Available: ${teamMembers.length > 0 ? teamMembers.map(m => `${m.name} (${m.department})`).join(', ') : 'None'}`
             }
-          ]
+          ],
+          tools: transferDestinations.length > 0 ? [
+            {
+              type: 'transferCall',
+              destinations: transferDestinations
+            }
+          ] : []
         },
         firstMessage: `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${companyName}. How may I assist you?`,
         forwardingPhoneNumber: companyPhone,
@@ -368,106 +380,7 @@ ${teamMembers.length > 0 ? teamMembers.map(m => `${m.name} (${m.department})`).j
           provider: 'deepgram',
           model: 'nova-2',
           language: 'en'
-        },
-        functions: [
-          {
-            name: 'transferToDepartment',
-            description: 'REQUIRED when caller asks to speak with a department. Transfers call to billing, sales, operations, management, field, or customer_service department.',
-            parameters: {
-              type: 'object',
-              properties: {
-                department: {
-                  type: 'string',
-                  description: 'Department to transfer to',
-                  enum: ['billing', 'sales', 'operations', 'management', 'field', 'customer_service']
-                },
-                reason: { type: 'string', description: 'Reason for transfer' },
-                callerName: { type: 'string', description: 'Name of the caller' },
-                urgency: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'], default: 'normal' }
-              },
-              required: ['department', 'reason']
-            }
-          },
-          {
-            name: 'transferToPerson',
-            description: 'REQUIRED when caller asks to speak with a specific person by name. Transfers call directly to that team member.',
-            parameters: {
-              type: 'object',
-              properties: {
-                personName: { type: 'string', description: 'Name of the person to transfer to' },
-                reason: { type: 'string', description: 'Reason for transfer' },
-                callerName: { type: 'string', description: 'Name of the caller' },
-                urgency: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'], default: 'normal' }
-              },
-              required: ['personName', 'reason']
-            }
-          },
-          {
-            name: 'checkAvailability',
-            description: 'Check if a specific person or department is available for transfer',
-            parameters: {
-              type: 'object',
-              properties: {
-                type: { type: 'string', enum: ['person', 'department'] },
-                name: { type: 'string', description: 'Name of person or department' }
-              },
-              required: ['type', 'name']
-            }
-          },
-          {
-            name: 'scheduleAppointment',
-            description: 'Schedule an appointment with the customer',
-            parameters: {
-              type: 'object',
-              properties: {
-                title: { type: 'string', description: 'Title of the appointment' },
-                attendeeName: { type: 'string', description: 'Name of the customer' },
-                attendeePhone: { type: 'string', description: 'Phone number of the customer' },
-                attendeeEmail: { type: 'string', description: 'Email of the customer (optional)' },
-                serviceType: { type: 'string', description: 'Type of service needed', enum: ['inspection', 'consultation', 'site_visit', 'meeting'] },
-                workType: { type: 'string', description: 'Indoor or outdoor work', enum: ['indoor', 'outdoor', 'mixed'] },
-                preferredDate: { type: 'string', description: 'Preferred date in YYYY-MM-DD format' },
-                preferredTime: { type: 'string', description: 'Preferred time in HH:MM format (24hr)' },
-                duration: { type: 'number', description: 'Duration in minutes', default: 60 },
-                notes: { type: 'string', description: 'Additional notes about the appointment' },
-                locationAddress: { type: 'string', description: 'Address for the appointment if site visit' }
-              },
-              required: ['title', 'attendeeName', 'attendeePhone', 'serviceType', 'workType', 'preferredDate', 'preferredTime']
-            }
-          },
-          {
-            name: 'checkAvailability',
-            description: 'Check available time slots for scheduling',
-            parameters: {
-              type: 'object',
-              properties: {
-                date: { type: 'string', description: 'Date to check in YYYY-MM-DD format' },
-                serviceType: { type: 'string', description: 'Type of service needed' }
-              },
-              required: ['date']
-            }
-          },
-          {
-            name: 'takeMessage',
-            description: 'Take a message for a team member',
-            parameters: {
-              type: 'object',
-              properties: {
-                callerName: { type: 'string', description: 'Name of the caller' },
-                callerPhone: { type: 'string', description: 'Phone number of the caller' },
-                callerCompany: { type: 'string', description: 'Company of the caller' },
-                forDepartment: { type: 'string', description: 'Department the message is for' },
-                forPerson: { type: 'string', description: 'Specific person the message is for' },
-                message: { type: 'string', description: 'The message content' },
-                urgency: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'], default: 'normal' },
-                callbackRequested: { type: 'boolean', description: 'Whether they requested a callback' },
-                preferredCallbackTime: { type: 'string', description: 'When they prefer to be called back' }
-              },
-              required: ['callerName', 'callerPhone', 'message']
-            }
-          }
-        ],
-        serverUrl: `${process.env.API_BASE_URL || 'https://homequest-api-1.onrender.com'}/api/vapi-webhooks/vapi/webhooks/function-call`
+        }
       };
       
       // Return the assistant configuration for this inbound call
