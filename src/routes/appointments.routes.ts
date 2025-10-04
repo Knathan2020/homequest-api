@@ -1007,12 +1007,26 @@ router.post('/extract-from-call', async (req, res) => {
 
       // Adjust date based on extracted info
       if (extractedDate) {
-        if (extractedDate.toLowerCase() === 'tomorrow') {
+        const dateLower = extractedDate.toLowerCase();
+        if (dateLower === 'tomorrow') {
           scheduledAt.setDate(scheduledAt.getDate() + 1);
-        } else if (extractedDate.toLowerCase() === 'next week') {
+        } else if (dateLower === 'next week') {
           scheduledAt.setDate(scheduledAt.getDate() + 7);
+        } else {
+          // Handle day names (monday, tuesday, etc.)
+          const dayMap: { [key: string]: number } = {
+            'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
+            'thursday': 4, 'friday': 5, 'saturday': 6
+          };
+
+          const targetDay = dayMap[dateLower];
+          if (targetDay !== undefined) {
+            const currentDay = scheduledAt.getDay();
+            let daysToAdd = targetDay - currentDay;
+            if (daysToAdd <= 0) daysToAdd += 7; // Next week if day already passed
+            scheduledAt.setDate(scheduledAt.getDate() + daysToAdd);
+          }
         }
-        // TODO: Handle day names (monday, tuesday, etc.)
       }
 
       // Set time if extracted
