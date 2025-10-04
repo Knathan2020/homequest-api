@@ -347,7 +347,10 @@ router.post('/webhook', async (req, res) => {
               content: `⚠️ CRITICAL INSTRUCTION - READ FIRST ⚠️
 
 🚨 WHEN CALLER REQUESTS A TRANSFER:
-- IMMEDIATELY call transferToPerson() or transferToDepartment() function
+- Say "One moment, I'll transfer you now" or similar brief acknowledgment
+- IMMEDIATELY call transferToPerson() or transferToDepartment() function SILENTLY
+- DO NOT verbalize the function parameters (do not say "calling transfer to person" or read out the parameters)
+- DO NOT announce what you are doing with the function
 - DO NOT end the call
 - DO NOT say "okay" and hang up
 - DO NOT use endCall() function when transfer is requested
