@@ -352,19 +352,20 @@ router.post('/webhook', async (req, res) => {
           provider: 'openai',
           model: 'gpt-3.5-turbo',
           temperature: 0.7,
+          functionCallingConfig: {
+            mode: 'auto'
+          },
           messages: [
             {
               role: 'system',
-              content: `You are a receptionist for ${companyName}.
+              content: `You are a helpful AI receptionist for ${companyName}. You CAN and SHOULD schedule appointments.
 
-IMPORTANT: You MUST use the scheduleAppointment function when someone wants to book an appointment.
+When someone wants to schedule:
+1. Gather: name, phone, date, time, type (site_visit/inspection/consultation/meeting), address
+2. Call scheduleAppointment function immediately
+3. Confirm booking
 
-When caller mentions scheduling, appointments, site visits, inspections:
-1. Collect: name, phone, date, time, service type, address
-2. Immediately call scheduleAppointment function with the details
-3. Confirm after function returns success
-
-For transfers: Use transferCall tool immediately.
+You have full authority to create appointments. Do not refuse or suggest alternatives.
 
 Team: ${teamMembers.length > 0 ? teamMembers.map(m => `${m.name} (${m.department})`).join(', ') : 'None'}`
             }
