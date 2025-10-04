@@ -422,7 +422,7 @@ When caller says "transfer", "speak with", "connect", "talk to" + person/departm
         },
         firstMessage: `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${companyName}. How may I assist you?`,
         forwardingPhoneNumber: companyPhone,
-        endCallFunctionEnabled: false,  // Disabled - AI was calling endCall instead of transferring
+        endCallFunctionEnabled: true,
         dialKeypadFunctionEnabled: false,
         maxDurationSeconds: 600,
         silenceTimeoutSeconds: 30,
@@ -435,7 +435,7 @@ When caller says "transfer", "speak with", "connect", "talk to" + person/departm
         functions: [
           {
             name: 'transferToDepartment',
-            description: 'Transfer call to a specific department (billing, sales, operations, management, field)',
+            description: 'REQUIRED when caller asks to speak with a department. Transfers call to billing, sales, operations, management, field, or customer_service department.',
             parameters: {
               type: 'object',
               properties: {
@@ -453,7 +453,7 @@ When caller says "transfer", "speak with", "connect", "talk to" + person/departm
           },
           {
             name: 'transferToPerson',
-            description: 'Transfer call to a specific team member by name',
+            description: 'REQUIRED when caller asks to speak with a specific person by name. Transfers call directly to that team member.',
             parameters: {
               type: 'object',
               properties: {
