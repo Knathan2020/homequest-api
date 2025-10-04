@@ -81,8 +81,11 @@ router.post('/vapi/webhooks/assistant-request', async (req, res) => {
 
 When someone wants to schedule an appointment:
 1. Collect: their name, phone number, preferred date/time, type of service (site visit/inspection/consultation/meeting), and address if needed
-2. Confirm the details back to them: "Perfect! I have you scheduled for [DATE] at [TIME] for [SERVICE TYPE]. We'll send you a confirmation text shortly."
-3. Ask if there's anything else you can help with
+2. SILENTLY call the scheduleAppointment function (DO NOT say "calling the function" or mention function calls)
+3. After the function succeeds, confirm to them: "Perfect! I have you scheduled for [DATE] at [TIME] for [SERVICE TYPE]. We'll send you a confirmation text shortly."
+4. Ask if there's anything else you can help with
+
+IMPORTANT: Never announce that you're calling a function. Just call it silently in the background.
 
 For transfers: Use the transferCall tool to connect them to team members.
 
@@ -299,6 +302,53 @@ router.post('/vapi/webhooks/function-call', async (req, res) => {
     console.log('🔍 Full webhook body:', JSON.stringify(req.body, null, 2));
 
     const { message } = req.body;
+
+    // Handle end-of-call-report
+    if (message?.type === 'end-of-call-report') {
+      console.log('📞 End-of-call-report received, extracting schedule...');
+
+      const transcript = message.artifact?.transcript || message.transcript || '';
+      const call = message.call;
+      const phoneNumberId = call?.phoneNumberId;
+
+      // Look up team from phone number
+      const { data: phoneData } = await supabase
+        .from('team_phones')
+        .select('team_id')
+        .eq('vapi_phone_id', phoneNumberId)
+        .single();
+
+      if (!phoneData) {
+        console.log('⚠️ No team found for phone:', phoneNumberId);
+        return res.json({ success: false });
+      }
+
+      const teamId = phoneData.team_id;
+      console.log('✅ Found team:', teamId);
+
+      // Check if transcript mentions scheduling
+      const hasScheduling = /schedule|appointment|site visit|inspection|book/i.test(transcript);
+
+      if (hasScheduling && transcript.length > 50) {
+        console.log('🗓️ Scheduling mentioned, calling extraction API...');
+
+        const extractUrl = `${process.env.API_BASE_URL || 'https://homequest-api-1.onrender.com'}/api/appointments/extract-from-call`;
+
+        await fetch(extractUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            callId: call?.id,
+            transcript,
+            teamId,
+            phoneNumber: call?.customer?.number,
+            callDate: new Date().toISOString()
+          })
+        });
+      }
+
+      return res.json({ success: true });
+    }
 
     // Handle new VAPI tool-calls format
     if (message?.type === 'tool-calls') {
