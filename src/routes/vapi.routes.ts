@@ -350,7 +350,7 @@ router.post('/webhook', async (req, res) => {
         },
         model: {
           provider: 'openai',
-          model: 'gpt-4',
+          model: 'gpt-3.5-turbo',
           temperature: 0.7,
           messages: [
             {
