@@ -355,6 +355,35 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// Delete appointment
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from('appointments')
+      .delete()
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      data,
+      message: 'Appointment deleted successfully'
+    });
+
+  } catch (error: any) {
+    console.error('Error deleting appointment:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 /**
  * Cancel an appointment
  */
@@ -989,8 +1018,8 @@ router.post('/extract-from-call', async (req, res) => {
       }
     }
 
-    // Extract time if mentioned
-    const timeMatch = transcript.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)/i);
+    // Extract time if mentioned (handles "10:30 AM", "10 30 PM", "3:30", "10 30")
+    const timeMatch = transcript.match(/(\d{1,2})\s*:?\s*(\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?/i);
     if (timeMatch) {
       extractedTime = timeMatch[0];
     }
@@ -999,6 +1028,23 @@ router.post('/extract-from-call', async (req, res) => {
     const dateMatch = transcript.match(/(?:tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week)/i);
     if (dateMatch) {
       extractedDate = dateMatch[0];
+    }
+
+    // Extract attendee name (look for patterns like "My name is X", "This is X", or name before phone number)
+    let extractedName = '';
+    const namePatterns = [
+      /(?:my name is|this is|i'm|im)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+      /([A-Z][a-z]+\s+[A-Z][a-z]+)\.\s*(?:at|and my number)/i,
+      /([A-Z][a-z]+\s+[A-Z][a-z]+)\s*\.\s*\d{1}\s*\d{1}\s*\d{1}/i
+    ];
+
+    for (const pattern of namePatterns) {
+      const nameMatch = transcript.match(pattern);
+      if (nameMatch && nameMatch[1]) {
+        extractedName = nameMatch[1].trim();
+        console.log(`   Found name: "${extractedName}"`);
+        break;
+      }
     }
 
     if (hasSchedulingIntent) {
@@ -1031,14 +1077,23 @@ router.post('/extract-from-call', async (req, res) => {
 
       // Set time if extracted
       if (extractedTime) {
-        const timeMatch = extractedTime.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)/i);
+        const timeMatch = extractedTime.match(/(\d{1,2})\s*:?\s*(\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?/i);
         if (timeMatch) {
           let hour = parseInt(timeMatch[1]);
           const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-          const ampm = timeMatch[3].toLowerCase();
+          const ampm = timeMatch[3] ? timeMatch[3].toLowerCase().replace(/\./g, '') : '';
 
+          // If AM/PM specified, handle conversion
           if (ampm === 'pm' && hour < 12) hour += 12;
           if (ampm === 'am' && hour === 12) hour = 0;
+
+          // If no AM/PM specified, assume PM for hours 1-7, AM for hours 8-12
+          if (!ampm) {
+            if (hour >= 1 && hour <= 7) {
+              hour += 12; // Assume PM for 1-7 (e.g., "3 30" = 3:30 PM)
+            }
+            // 8-12 stay as-is (assume AM)
+          }
 
           scheduledAt.setHours(hour, minutes, 0, 0);
         }
@@ -1052,7 +1107,7 @@ router.post('/extract-from-call', async (req, res) => {
         title: 'Follow-up - Discussed in Call',
         scheduled_at: scheduledAt.toISOString(),
         duration_minutes: 60,
-        attendee_name: phoneNumber || 'Unknown Caller',
+        attendee_name: extractedName || phoneNumber || 'Unknown Caller',
         attendee_phone: phoneNumber,
         work_type: 'mixed',
         notes: `Schedule discussed in call. Transcript snippet: "${transcript.substring(0, 200)}..."`,
