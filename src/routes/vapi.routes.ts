@@ -360,14 +360,54 @@ router.post('/webhook', async (req, res) => {
               role: 'system',
               content: `You are a receptionist for ${companyName}.
 
-When someone wants to schedule an appointment:
-1. Collect: their name, phone number, preferred date/time, type of service (site visit/inspection/consultation/meeting), and address if needed
-2. Confirm the details back to them: "Perfect! I have you scheduled for [DATE] at [TIME] for [SERVICE TYPE]. We'll send you a confirmation text shortly."
-3. Ask if there's anything else you can help with
+🎯 YOUR MISSION: SCHEDULE APPOINTMENTS - Transferring is a LAST RESORT!
 
-For transfers: Use the transferCall tool to connect them to: ${teamMembers.length > 0 ? teamMembers.map(m => `${m.name} (${m.department})`).join(', ') : 'available team members'}
+🔥 ASSUMED CLOSE TECHNIQUE (Use this!):
+- ACT like the appointment is already happening
+- ❌ DON'T say: "Would you like to schedule?"
+- ✅ DO say: "Perfect! I'm pulling up the schedule now. What's your name?"
+- ✅ DO say: "Great! Let me get you booked. I'll need your name, number, and best time - go ahead!"
 
-Be friendly and professional.`
+📅 SLOT SUGGESTION POWER MOVE:
+Instead of asking "when works for you?", SUGGEST specific slots:
+- "I have tomorrow at 2pm or Thursday at 10am - which works better?"
+- "We're booking up fast - I can get you in Tuesday 9am or Wednesday 3pm. Which one?"
+- Offer 2-3 specific options, they'll pick one!
+
+⚡ URGENCY DETECTION:
+Listen for: "emergency", "ASAP", "urgent", "right now", "immediately", "leak", "broken"
+- If detected → Suggest SAME DAY or NEXT DAY slots first
+- Say: "That sounds urgent! I can get someone out today at 3pm or tomorrow morning at 8am - which is better?"
+
+💎 VALUE STACKING (Before any transfer):
+If they ask to speak to someone:
+- "I can schedule you in 30 seconds, OR transfer you and you'll wait 5-10 minutes. Which do you prefer?"
+- "I have all the info here to book you - let me get your name and we're done in under a minute!"
+
+📞 CALLBACK UPGRADE:
+If they insist on talking to someone specific:
+- "I can have [NAME] call you back at [THEIR PREFERRED TIME] - what number works best?"
+- Then schedule a callback task (not just an appointment)
+
+🎯 QUESTION PRE-LOADING:
+Get ALL info upfront in one go:
+- "Just need 3 quick things: your name, phone number, and best time this week - go!"
+- Feels efficient, not interrogative
+
+🚫 TRANSFER AS LAST RESORT ONLY:
+If they demand transfer after you've tried EVERYTHING:
+1. Slot suggestions (2-3 times)
+2. Value stack (show wait time)
+3. Callback offer
+4. Try again with urgency
+ONLY THEN transfer to: ${teamMembers.length > 0 ? teamMembers.map(m => `${m.name} (${m.department})`).join(', ') : 'team members'}
+
+🏆 SUCCESS METRICS:
+- Appointments scheduled = WIN
+- Callbacks scheduled = WIN
+- Transfers = LOSS (avoid at all costs)
+
+Be confident, assumptive, and guide them to booking!`
             }
           ],
           tools: transferDestinations.length > 0 ? [
@@ -431,6 +471,23 @@ Be friendly and professional.`
                 date: { type: 'string', description: 'Date to check in YYYY-MM-DD format' }
               },
               required: ['location', 'date']
+            }
+          },
+          {
+            name: 'scheduleCallback',
+            description: 'Schedule a callback from a specific team member. Use this when customer wants to speak to someone specific but you can call them back instead of transferring.',
+            parameters: {
+              type: 'object',
+              properties: {
+                customerName: { type: 'string', description: 'Name of the customer' },
+                customerPhone: { type: 'string', description: 'Phone number to call back' },
+                requestedPerson: { type: 'string', description: 'Name of person they want to speak with (optional)' },
+                requestedDepartment: { type: 'string', description: 'Department they need help from (optional)' },
+                callbackTime: { type: 'string', description: 'When to call them back (e.g., "tomorrow at 2pm", "in 1 hour")' },
+                reason: { type: 'string', description: 'Why they need the callback' },
+                urgency: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'], description: 'How urgent is this callback' }
+              },
+              required: ['customerName', 'customerPhone', 'callbackTime', 'reason']
             }
           }
         ]
@@ -786,6 +843,51 @@ Be friendly and professional.`
           console.error('Error processing person transfer:', error);
           return res.json({
             result: `I'm having trouble locating ${personName} right now. Let me connect you to our main team or take a message for you.`
+          });
+        }
+      }
+
+      if (functionCall.name === 'scheduleCallback') {
+        const {
+          customerName, customerPhone, requestedPerson, requestedDepartment,
+          callbackTime, reason, urgency = 'normal'
+        } = functionCall.parameters;
+
+        try {
+          // Create a callback task in the database
+          const { error} = await supabase
+            .from('callback_tasks')
+            .insert({
+              team_id: teamId || '11111111-1111-1111-1111-111111111111',
+              customer_name: customerName,
+              customer_phone: customerPhone,
+              requested_person: requestedPerson,
+              requested_department: requestedDepartment,
+              callback_time: callbackTime,
+              reason,
+              urgency,
+              source: 'ai_assistant',
+              ai_call_id: call?.id,
+              status: 'pending',
+              created_at: new Date().toISOString()
+            });
+
+          if (error) {
+            console.error('Failed to save callback task:', error);
+            return res.json({
+              result: `I had trouble saving that callback request. Let me connect you to someone right away instead.`
+            });
+          }
+
+          const personText = requestedPerson ? requestedPerson : requestedDepartment ? `someone from ${requestedDepartment}` : 'a team member';
+
+          return res.json({
+            result: `Perfect! I've scheduled ${personText} to call you back at ${callbackTime}. They'll reach you at ${customerPhone}. Is there anything else I can help you with?`
+          });
+        } catch (error) {
+          console.error('Error scheduling callback:', error);
+          return res.json({
+            result: `I'm having trouble scheduling that callback. Would you like me to connect you now instead?`
           });
         }
       }
