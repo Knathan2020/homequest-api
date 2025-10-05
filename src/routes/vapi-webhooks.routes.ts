@@ -420,7 +420,9 @@ Return this exact JSON:
             confidence: m.metadata?.wordLevelConfidence ?
               m.metadata.wordLevelConfidence.reduce((sum: number, w: any) => sum + (w.confidence || 0), 0) / m.metadata.wordLevelConfidence.length :
               null,
-            is_final: true
+            is_final: true,
+            caller_name: appt.attendeeName || null,
+            caller_phone: appt.attendeePhone || call.customer?.number || null
           }));
 
         const { error: transcriptError } = await supabase
