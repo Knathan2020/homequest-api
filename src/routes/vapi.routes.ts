@@ -734,52 +734,18 @@ Be confident, assumptive, and guide them to booking!`
                 transfer_status: 'initiated'
               });
 
-            // Use Vapi API to transfer the call
-            console.log(`📞 DEBUG: Call object:`, JSON.stringify(call, null, 2));
+            // Return transfer instruction to Vapi
             console.log(`📞 Transferring call ${call?.id} to ${phoneNumber} (${selectedMember.name} - ${department})`);
-
-            const transferUrl = `https://aws-us-west-2-production1-phone-call-websocket.vapi.ai/${call?.id}/control`;
-            const transferPayload = {
-              type: 'transfer',
-              destination: {
-                type: 'number',
-                number: phoneNumber
-              },
-              content: `Transferring you to ${selectedMember.name || department}`
-            };
-
-            console.log(`📞 Transfer URL: ${transferUrl}`);
-            console.log(`📞 Transfer payload:`, JSON.stringify(transferPayload, null, 2));
-
-            try {
-              // Call Vapi control API to transfer the call
-              const vapiResponse = await fetch(transferUrl, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(transferPayload)
-              });
-
-              const responseText = await vapiResponse.text();
-              console.log(`📞 Vapi transfer response status: ${vapiResponse.status}`);
-              console.log(`📞 Vapi transfer response body:`, responseText);
-
-              if (!vapiResponse.ok) {
-                console.error('❌ Vapi transfer failed:', responseText);
-              } else {
-                console.log('✅ Transfer initiated successfully');
-              }
-            } catch (error) {
-              console.error('❌ Error calling Vapi API:', error);
-            }
 
             return res.json({
               results: [
                 {
                   toolCallId: functionCall.toolCallId,
-                  result: `Transferring you now to ${selectedMember.name || department}...`
+                  result: `Transferring you to ${selectedMember.name} in ${department}. Please hold.`,
+                  forwardCall: {
+                    phoneNumber: phoneNumber,
+                    message: `Connecting to ${selectedMember.name} - ${reason}`
+                  }
                 }
               ]
             });
@@ -828,11 +794,16 @@ Be confident, assumptive, and guide them to booking!`
 
             // Return proper Vapi transfer response
             return res.json({
-              result: `Great! I'm connecting you directly to ${teamMember.name} in our ${teamMember.department} department. Please hold.`,
-              forwardCall: {
-                phoneNumber: teamMember.phone_number,
-                message: `Transferring call from AI: ${reason}. Caller: ${callerName || 'Unknown'}`
-              }
+              results: [
+                {
+                  toolCallId: functionCall.toolCallId,
+                  result: `Great! I'm connecting you directly to ${teamMember.name} in our ${teamMember.department} department. Please hold.`,
+                  forwardCall: {
+                    phoneNumber: teamMember.phone_number,
+                    message: `Connecting to ${teamMember.name} - ${reason}`
+                  }
+                }
+              ]
             });
           } else {
             return res.json({

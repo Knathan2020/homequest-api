@@ -5,9 +5,9 @@
 
 import axios from 'axios';
 
-const VAPI_API_KEY = process.env.VAPI_API_KEY || '';
+const VAPI_API_KEY = process.env.VAPI_API_KEY || process.env.VAPI_PRIVATE_KEY || '';
 const VAPI_PHONE_ID = '051ecb0e-0db4-4bbb-96d7-4b47b8ec2f94'; // Your existing phone ID from the dashboard
-const WEBHOOK_URL = 'https://cuddly-giggle-69p59v4xv5gw2rvw7-4000.app.github.dev/api/vapi/webhook';
+const WEBHOOK_URL = 'https://homequest-api-1.onrender.com/api/vapi/webhook';
 
 async function configureWebhook() {
   try {
@@ -17,6 +17,7 @@ async function configureWebhook() {
     const response = await axios.patch(
       `https://api.vapi.ai/phone-number/${VAPI_PHONE_ID}`,
       {
+        assistantId: null,  // CRITICAL: Remove static assistant
         serverUrl: WEBHOOK_URL,
         serverUrlSecret: null
       },
