@@ -20,26 +20,47 @@ const supabase = createClient(
  */
 router.post('/vapi/webhooks/assistant-request', async (req, res) => {
   try {
+    console.log('🔍 RAW WEBHOOK BODY:', JSON.stringify(req.body, null, 2));
+
     const { call, phoneNumber } = req.body;
 
     // Vapi sends phoneNumber at root level, not in call
-    const incomingNumber = phoneNumber?.number || call?.phoneNumber?.number;
+    // Also check call.phoneNumberId which Vapi uses for imported Twilio numbers
+    const incomingNumber = phoneNumber?.number || call?.phoneNumber?.number || call?.phoneNumberId;
 
     console.log('🤖 Assistant request received:', {
       callId: call?.id,
       phoneNumber: incomingNumber,
+      phoneNumberId: call?.phoneNumberId,
       customer: call?.customer
     });
 
-    // Look up team by phone number
-    const { data: phoneData } = await supabase
-      .from('team_phones')
-      .select('team_id, team_name')
-      .eq('twilio_number', incomingNumber)
-      .single();
+    // Look up team by phone number OR vapi_phone_id
+    // Try phone number first, then fall back to vapi_phone_id
+    let phoneData = null;
+
+    if (incomingNumber && incomingNumber.startsWith('+')) {
+      // It's a phone number
+      const { data } = await supabase
+        .from('team_phones')
+        .select('team_id, team_name')
+        .eq('twilio_number', incomingNumber)
+        .single();
+      phoneData = data;
+    }
+
+    // If not found and we have phoneNumberId (UUID), try that
+    if (!phoneData && call?.phoneNumberId) {
+      const { data } = await supabase
+        .from('team_phones')
+        .select('team_id, team_name')
+        .eq('vapi_phone_id', call.phoneNumberId)
+        .single();
+      phoneData = data;
+    }
 
     if (!phoneData) {
-      console.error('❌ No team found for phone number:', incomingNumber);
+      console.error('❌ No team found for:', { incomingNumber, phoneNumberId: call?.phoneNumberId });
       return res.status(404).json({ error: 'Team not found' });
     }
 
