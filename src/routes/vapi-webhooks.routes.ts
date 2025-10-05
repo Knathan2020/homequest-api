@@ -128,10 +128,11 @@ router.post('/vapi/webhooks/assistant-request', async (req, res) => {
             content: `You are a receptionist for ${companyName}.
 
 When someone wants to schedule an appointment:
-1. Collect: their name, phone number, preferred date/time, type of service (site visit/inspection/consultation/meeting), and address if needed
-2. SILENTLY call the scheduleAppointment function (DO NOT say "calling the function" or mention function calls)
-3. After the function succeeds, confirm to them: "Perfect! I have you scheduled for [DATE] at [TIME] for [SERVICE TYPE]. We'll send you a confirmation text shortly."
-4. Ask if there's anything else you can help with
+1. Ask for: their name, phone number, preferred date/time, type of service (site visit/inspection/consultation/meeting), and address if needed
+2. LET THEM FINISH speaking all their information - DO NOT interrupt them mid-sentence
+3. Once you have all required info, SILENTLY call the scheduleAppointment function (DO NOT say "calling the function" or mention function calls)
+4. After the function succeeds, confirm to them: "Perfect! I have you scheduled for [DATE] at [TIME] for [SERVICE TYPE]. We'll send you a confirmation text shortly."
+5. Ask if there's anything else you can help with
 
 When someone asks to be transferred:
 1. Say "One moment, let me transfer you"
@@ -139,6 +140,7 @@ When someone asks to be transferred:
 3. That's it - just transfer
 
 CRITICAL RULES:
+- ALWAYS let the caller finish speaking before you respond - DO NOT cut them off
 - You MUST use the transferCall tool when they ask to transfer
 - NEVER say "I can't transfer" or "I'm unable to transfer"
 - DO NOT ask who they want - just pick the first available destination and transfer
@@ -149,12 +151,51 @@ CRITICAL RULES:
 Be friendly and professional.`
           }
         ],
-        tools: transferDestinations.length > 0 ? [
-          {
+        tools: [
+          ...(transferDestinations.length > 0 ? [{
             type: 'transferCall',
             destinations: transferDestinations
+          }] : []),
+          {
+            type: 'function',
+            async: false,
+            function: {
+              name: 'scheduleAppointment',
+              description: 'Schedules an appointment for a customer',
+              parameters: {
+                type: 'object',
+                properties: {
+                  customerName: {
+                    type: 'string',
+                    description: 'Full name of the customer'
+                  },
+                  phoneNumber: {
+                    type: 'string',
+                    description: 'Customer phone number'
+                  },
+                  appointmentDate: {
+                    type: 'string',
+                    description: 'Date of appointment in YYYY-MM-DD format'
+                  },
+                  appointmentTime: {
+                    type: 'string',
+                    description: 'Time of appointment in HH:MM format (24-hour)'
+                  },
+                  serviceType: {
+                    type: 'string',
+                    description: 'Type of service: site visit, inspection, consultation, or meeting'
+                  },
+                  address: {
+                    type: 'string',
+                    description: 'Service address if applicable'
+                  }
+                },
+                required: ['customerName', 'phoneNumber', 'appointmentDate', 'appointmentTime', 'serviceType']
+              }
+            },
+            serverUrl: `${process.env.API_BASE_URL}/api/vapi-webhooks/vapi/webhooks/schedule-appointment`
           }
-        ] : undefined
+        ]
       },
       voice: {
         provider: '11labs',
@@ -189,6 +230,87 @@ Be friendly and professional.`
 /**
  * Vapi webhook endpoint for function calls
  */
+/**
+ * Schedule appointment webhook - called by Vapi when AI uses scheduleAppointment function
+ */
+router.post('/vapi/webhooks/schedule-appointment', async (req, res) => {
+  try {
+    console.log('📅 Schedule appointment webhook called:', JSON.stringify(req.body, null, 2));
+
+    const { message } = req.body;
+
+    // Handle tool-calls format
+    if (message?.type === 'tool-calls') {
+      const { call, toolCallList } = message;
+      const results = [];
+
+      for (const toolCall of toolCallList || []) {
+        const { id, name: functionName, parameters } = toolCall;
+
+        console.log('📞 Tool call received:', { functionName, parameters, toolCallId: id });
+
+        if (functionName === 'scheduleAppointment') {
+          // Look up team ID from phone number
+          const phoneNumberId = call?.phoneNumberId;
+          const { data: phoneData } = await supabase
+            .from('team_phones')
+            .select('team_id, team_name')
+            .eq('vapi_phone_id', phoneNumberId)
+            .single();
+
+          if (!phoneData) {
+            console.error('❌ No team found for phone:', phoneNumberId);
+            results.push({
+              name: functionName,
+              toolCallId: id,
+              result: JSON.stringify({ success: false, error: 'Team not found' })
+            });
+            continue;
+          }
+
+          // Add team_id to call object for handleScheduleAppointment
+          const callWithTeam = { ...call, assistantId: phoneData.team_id };
+
+          // Map parameters to match expected format
+          const appointmentParams = {
+            customerName: parameters.customerName,
+            phoneNumber: parameters.phoneNumber,
+            appointmentDate: parameters.appointmentDate,
+            appointmentTime: parameters.appointmentTime,
+            serviceType: parameters.serviceType,
+            address: parameters.address,
+            attendeeName: parameters.customerName,
+            attendeePhone: parameters.phoneNumber,
+            preferredDate: parameters.appointmentDate,
+            preferredTime: parameters.appointmentTime,
+            locationAddress: parameters.address,
+            title: `${parameters.serviceType} - ${parameters.customerName}`,
+            workType: parameters.serviceType === 'site_visit' ? 'outdoor' : 'indoor'
+          };
+
+          const result = await handleScheduleAppointment(callWithTeam, appointmentParams);
+
+          results.push({
+            name: functionName,
+            toolCallId: id,
+            result: JSON.stringify(result)
+          });
+        }
+      }
+
+      return res.json({ results });
+    }
+
+    // Fallback response
+    console.log('⚠️ No tool-calls in webhook body');
+    res.json({ result: 'No scheduling data received' });
+
+  } catch (error: any) {
+    console.error('❌ Schedule appointment webhook error:', error);
+    res.json({ result: 'Failed to schedule appointment' });
+  }
+});
+
 /**
  * End of call webhook - auto-create appointments from transcript
  */
