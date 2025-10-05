@@ -197,7 +197,11 @@ router.post('/vapi/webhooks/end-of-call', async (req, res) => {
     console.log('🔥 RAW WEBHOOK BODY:', JSON.stringify(req.body, null, 2));
     console.log('🔥 WEBHOOK KEYS:', Object.keys(req.body));
 
-    const { call, messages, transcript } = req.body;
+    // Handle both formats: direct and wrapped in message
+    const { message } = req.body;
+    const call = message?.call || req.body.call;
+    const messages = message?.artifact?.messages || req.body.messages;
+    const transcript = message?.artifact?.transcript || req.body.transcript;
 
     console.log('📞 End of call received:', {
       callId: call?.id,
@@ -212,7 +216,8 @@ router.post('/vapi/webhooks/end-of-call', async (req, res) => {
     let fullTranscript = '';
     if (messages && Array.isArray(messages)) {
       fullTranscript = messages
-        .map((m: any) => `${m.role === 'bot' ? 'Assistant' : 'Caller'}: ${m.message}`)
+        .filter((m: any) => m.role === 'user' || m.role === 'bot' || m.role === 'assistant')
+        .map((m: any) => `${m.role === 'bot' || m.role === 'assistant' ? 'Assistant' : 'Caller'}: ${m.message || m.content}`)
         .join('\n');
     } else if (transcript) {
       fullTranscript = transcript;
@@ -236,17 +241,17 @@ router.post('/vapi/webhooks/end-of-call', async (req, res) => {
     console.log('🗓️ Appointment mentioned - parsing with AI...');
 
     // Look up team ID from phone number
-    const phoneNumber = call?.phoneNumber?.number || call?.phoneNumberId;
-    console.log('📱 Looking up team for phone:', phoneNumber);
+    const phoneNumberId = message?.phoneNumber?.id || call?.phoneNumberId;
+    console.log('📱 Looking up team for phone ID:', phoneNumberId);
 
     const { data: phoneData } = await supabase
       .from('team_phones')
       .select('team_id, team_name')
-      .or(`twilio_number.eq.${phoneNumber},vapi_phone_id.eq.${phoneNumber}`)
+      .eq('vapi_phone_id', phoneNumberId)
       .single();
 
     if (!phoneData) {
-      console.error('❌ No team found for phone:', phoneNumber);
+      console.error('❌ No team found for phone:', phoneNumberId);
       return res.json({ success: false, error: 'Team not found' });
     }
 
