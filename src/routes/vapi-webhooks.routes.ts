@@ -302,21 +302,31 @@ router.post('/vapi/webhooks/end-of-call', async (req, res) => {
         messages: [
           {
             role: 'system',
-            content: `Extract appointment info from transcript. Today is ${new Date().toISOString().split('T')[0]}.
-Return JSON:
+            content: `Extract appointment details from this phone call transcript.
+
+Today: ${new Date().toISOString().split('T')[0]}
+Tomorrow: ${new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+
+CRITICAL RULES:
+- Only extract info that was CLEARLY stated in the call
+- Do NOT use placeholder text like "sorry" for names
+- If caller doesn't give their name, leave attendeeName empty
+- Extract the COMPLETE address if mentioned
+- workType: "outdoor" for site visits/exterior, "indoor" for interior/office meetings
+
+Return this exact JSON:
 {
-  "hasAppointment": true/false,
-  "attendeeName": "string",
-  "attendeePhone": "string or null",
-  "serviceType": "site_visit"|"inspection"|"consultation"|"meeting",
-  "workType": "indoor"|"outdoor"|"mixed",
+  "hasAppointment": true,
+  "attendeeName": "actual caller name from transcript",
+  "attendeePhone": "phone number stated or null",
+  "serviceType": "site_visit" | "inspection" | "consultation" | "meeting",
+  "workType": "outdoor" | "indoor" | "mixed",
   "preferredDate": "YYYY-MM-DD",
-  "preferredTime": "HH:MM" (24hr),
-  "locationAddress": "string or null",
-  "title": "brief title",
-  "notes": "any additional info"
-}
-Convert relative dates (Monday, tomorrow, next week) to actual dates.`
+  "preferredTime": "HH:MM (24-hour format)",
+  "locationAddress": "full address with street, city, state, zip",
+  "title": "Brief descriptive title",
+  "callSummary": "2-3 sentences summarizing the call and what was requested"
+}`
           },
           {
             role: 'user',
@@ -343,6 +353,18 @@ Convert relative dates (Monday, tomorrow, next week) to actual dates.`
       return res.json({ success: true, message: 'Incomplete data' });
     }
 
+    // Check for duplicate - if appointment already exists for this call ID, skip
+    const { data: existingAppt } = await supabase
+      .from('appointments')
+      .select('id')
+      .eq('ai_call_id', call.id)
+      .single();
+
+    if (existingAppt) {
+      console.log('⚠️ Appointment already exists for this call, skipping duplicate');
+      return res.json({ success: true, message: 'Appointment already created', appointmentId: existingAppt.id });
+    }
+
     // Create appointment
     const scheduledAt = `${appt.preferredDate}T${appt.preferredTime}:00Z`;
 
@@ -359,7 +381,7 @@ Convert relative dates (Monday, tomorrow, next week) to actual dates.`
         attendee_phone: appt.attendeePhone || call.customer?.number,
         location_type: appt.workType === 'outdoor' ? 'site' : 'in_person',
         location_details: appt.locationAddress,
-        notes: appt.notes,
+        notes: appt.callSummary || appt.notes || `Call with ${appt.attendeeName} regarding ${appt.serviceType}`,
         source: 'phone',
         created_by_ai: true,
         ai_call_id: call.id
