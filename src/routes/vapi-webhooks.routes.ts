@@ -129,22 +129,28 @@ router.post('/vapi/webhooks/assistant-request', async (req, res) => {
 
 When someone wants to schedule an appointment:
 1. Collect: their name, phone number, preferred date/time, type of service (site visit/inspection/consultation/meeting), and address if needed
-2. SILENTLY call the scheduleAppointment function (DO NOT say "calling the function" or mention function calls)
-3. After the function succeeds, confirm to them: "Perfect! I have you scheduled for [DATE] at [TIME] for [SERVICE TYPE]. We'll send you a confirmation text shortly."
+2. Confirm the details back to them
+3. Tell them: "Perfect! I have you scheduled for [DATE] at [TIME] for [SERVICE TYPE]. We'll send you a confirmation text shortly."
 4. Ask if there's anything else you can help with
 
-When someone asks to be transferred:
-1. Say "One moment, let me transfer you"
-2. IMMEDIATELY use the transferCall tool
-3. That's it - just transfer
+When someone asks to be transferred or speak to someone:
+1. ONLY transfer if they explicitly ask for it (e.g., "transfer me", "can I speak to", "connect me to")
+2. Say "One moment, let me transfer you"
+3. IMMEDIATELY use the transferCall tool
+4. That's it - just transfer
 
-CRITICAL RULES:
-- You MUST use the transferCall tool when they ask to transfer
-- NEVER say "I can't transfer" or "I'm unable to transfer"
-- DO NOT ask who they want - just pick the first available destination and transfer
-- If they mention a name/department, transfer there
-- Otherwise transfer to the first person in the list
-- STOP TALKING and CALL THE TOOL immediately
+CRITICAL RULES FOR TRANSFERS:
+- ONLY use transferCall if they EXPLICITLY ask to speak to someone or be transferred
+- DO NOT transfer just because they mention a name
+- DO NOT transfer unless they clearly want to talk to someone
+- If they mention a name/department when asking for transfer, use that destination
+- Otherwise pick the first available destination
+- NEVER say "I can't transfer" - just transfer silently
+
+GENERAL RULES:
+- Answer questions directly without offering transfers
+- Be helpful and answer their questions
+- ONLY transfer when they explicitly request it
 
 Be friendly and professional.`
           }
@@ -223,6 +229,7 @@ router.post('/vapi/webhooks/end-of-call', async (req, res) => {
       fullTranscript = transcript;
     }
 
+    console.log('📝 Full transcript length:', fullTranscript.length);
     console.log('📝 Full transcript:', fullTranscript);
 
     // Check if mentions scheduling
@@ -232,6 +239,15 @@ router.post('/vapi/webhooks/end-of-call', async (req, res) => {
                              lower.includes('site visit') ||
                              lower.includes('inspection') ||
                              lower.includes('book');
+
+    console.log('🔍 Checking for appointment keywords:', {
+      hasSchedule: lower.includes('schedule'),
+      hasAppointment: lower.includes('appointment'),
+      hasSiteVisit: lower.includes('site visit'),
+      hasInspection: lower.includes('inspection'),
+      hasBook: lower.includes('book'),
+      wantsAppointment
+    });
 
     if (!wantsAppointment) {
       console.log('ℹ️ No appointment mentioned in call');
