@@ -348,6 +348,11 @@ router.post('/webhook', async (req, res) => {
       // Return personalized assistant immediately (<10ms)
       const fastAssistant = {
         name: `${company.name} Receptionist`,
+        transcriber: {
+          provider: 'deepgram',
+          model: 'nova-2',
+          language: 'en'
+        },
         voice: {
           provider: '11labs',
           voiceId: company.voiceId,
@@ -412,6 +417,7 @@ router.post('/webhook', async (req, res) => {
         return res.status(500).json({
           assistant: {
             name: 'Emergency Assistant',
+            transcriber: { provider: 'deepgram', model: 'nova-2', language: 'en' },
             voice: { provider: '11labs', voiceId: 'OYTbf65OHHFELVut7v2H' },
             model: { provider: 'openai', model: 'gpt-4', temperature: 0.7, messages: [{ role: 'system', content: 'You are a helpful assistant.' }] },
             firstMessage: 'Hello, how can I help you?'
