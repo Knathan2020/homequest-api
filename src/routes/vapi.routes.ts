@@ -366,47 +366,53 @@ router.post('/webhook', async (req, res) => {
             role: 'system',
             content: `You are a professional receptionist for ${company.name}. Help customers schedule appointments or transfer calls to team members: ${company.members.map(m => `${m.name} (${m.department})`).join(', ') || 'our team'}.`
           }],
-          tools: transferDestinations.length > 0 ? [{
-            type: 'transferCall',
-            destinations: transferDestinations
-          }] : []
+          tools: [
+            ...(transferDestinations.length > 0 ? [{
+              type: 'transferCall',
+              destinations: transferDestinations
+            }] : []),
+            {
+              type: 'function',
+              function: {
+                name: 'scheduleAppointment',
+                description: 'Schedule an appointment',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string' },
+                    attendeeName: { type: 'string' },
+                    attendeePhone: { type: 'string' },
+                    serviceType: { type: 'string', enum: ['inspection', 'consultation', 'site_visit', 'meeting'] },
+                    workType: { type: 'string', enum: ['indoor', 'outdoor', 'mixed'] },
+                    preferredDate: { type: 'string' },
+                    preferredTime: { type: 'string' }
+                  },
+                  required: ['title', 'attendeeName', 'attendeePhone', 'serviceType', 'workType', 'preferredDate', 'preferredTime']
+                }
+              }
+            },
+            {
+              type: 'function',
+              function: {
+                name: 'transferToPerson',
+                description: 'Transfer to a team member',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    personName: { type: 'string' },
+                    reason: { type: 'string' }
+                  },
+                  required: ['personName']
+                }
+              }
+            }
+          ]
         },
         firstMessage: `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${company.name}. How may I assist you?`,
         // serverUrl inherited from phone configuration - DO NOT include in transient assistant
         endCallFunctionEnabled: false,
         maxDurationSeconds: 600,
-        silenceTimeoutSeconds: 30,
-        functions: [
-          {
-            name: 'scheduleAppointment',
-            description: 'Schedule an appointment',
-            parameters: {
-              type: 'object',
-              properties: {
-                title: { type: 'string' },
-                attendeeName: { type: 'string' },
-                attendeePhone: { type: 'string' },
-                serviceType: { type: 'string', enum: ['inspection', 'consultation', 'site_visit', 'meeting'] },
-                workType: { type: 'string', enum: ['indoor', 'outdoor', 'mixed'] },
-                preferredDate: { type: 'string' },
-                preferredTime: { type: 'string' }
-              },
-              required: ['title', 'attendeeName', 'attendeePhone', 'serviceType', 'workType', 'preferredDate', 'preferredTime']
-            }
-          },
-          {
-            name: 'transferToPerson',
-            description: 'Transfer to a team member',
-            parameters: {
-              type: 'object',
-              properties: {
-                personName: { type: 'string' },
-                reason: { type: 'string' }
-              },
-              required: ['personName']
-            }
-          }
-        ]
+        silenceTimeoutSeconds: 30
       };
 
       console.log('⚡ Returning FAST assistant (no DB lookups)');
