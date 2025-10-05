@@ -4,11 +4,7 @@
  */
 
 import axios from 'axios';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+import { supabaseAdmin as supabase } from '../config/supabase';
 
 export interface OutlookAccount {
   id: string;
