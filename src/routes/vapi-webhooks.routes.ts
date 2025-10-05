@@ -220,9 +220,19 @@ router.post('/vapi/webhooks/end-of-call', async (req, res) => {
 
     // Build full conversation
     let fullTranscript = '';
+
+    console.log('🔍 Messages debug:', {
+      hasMessages: !!messages,
+      isArray: Array.isArray(messages),
+      length: messages?.length,
+      firstMessage: messages?.[0]
+    });
+
     if (messages && Array.isArray(messages)) {
-      fullTranscript = messages
-        .filter((m: any) => m.role === 'user' || m.role === 'bot' || m.role === 'assistant')
+      const filteredMessages = messages.filter((m: any) => m.role === 'user' || m.role === 'bot' || m.role === 'assistant');
+      console.log('🔍 Filtered messages:', filteredMessages.length, 'of', messages.length);
+
+      fullTranscript = filteredMessages
         .map((m: any) => `${m.role === 'bot' || m.role === 'assistant' ? 'Assistant' : 'Caller'}: ${m.message || m.content}`)
         .join('\n');
     } else if (transcript) {
