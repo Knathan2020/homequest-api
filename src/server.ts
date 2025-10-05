@@ -45,6 +45,7 @@ import nylasEmailRoutes from './routes/nylas-email.routes';
 import emailOAuthRoutes from './routes/email-oauth.routes';
 import autonomousCampaignsRoutes from './routes/autonomous-campaigns';
 import autonomousEmailRoutes from './routes/autonomous-email.routes';
+import microsoftDirectRoutes from './routes/microsoft-direct.routes';
 
 // Team & Project Management
 import teamRoutes from './routes/team.routes';
@@ -745,6 +746,7 @@ app.use('/api/nylas', nylasEmailRoutes);
 app.use('/api/email-oauth', emailOAuthRoutes);
 app.use('/api/autonomous-campaigns', autonomousCampaignsRoutes);
 app.use('/api/autonomous-email', autonomousEmailRoutes);
+app.use('/api/microsoft', microsoftDirectRoutes);
 
 // Team & Project Management
 app.use('/api/teams', teamRoutes);
