@@ -22,17 +22,23 @@ router.post('/vapi/webhooks/assistant-request', async (req, res) => {
   try {
     console.log('🔍 RAW WEBHOOK BODY:', JSON.stringify(req.body, null, 2));
 
-    const { call, phoneNumber } = req.body;
+    // Vapi can send data wrapped in 'message' object or at root level
+    const { call, phoneNumber, message } = req.body;
+
+    // Extract call and phoneNumber from message if wrapped
+    const actualCall = message?.call || call;
+    const actualPhoneNumber = message?.phoneNumber || phoneNumber;
 
     // Vapi sends phoneNumber at root level, not in call
     // Also check call.phoneNumberId which Vapi uses for imported Twilio numbers
-    const incomingNumber = phoneNumber?.number || call?.phoneNumber?.number || call?.phoneNumberId;
+    const incomingNumber = actualPhoneNumber?.number || actualCall?.phoneNumber?.number || actualCall?.phoneNumberId;
 
     console.log('🤖 Assistant request received:', {
-      callId: call?.id,
+      callId: actualCall?.id,
       phoneNumber: incomingNumber,
-      phoneNumberId: call?.phoneNumberId,
-      customer: call?.customer
+      phoneNumberId: actualCall?.phoneNumberId,
+      customer: actualCall?.customer,
+      hasMessage: !!message
     });
 
     // Look up team by phone number OR vapi_phone_id
@@ -50,17 +56,31 @@ router.post('/vapi/webhooks/assistant-request', async (req, res) => {
     }
 
     // If not found and we have phoneNumberId (UUID), try that
-    if (!phoneData && call?.phoneNumberId) {
+    if (!phoneData && actualCall?.phoneNumberId) {
       const { data } = await supabase
         .from('team_phones')
         .select('team_id, team_name')
-        .eq('vapi_phone_id', call.phoneNumberId)
+        .eq('vapi_phone_id', actualCall.phoneNumberId)
+        .single();
+      phoneData = data;
+    }
+
+    // Last resort: try the phoneNumber.id if it's a UUID
+    if (!phoneData && actualPhoneNumber?.id) {
+      const { data } = await supabase
+        .from('team_phones')
+        .select('team_id, team_name')
+        .eq('vapi_phone_id', actualPhoneNumber.id)
         .single();
       phoneData = data;
     }
 
     if (!phoneData) {
-      console.error('❌ No team found for:', { incomingNumber, phoneNumberId: call?.phoneNumberId });
+      console.error('❌ No team found for:', {
+        incomingNumber,
+        phoneNumberId: actualCall?.phoneNumberId,
+        phoneNumberObjId: actualPhoneNumber?.id
+      });
       return res.status(404).json({ error: 'Team not found' });
     }
 
