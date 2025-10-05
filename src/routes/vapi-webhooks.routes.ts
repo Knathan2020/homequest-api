@@ -95,7 +95,7 @@ router.post('/vapi/webhooks/assistant-request', async (req, res) => {
       .from('team_members')
       .select(`
         department,
-        profiles!inner(full_name, phone_number)
+        profiles!team_members_user_id_fkey!inner(full_name, phone_number)
       `)
       .eq('team_id', teamId)
       .not('profiles.phone_number', 'is', null);
