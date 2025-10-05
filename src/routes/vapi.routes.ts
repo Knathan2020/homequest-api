@@ -16,6 +16,83 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || ''
 );
 
+// ========== IN-MEMORY COMPANY CACHE FOR FAST WEBHOOK RESPONSE ==========
+interface CompanyCacheEntry {
+  name: string;
+  voiceId: string;
+  teamId: string;
+  members: Array<{
+    name: string;
+    role: string;
+    department: string;
+    phoneNumber: string;
+    email: string;
+  }>;
+  departments: string[];
+}
+
+const companyCache: Record<string, CompanyCacheEntry> = {};
+
+async function loadCompanyCache() {
+  console.log('🔄 Loading company cache...');
+  try {
+    const { data: phones } = await supabase
+      .from('team_phones')
+      .select('vapi_phone_id, team_id');
+
+    if (!phones) return;
+
+    for (const phone of phones) {
+      const { vapi_phone_id, team_id } = phone;
+
+      const { data: team } = await supabase
+        .from('teams')
+        .select('company_name, name')
+        .eq('id', team_id)
+        .single();
+
+      const { data: members } = await supabase
+        .from('team_members')
+        .select(`*, profiles:user_id (full_name, phone_number, email)`)
+        .eq('team_id', team_id);
+
+      const { data: config } = await supabase
+        .from('phone_configs')
+        .select('voice_id')
+        .eq('vapi_phone_id', vapi_phone_id)
+        .single();
+
+      const teamMembers = (members || []).map((m: any) => ({
+        name: m.profiles?.full_name || m.permissions?.fullName || 'Unknown',
+        role: m.permissions?.jobTitle || m.role || '',
+        department: m.department || '',
+        phoneNumber: m.profiles?.phone_number || m.permissions?.phoneNumber || '',
+        email: m.profiles?.email || m.permissions?.email || ''
+      }));
+
+      const departments = [...new Set(teamMembers.map(m => m.department).filter(Boolean))];
+
+      companyCache[vapi_phone_id] = {
+        name: team?.company_name || team?.name || 'our company',
+        voiceId: config?.voice_id || 'OYTbf65OHHFELVut7v2H',
+        teamId: team_id,
+        members: teamMembers,
+        departments
+      };
+
+      console.log(`✅ Cached: ${vapi_phone_id} → ${companyCache[vapi_phone_id].name} (${teamMembers.length} members)`);
+    }
+
+    console.log(`✅ Cache loaded: ${Object.keys(companyCache).length} phones`);
+  } catch (error) {
+    console.error('❌ Cache error:', error);
+  }
+}
+
+loadCompanyCache();
+setInterval(loadCompanyCache, 5 * 60 * 1000);
+// ========== END CACHE ==========
+
 // Initiate a Vapi AI call
 router.post('/call', async (req, res) => {
   try {
@@ -236,32 +313,124 @@ router.post('/webhook', async (req, res) => {
     
     // Handle inbound call webhook - SIMPLIFIED FOR TESTING
     if (type === 'assistant-request') {
-      console.log('📥 Inbound call detected! Returning assistant config...');
+      console.log('📥 Inbound call detected! Returning FAST assistant config...');
 
       try {
-      
-      // Determine which assistant to use based on the phone number called
-      // You can look up the team/company based on the phoneNumberId
+
+      // FAST MODE: Use in-memory cache for instant company lookup (<1ms)
       const phoneNumberId = call?.phoneNumberId;
-      
-      // Look up company/team configuration based on phone number
-      let companyName = ''; // Will be fetched from database
-      let companyPhone = process.env.DEFAULT_TRANSFER_NUMBER;
-      let receptionistVoiceId = 'OYTbf65OHHFELVut7v2H'; // Hope voice as default
+
+      console.log(`⚡ FAST RESPONSE for phone: ${phoneNumberId}`);
+
+      // Get company from cache (instant lookup)
+      const company = companyCache[phoneNumberId] || {
+        name: 'our company',
+        voiceId: 'OYTbf65OHHFELVut7v2H',
+        teamId: '',
+        members: [],
+        departments: []
+      };
+
+      console.log(`✅ Using cached company: ${company.name} (${company.members.length} members)`);
+
+      // Build transfer destinations from cached members
+      const transferDestinations = company.members
+        .filter(m => m.phoneNumber && m.phoneNumber.trim())
+        .map(m => ({
+          type: 'number',
+          number: m.phoneNumber,
+          description: `${m.name} - ${m.department}`
+        }));
+
+      // Return personalized assistant immediately (<10ms)
+      const fastAssistant = {
+        name: `${company.name} Receptionist`,
+        voice: {
+          provider: '11labs',
+          voiceId: company.voiceId,
+          model: 'eleven_turbo_v2'
+        },
+        model: {
+          provider: 'openai',
+          model: 'gpt-4',
+          temperature: 0.7,
+          messages: [{
+            role: 'system',
+            content: `You are a professional receptionist for ${company.name}. Help customers schedule appointments or transfer calls to team members: ${company.members.map(m => `${m.name} (${m.department})`).join(', ') || 'our team'}.`
+          }],
+          tools: transferDestinations.length > 0 ? [{
+            type: 'transferCall',
+            destinations: transferDestinations
+          }] : []
+        },
+        firstMessage: `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${company.name}. How may I assist you?`,
+        serverUrl: `${process.env.API_BASE_URL || 'https://homequest-api-1.onrender.com'}/api/vapi/webhook`,
+        endCallFunctionEnabled: false,
+        maxDurationSeconds: 600,
+        silenceTimeoutSeconds: 30,
+        functions: [
+          {
+            name: 'scheduleAppointment',
+            description: 'Schedule an appointment',
+            parameters: {
+              type: 'object',
+              properties: {
+                title: { type: 'string' },
+                attendeeName: { type: 'string' },
+                attendeePhone: { type: 'string' },
+                serviceType: { type: 'string', enum: ['inspection', 'consultation', 'site_visit', 'meeting'] },
+                workType: { type: 'string', enum: ['indoor', 'outdoor', 'mixed'] },
+                preferredDate: { type: 'string' },
+                preferredTime: { type: 'string' }
+              },
+              required: ['title', 'attendeeName', 'attendeePhone', 'serviceType', 'workType', 'preferredDate', 'preferredTime']
+            }
+          },
+          {
+            name: 'transferToPerson',
+            description: 'Transfer to a team member',
+            parameters: {
+              type: 'object',
+              properties: {
+                personName: { type: 'string' },
+                reason: { type: 'string' }
+              },
+              required: ['personName']
+            }
+          }
+        ]
+      };
+
+      console.log('⚡ Returning FAST assistant (no DB lookups)');
+      return res.json({ assistant: fastAssistant });
+
+      } catch (error) {
+        console.error('❌ Error creating fast assistant:', error);
+        return res.status(500).json({
+          assistant: {
+            name: 'Emergency Assistant',
+            voice: { provider: '11labs', voiceId: 'OYTbf65OHHFELVut7v2H' },
+            model: { provider: 'openai', model: 'gpt-4', temperature: 0.7, messages: [{ role: 'system', content: 'You are a helpful assistant.' }] },
+            firstMessage: 'Hello, how can I help you?'
+          }
+        });
+      }
+    }
+
+    // Handle function calls from the assistant
+    if (type === 'function-call') {
+      const { functionCall, call } = message;  // Get from message, not req.body
+      console.log('🔧 Function call received:', functionCall.name, functionCall.parameters);
+
+      // Get teamId from the phone number if available
       let teamId = null;
-      let teamMembers = [];
-      let departments = [];
-      
-      // Try to fetch company info based on phone number
-      if (phoneNumberId) {
-        try {
-          // First check if there's a team associated with this phone number
-          const { data: teamPhone } = await supabase
+      if (call?.phoneNumberId) {
+        const { data: teamPhone } = await supabase
             .from('team_phones')
             .select('team_id')
             .eq('vapi_phone_id', phoneNumberId)
             .single();
-          
+
           if (teamPhone?.team_id) {
             teamId = teamPhone.team_id;
             
