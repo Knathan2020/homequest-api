@@ -36,7 +36,7 @@ export interface GraphEmail {
 class MicrosoftGraphService {
   private readonly clientId = process.env.OUTLOOK_CLIENT_ID;
   private readonly clientSecret = process.env.OUTLOOK_CLIENT_SECRET;
-  private readonly redirectUri = `${process.env.APP_URL}/api/nylas/callback`;
+  private readonly redirectUri = `${process.env.APP_URL}/api/microsoft/callback`;
   private readonly scopes = [
     'https://graph.microsoft.com/Mail.Read',
     'https://graph.microsoft.com/Mail.Send',
