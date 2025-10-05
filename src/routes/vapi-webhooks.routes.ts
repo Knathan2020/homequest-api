@@ -170,7 +170,7 @@ Be friendly and professional.`
         similarityBoost: 0.75
       },
       endCallFunctionEnabled: true,
-      dialKeypadFunctionEnabled: true,
+      dialKeypadFunctionEnabled: false,
       maxDurationSeconds: 600,
       silenceTimeoutSeconds: 30,
       responseDelaySeconds: 0.5,
