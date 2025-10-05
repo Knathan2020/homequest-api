@@ -367,7 +367,7 @@ router.post('/webhook', async (req, res) => {
           }] : []
         },
         firstMessage: `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${company.name}. How may I assist you?`,
-        serverUrl: `${process.env.API_BASE_URL || 'https://homequest-api-1.onrender.com'}/api/vapi/webhook`,
+        // serverUrl inherited from phone configuration - DO NOT include in transient assistant
         endCallFunctionEnabled: false,
         maxDurationSeconds: 600,
         silenceTimeoutSeconds: 30,
