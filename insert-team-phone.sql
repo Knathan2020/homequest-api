@@ -13,6 +13,205 @@ INSERT INTO team_phones (
   'HomeQuest Construction',
   'kentrill@yhshomes.com',
   '+18142610584',
+47 segments
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+🤖 AI
+12:18:46 PM
+Good afternoon. Homequest Construction. How may I assist you today?
+
+👤 Human
+12:18:49 PM
+95%
+Hi. Yes. I would like to place an appointment.
+
+👤 Human
+12:18:49 PM
+95%
+Hi. Yes. I would like to place an appointment.
+
+👤 Human
+12:18:49 PM
+95%
+Hi. Yes. I would like to place an appointment.
+
+👤 Human
+12:18:49 PM
+95%
+Hi. Yes. I would like to place an appointment.
+
+👤 Human
+12:18:49 PM
+95%
+Hi. Yes. I would like to place an appointment.
+
+👤 Human
+12:18:49 PM
+95%
+Hi. Yes. I would like to place an appointment.
+
+👤 Human
+12:18:49 PM
+95%
+Hi. Yes. I would like to place an appointment.
+
+👤 Human
+12:18:49 PM
+95%
+Hi. Yes. I would like to place an appointment.
+
+👤 Human
+12:18:49 PM
+95%
+Hi. Yes. I would like to place an appointment.
+
+👤 Human
+12:18:49 PM
+95%
+Hi. Yes. I would like to place an appointment.
+
+👤 Human
+12:18:49 PM
+95%
+Hi. Yes. I would like to place an appointment.
   '86d21bb9-4562-4fcf-a834-cbfdccc0de5f',
   'active'
 )

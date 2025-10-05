@@ -398,29 +398,40 @@ Return this exact JSON:
 
     // Save transcript segments to call_transcripts table for frontend comms
     if (messages && Array.isArray(messages)) {
-      const transcriptRecords = messages
-        .filter((m: any) => m.role === 'user' || m.role === 'bot' || m.role === 'assistant')
-        .map((m: any) => ({
-          call_id: call.id,
-          speaker: m.role === 'user' ? 'user' : 'assistant',
-          text: m.message || m.content,
-          spoken_at: m.time ? new Date(m.time).toISOString() : new Date().toISOString(),
-          start_time: m.secondsFromStart || 0,
-          end_time: m.secondsFromStart ? m.secondsFromStart + ((m.duration || 0) / 1000) : 0,
-          confidence: m.metadata?.wordLevelConfidence ?
-            m.metadata.wordLevelConfidence.reduce((sum: number, w: any) => sum + (w.confidence || 0), 0) / m.metadata.wordLevelConfidence.length :
-            null,
-          is_final: true
-        }));
-
-      const { error: transcriptError } = await supabase
+      // Check if transcripts already exist for this call to prevent duplicates
+      const { data: existingTranscripts } = await supabase
         .from('call_transcripts')
-        .insert(transcriptRecords);
+        .select('id')
+        .eq('call_id', call.id)
+        .limit(1);
 
-      if (transcriptError) {
-        console.error('⚠️ Failed to save transcript:', transcriptError);
+      if (existingTranscripts && existingTranscripts.length > 0) {
+        console.log('⚠️ Transcripts already saved for this call, skipping duplicates');
       } else {
-        console.log('✅ Transcript saved to database:', transcriptRecords.length, 'segments');
+        const transcriptRecords = messages
+          .filter((m: any) => m.role === 'user' || m.role === 'bot' || m.role === 'assistant')
+          .map((m: any) => ({
+            call_id: call.id,
+            speaker: m.role === 'user' ? 'user' : 'assistant',
+            text: m.message || m.content,
+            spoken_at: m.time ? new Date(m.time).toISOString() : new Date().toISOString(),
+            start_time: m.secondsFromStart || 0,
+            end_time: m.secondsFromStart ? m.secondsFromStart + ((m.duration || 0) / 1000) : 0,
+            confidence: m.metadata?.wordLevelConfidence ?
+              m.metadata.wordLevelConfidence.reduce((sum: number, w: any) => sum + (w.confidence || 0), 0) / m.metadata.wordLevelConfidence.length :
+              null,
+            is_final: true
+          }));
+
+        const { error: transcriptError } = await supabase
+          .from('call_transcripts')
+          .insert(transcriptRecords);
+
+        if (transcriptError) {
+          console.error('⚠️ Failed to save transcript:', transcriptError);
+        } else {
+          console.log('✅ Transcript saved to database:', transcriptRecords.length, 'segments');
+        }
       }
     }
 
