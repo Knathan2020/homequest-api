@@ -90,18 +90,22 @@ router.post('/vapi/webhooks/assistant-request', async (req, res) => {
     console.log('✅ Found team:', { teamId, companyName });
 
     // Fetch team members for transfer destinations
+    // Join with profiles to get name and phone_number, keep department from team_members
     const { data: teamMembers } = await supabase
       .from('team_members')
-      .select('name, phone_number, department')
+      .select(`
+        department,
+        profiles!inner(full_name, phone_number)
+      `)
       .eq('team_id', teamId)
-      .not('phone_number', 'is', null);
+      .not('profiles.phone_number', 'is', null);
 
     const transferDestinations = (teamMembers || [])
-      .filter((m: any) => m.phone_number && m.phone_number.trim())
+      .filter((m: any) => m.profiles?.phone_number && m.profiles.phone_number.trim() && m.profiles.full_name)
       .map((m: any) => ({
         type: 'number',
-        number: m.phone_number,
-        description: `${m.name} - ${m.department}`
+        number: m.profiles.phone_number,
+        description: `${m.profiles.full_name} - ${m.department}`
       }));
 
     console.log('📋 Transfer destinations:', transferDestinations.length);
