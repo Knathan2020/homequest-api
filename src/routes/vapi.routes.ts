@@ -89,8 +89,11 @@ async function loadCompanyCache() {
   }
 }
 
-loadCompanyCache();
-setInterval(loadCompanyCache, 5 * 60 * 1000);
+// Initialize cache (wrapped in IIFE to handle async at top level)
+(async () => {
+  await loadCompanyCache();
+  setInterval(loadCompanyCache, 5 * 60 * 1000);
+})();
 // ========== END CACHE ==========
 
 // Initiate a Vapi AI call
