@@ -126,7 +126,7 @@ class NylasEmailService {
   async getAuthUrl(provider: 'gmail' | 'outlook', userId: string): Promise<string> {
     try {
       // Use our custom callback endpoint that's configured in Google OAuth
-      const redirectUri = `https://cuddly-giggle-69p59v4xv5gw2rvw7-4000.app.github.dev/api/nylas/callback`;
+      const redirectUri = `${process.env.APP_URL}/api/nylas/callback`;
       const clientId = process.env.NYLAS_CLIENT_ID;
 
       console.log('📧 Nylas OAuth Config:', {
@@ -184,7 +184,7 @@ class NylasEmailService {
       const grant = await nylas.auth.exchangeCodeForToken({
         clientSecret: process.env.NYLAS_CLIENT_SECRET || '',
         clientId: process.env.NYLAS_CLIENT_ID || '',
-        redirectUri: `https://cuddly-giggle-69p59v4xv5gw2rvw7-4000.app.github.dev/api/nylas/callback`,
+        redirectUri: `${process.env.APP_URL}/api/nylas/callback`,
         code
       });
 
