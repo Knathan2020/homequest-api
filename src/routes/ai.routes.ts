@@ -5,6 +5,7 @@
 
 import express, { Request, Response } from 'express';
 import OpenAI from 'openai';
+import { createClient } from '@supabase/supabase-js';
 
 const router = express.Router();
 
@@ -12,6 +13,12 @@ const router = express.Router();
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
+// Initialize Supabase
+const supabase = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_KEY || ''
+);
 
 /**
  * @route   POST /api/ai/generate-response
@@ -342,8 +349,22 @@ router.post('/insights', async (req: Request, res: Response) => {
       calls = [],
       messages = [],
       vendors = [],
-      limit = 5
+      limit = 5,
+      teamId
     } = req.body;
+
+    // Load previous insights from database (last 5 insights)
+    const { data: previousInsights } = await supabase
+      .from('team_activity')
+      .select('description, created_at')
+      .eq('team_id', teamId)
+      .eq('activity_type', 'ai_insight')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    const insightHistory = previousInsights?.map((ins: any) =>
+      `${new Date(ins.created_at).toLocaleDateString()}: ${ins.description}`
+    ).join('\n') || 'No previous insights';
 
     // Create context from recent communications (NO EMAILS - kept private)
     const recentCalls = calls.slice(0, limit).map((c: any) => ({
@@ -368,6 +389,11 @@ router.post('/insights', async (req: Request, res: Response) => {
     // Create a system prompt for insight generation
     const systemPrompt = `You are an AI assistant for a construction company that analyzes communication patterns and provides actionable insights.
 
+You REMEMBER previous insights you've generated. Use this to track changes over time and avoid repeating yourself.
+
+PREVIOUS INSIGHTS:
+${insightHistory}
+
 Based on the communication history, generate ONE specific, actionable insight that helps the builder/contractor work more efficiently.
 
 Focus on:
@@ -376,6 +402,10 @@ Focus on:
 - Follow-up reminders for important conversations
 - Project coordination opportunities
 - Vendor communication trends
+- CHANGES or TRENDS since your last insights
+
+If you notice patterns have changed since last time, mention it (e.g., "Mike's response time has improved since last week").
+If patterns are consistent, provide NEW insights you haven't mentioned before.
 
 Return ONLY the insight text (1-2 sentences max), no formatting, no quotes. Be specific and reference actual names/companies from the data.`;
 
@@ -406,6 +436,26 @@ Generate ONE specific, actionable insight based on actual patterns in this data.
 
     if (!insight) {
       throw new Error('Failed to generate insight');
+    }
+
+    // Save insight to database for memory
+    if (teamId) {
+      await supabase
+        .from('team_activity')
+        .insert({
+          team_id: teamId,
+          activity_type: 'ai_insight',
+          title: 'AI Generated Insight',
+          description: insight,
+          metadata: {
+            calls_analyzed: recentCalls.length,
+            messages_analyzed: recentMessages.length,
+            vendors_count: vendorInfo.length,
+            tokens_used: completion.usage?.total_tokens
+          }
+        });
+
+      console.log('✅ AI insight saved to database for team:', teamId);
     }
 
     res.json({
