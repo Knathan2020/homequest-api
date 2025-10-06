@@ -135,20 +135,50 @@ export class AutodeskForgeService {
         }
       }
 
-      // Upload file to bucket
-      const uploadResponse = await axios.put(
-        `${this.baseUrl}/oss/v2/buckets/${bucketKey}/objects/${objectKey}`,
-        fileBuffer,
+      // Upload file to bucket using signed S3 URL (new method)
+      // Step 1: Get signed S3 upload URL
+      console.log('📝 Getting signed S3 upload URL...');
+      const signedUrlResponse = await axios.get(
+        `${this.baseUrl}/oss/v2/buckets/${bucketKey}/objects/${objectKey}/signeds3upload`,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/octet-stream',
-            'Content-Length': fileBuffer.length
+            Authorization: `Bearer ${token}`
           }
         }
       );
 
-      const objectId = uploadResponse.data.objectId;
+      const uploadKey = signedUrlResponse.data.uploadKey;
+      const urls = signedUrlResponse.data.urls;
+
+      if (!urls || urls.length === 0) {
+        throw new Error('No signed S3 URLs returned');
+      }
+
+      // Step 2: Upload to S3 directly (single part for files under 5MB)
+      console.log('📤 Uploading to S3...');
+      await axios.put(urls[0], fileBuffer, {
+        headers: {
+          'Content-Type': 'application/octet-stream'
+        }
+      });
+
+      // Step 3: Complete the upload
+      console.log('✅ Completing upload...');
+      const completeResponse = await axios.post(
+        `${this.baseUrl}/oss/v2/buckets/${bucketKey}/objects/${objectKey}/signeds3upload`,
+        {
+          uploadKey,
+          size: fileBuffer.length
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const objectId = completeResponse.data.objectId;
       const urn = Buffer.from(objectId).toString('base64').replace(/=/g, '');
 
       console.log(`✅ File uploaded. URN: ${urn}`);
