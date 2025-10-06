@@ -149,8 +149,14 @@ export class AutodeskForgeService {
       return urn;
 
     } catch (error: any) {
-      console.error('❌ Upload failed:', error.response?.data || error.message);
-      throw new Error('Failed to upload file to Autodesk');
+      console.error('❌ Upload failed:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url
+      });
+      throw new Error(`Failed to upload file to Autodesk: ${error.response?.data?.detail || error.message}`);
     }
   }
 
