@@ -81,6 +81,8 @@ router.post('/upload', upload.array('files', 10), async (req: Request, res: Resp
             fileSize: file.size,
             success: autodeskResult.success,
             processingMethod: 'autodesk-3d',
+            urn: autodeskResult.urn, // Add URN at top level for frontend
+            viewerUrl: autodeskResult.viewerUrl,
             data: {
               urn: autodeskResult.urn,
               viewerUrl: autodeskResult.viewerUrl,
