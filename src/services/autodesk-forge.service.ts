@@ -318,7 +318,22 @@ export class AutodeskForgeService {
         }
       );
 
-      return response.data.data;
+      // Log the full response to see structure
+      console.log('📋 Raw response status:', response.status);
+      console.log('📋 Response data keys:', response.data ? Object.keys(response.data) : 'no data');
+      console.log('📋 Response.data.data exists?', !!response.data?.data);
+
+      // Check multiple possible paths
+      if (response.data.data) {
+        console.log('📋 Using response.data.data');
+        return response.data.data;
+      } else if (response.data.collection) {
+        console.log('📋 Using response.data.collection (alternate path)');
+        return { collection: response.data.collection };
+      } else {
+        console.log('📋 Using full response.data');
+        return response.data;
+      }
 
     } catch (error: any) {
       console.error('❌ Failed to get properties:', error.response?.data || error.message);
