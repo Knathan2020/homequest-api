@@ -141,46 +141,30 @@ router.post('/upload', upload.array('files', 10), async (req: Request, res: Resp
           };
 
         } else if (fileExtension === '.pdf') {
-          // PDF processing - convert to image then process
-          console.log('📄 Processing PDF file...');
+          // PDF processing - Send to Autodesk for 3D viewing
+          console.log('📄 Processing PDF with Autodesk...');
 
-          const tempDir = path.join(process.cwd(), 'temp-cad-files');
-          if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-          }
-
-          const tempFilePath = path.join(tempDir, `${Date.now()}_${file.originalname}`);
-          fs.writeFileSync(tempFilePath, file.buffer);
-
-          const pdfResult = await cadProcessor.processCADFile(tempFilePath, {
-            outputFormat: 'png',
-            resolution: 300,
-            scale: 1.0,
-            includeMetadata: true
-          });
-
-          // Clean up temp file
-          if (fs.existsSync(tempFilePath)) {
-            fs.unlinkSync(tempFilePath);
-          }
+          const autodeskResult = await autodeskService.processCADFile(file.buffer, file.originalname);
 
           result = {
             fileName: file.originalname,
             fileType: 'pdf',
             fileSize: file.size,
-            success: pdfResult.success,
-            processingMethod: 'pdf-converter',
+            success: autodeskResult.success,
+            processingMethod: 'autodesk-forge',
+            urn: autodeskResult.urn,
+            viewerUrl: autodeskResult.viewerUrl,
             data: {
-              outputPath: pdfResult.outputPath,
-              previewImage: pdfResult.previewImage,
-              metadata: pdfResult.metadata,
-              walls: [],
-              doors: [],
-              windows: [],
-              rooms: [],
-              supports3D: false
+              walls: autodeskResult.floorplanData?.walls || [],
+              doors: autodeskResult.floorplanData?.doors || [],
+              windows: autodeskResult.floorplanData?.windows || [],
+              stairs: autodeskResult.floorplanData?.stairs || [],
+              rooms: autodeskResult.floorplanData?.rooms || [],
+              metadata: autodeskResult.metadata || {},
+              supports3D: true
             },
-            error: pdfResult.error
+            translationStatus: autodeskResult.status,
+            error: autodeskResult.error
           };
 
         } else if (['.jpg', '.jpeg', '.png', '.webp', '.tiff'].includes(fileExtension)) {
