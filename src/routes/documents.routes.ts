@@ -11,6 +11,7 @@ import sharp from 'sharp';
 import { createClient } from '@supabase/supabase-js';
 import intelligentService from '../services/intelligent-floor-plan.service';
 import { QueueService } from '../services/queue/queue.service';
+import { fromPath } from 'pdf2pic';
 
 const router = express.Router();
 const queueService = new QueueService();
@@ -346,11 +347,12 @@ Provide a detailed breakdown of the spatial layout.`;
 const generateThumbnail = async (filePath: string, filename: string): Promise<string | null> => {
   try {
     const isImage = /\.(jpe?g|png|gif|webp|tiff)$/i.test(filename);
+    const isPDF = /\.pdf$/i.test(filename);
+
+    const thumbnailDir = path.join(process.cwd(), 'uploads', 'documents', 'thumbnails');
+    await fs.mkdir(thumbnailDir, { recursive: true });
 
     if (isImage) {
-      const thumbnailDir = path.join(process.cwd(), 'uploads', 'documents', 'thumbnails');
-      await fs.mkdir(thumbnailDir, { recursive: true });
-
       const thumbnailPath = path.join(thumbnailDir, `thumb_${filename}`);
 
       await sharp(filePath)
@@ -362,6 +364,28 @@ const generateThumbnail = async (filePath: string, filename: string): Promise<st
         .toFile(thumbnailPath);
 
       return `/uploads/documents/thumbnails/thumb_${filename}`;
+    } else if (isPDF) {
+      // Generate thumbnail from first page of PDF
+      const thumbnailFilename = `thumb_${filename.replace('.pdf', '')}.jpg`;
+      const thumbnailPath = path.join(thumbnailDir, thumbnailFilename);
+
+      try {
+        const pdf2picConverter = fromPath(filePath, {
+          density: 100,
+          saveFilename: thumbnailFilename.replace('.jpg', ''),
+          savePath: thumbnailDir,
+          format: 'jpg',
+          width: 300,
+          height: 300
+        });
+
+        await pdf2picConverter(1); // Convert first page only
+
+        return `/uploads/documents/thumbnails/${thumbnailFilename}`;
+      } catch (pdfError) {
+        console.error('PDF thumbnail generation failed:', pdfError);
+        return null;
+      }
     }
 
     return null;
