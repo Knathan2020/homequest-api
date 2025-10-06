@@ -416,8 +416,11 @@ export class AutodeskForgeService {
           const props = item.properties || {};
           const name = item.name?.toLowerCase() || '';
           const category = props.Category?.toLowerCase() || '';
-          const layer = (props.Layer || '').toUpperCase(); // AutoCAD uses layer names!
-          const entityType = props['Entity Type'] || '';
+
+          // AutoCAD nests properties under "General" - check both locations
+          const generalProps = props.General || {};
+          const layer = (generalProps.Layer || props.Layer || '').toUpperCase();
+          const entityType = generalProps.Name || props['Entity Type'] || '';
 
           // Track layers for debugging
           if (layer) layersFound.add(layer);
