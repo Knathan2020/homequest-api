@@ -16,6 +16,7 @@ import floorPlanStorageRoutes from './routes/floor-plan-storage.routes';
 import documentsRoutes from './routes/documents.routes';
 import productionBlueprintRoutes from './routes/production-blueprint.routes';
 import wallEditorRoutes from './routes/wall-editor.routes';
+import cadApiRoutes from './routes/cad-api.routes'; // NEW: Autodesk 3D CAD API
 
 // AI & Voice Systems
 import aiRoutes from './routes/ai.routes';
@@ -720,6 +721,7 @@ app.use('/api/floor-plan-storage', floorPlanStorageRoutes);
 app.use('/api/documents', documentsRoutes);
 app.use('/api/blueprint', productionBlueprintRoutes);
 app.use('/api/wall-editor', wallEditorRoutes);
+app.use('/api/cad', cadApiRoutes); // NEW: Autodesk 3D CAD & Floorplan API
 
 // AI & Voice Systems
 app.use('/api/ai', aiRoutes);

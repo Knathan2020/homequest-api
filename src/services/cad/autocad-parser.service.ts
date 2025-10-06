@@ -32,6 +32,13 @@ export interface DXFFloorPlan {
     size: { width: number; height: number };
     layer: string;
   }>;
+  stairs: Array<{
+    position: { x: number; y: number };
+    boundary?: Array<{ x: number; y: number }>;
+    direction?: 'up' | 'down' | 'unknown';
+    steps?: number;
+    layer: string;
+  }>;
   rooms: Array<{
     boundary: Array<{ x: number; y: number }>;
     label?: string;
@@ -61,6 +68,7 @@ export class AutoCADParserService {
   private wallLayers = ['WALL', 'WALLS', 'A-WALL', 'ARCH-WALL', '0'];
   private doorLayers = ['DOOR', 'DOORS', 'A-DOOR', 'ARCH-DOOR'];
   private windowLayers = ['WINDOW', 'WINDOWS', 'A-WIND', 'ARCH-WIND'];
+  private stairLayers = ['STAIR', 'STAIRS', 'A-FLOR-STRS', 'ARCH-STAIR', 'STRS'];
   private textLayers = ['TEXT', 'NOTES', 'LABELS', 'DIMENSIONS'];
 
   async parseDXF(filePath: string): Promise<DXFFloorPlan> {
@@ -81,6 +89,7 @@ export class AutoCADParserService {
         walls: [],
         doors: [],
         windows: [],
+        stairs: [],
         rooms: [],
         dimensions: [],
         textLabels: [],
@@ -106,6 +115,7 @@ export class AutoCADParserService {
         walls: floorPlan.walls.length,
         doors: floorPlan.doors.length,
         windows: floorPlan.windows.length,
+        stairs: floorPlan.stairs.length,
         rooms: floorPlan.rooms.length,
         dimensions: floorPlan.dimensions.length,
         textLabels: floorPlan.textLabels.length,
@@ -124,6 +134,9 @@ export class AutoCADParserService {
       }
       if (floorPlan.windows.length > 0) {
         console.log(`🪟 Window details: ${floorPlan.windows.map(w => `window on layer "${w.layer}"`).join(', ')}`);
+      }
+      if (floorPlan.stairs.length > 0) {
+        console.log(`🪜 Stair details: ${floorPlan.stairs.map(s => `stairs on layer "${s.layer}" (${s.steps || '?'} steps)`).join(', ')}`);
       }
       if (floorPlan.textLabels.length > 0) {
         console.log(`📝 Text labels: ${floorPlan.textLabels.map(t => `"${t.text}" at (${t.position.x}, ${t.position.y})`).slice(0, 10).join(', ')}${floorPlan.textLabels.length > 10 ? '...' : ''}`);
@@ -221,6 +234,18 @@ export class AutoCADParserService {
           type: this.classifyWallType(layer)
         });
       }
+    } else if (this.isStairLayer(layer)) {
+      // Stairs detected on stair layer
+      console.log(`🪜 Adding stairs from polyline with ${entity.vertices.length} vertices`);
+      const centroid = this.calculateCentroid(entity.vertices);
+      const steps = this.estimateSteps(entity.vertices);
+      floorPlan.stairs.push({
+        position: centroid,
+        boundary: entity.vertices.map((v: any) => ({ x: v.x, y: v.y })),
+        steps,
+        direction: 'unknown',
+        layer
+      });
     } else if (entity.closed && entity.vertices.length > 3) {
       // Could be a room boundary
       console.log(`🏠 Adding room boundary with ${entity.vertices.length} vertices`);
@@ -322,8 +347,15 @@ export class AutoCADParserService {
         size: { width: 48, height: 6 }, // Default window size
         layer
       });
+    } else if (blockName.includes('STAIR') || blockName.includes('STRS') || this.isStairLayer(layer)) {
+      console.log(`🪜 Adding stairs from block: "${blockName}"`);
+      floorPlan.stairs.push({
+        position: { x: entity.position.x, y: entity.position.y },
+        direction: 'unknown',
+        layer
+      });
     } else {
-      console.log(`⚠️  Block ignored - not recognized as door/window: "${blockName}"`);
+      console.log(`⚠️  Block ignored - not recognized as door/window/stair: "${blockName}"`);
     }
   }
 
@@ -372,8 +404,14 @@ export class AutoCADParserService {
   }
 
   private isWindowLayer(layer: string): boolean {
-    return this.windowLayers.some(windowLayer => 
+    return this.windowLayers.some(windowLayer =>
       layer.toUpperCase().includes(windowLayer)
+    );
+  }
+
+  private isStairLayer(layer: string): boolean {
+    return this.stairLayers.some(stairLayer =>
+      layer.toUpperCase().includes(stairLayer)
     );
   }
 
@@ -514,13 +552,44 @@ export class AutoCADParserService {
   private calculateCentroid(vertices: Array<{ x: number; y: number }>): { x: number; y: number } {
     const n = vertices.length;
     let cx = 0, cy = 0;
-    
+
     for (const vertex of vertices) {
       cx += vertex.x;
       cy += vertex.y;
     }
-    
+
     return { x: cx / n, y: cy / n };
+  }
+
+  private estimateSteps(vertices: Array<{ x: number; y: number }>): number {
+    // Estimate number of steps based on polyline segments
+    // Stairs typically have parallel line segments representing treads
+    if (vertices.length < 3) return 0;
+
+    // Count direction changes which often indicate steps
+    let steps = 0;
+    for (let i = 1; i < vertices.length - 1; i++) {
+      const dx1 = vertices[i].x - vertices[i-1].x;
+      const dy1 = vertices[i].y - vertices[i-1].y;
+      const dx2 = vertices[i+1].x - vertices[i].x;
+      const dy2 = vertices[i+1].y - vertices[i].y;
+
+      // Check if direction changed significantly (perpendicular segments)
+      const dot = dx1 * dx2 + dy1 * dy2;
+      const mag1 = Math.sqrt(dx1*dx1 + dy1*dy1);
+      const mag2 = Math.sqrt(dx2*dx2 + dy2*dy2);
+
+      if (mag1 > 0 && mag2 > 0) {
+        const cosAngle = dot / (mag1 * mag2);
+        // If nearly perpendicular (cos ≈ 0), likely a step
+        if (Math.abs(cosAngle) < 0.3) {
+          steps++;
+        }
+      }
+    }
+
+    // Typical stairs have pairs of segments (tread + riser)
+    return Math.max(Math.floor(steps / 2), vertices.length / 4);
   }
 
   private isRoomLabel(text: string): boolean {
