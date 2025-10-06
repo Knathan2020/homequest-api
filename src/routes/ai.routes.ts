@@ -331,4 +331,108 @@ Return only the JSON object with the extracted appointment data.`;
   }
 });
 
+/**
+ * @route   POST /api/ai/insights
+ * @desc    Generate AI insights based on communication history
+ * @access  Public
+ */
+router.post('/insights', async (req: Request, res: Response) => {
+  try {
+    const {
+      emails = [],
+      calls = [],
+      messages = [],
+      vendors = [],
+      limit = 5
+    } = req.body;
+
+    // Create context from recent communications
+    const recentEmails = emails.slice(0, limit).map((e: any) => ({
+      from: e.from,
+      subject: e.subject,
+      date: e.date,
+      snippet: e.snippet || e.body?.substring(0, 100)
+    }));
+
+    const recentCalls = calls.slice(0, limit).map((c: any) => ({
+      contact: c.contact,
+      type: c.type,
+      duration: c.duration,
+      date: c.timestamp
+    }));
+
+    const recentMessages = messages.slice(0, limit).map((m: any) => ({
+      from: m.from,
+      content: m.content?.substring(0, 100),
+      date: m.timestamp
+    }));
+
+    const vendorInfo = vendors.map((v: any) => ({
+      name: v.name,
+      company: v.company,
+      specialty: v.specialty
+    }));
+
+    // Create a system prompt for insight generation
+    const systemPrompt = `You are an AI assistant for a construction company that analyzes communication patterns and provides actionable insights.
+
+Based on the communication history, generate ONE specific, actionable insight that helps the builder/contractor work more efficiently.
+
+Focus on:
+- Response time patterns from specific contacts
+- Scheduling patterns (best times to reach people)
+- Follow-up reminders for important conversations
+- Project coordination opportunities
+- Vendor communication trends
+
+Return ONLY the insight text (1-2 sentences max), no formatting, no quotes. Be specific and reference actual names/companies from the data.`;
+
+    const userPrompt = `Recent communications:
+
+EMAILS (${recentEmails.length}):
+${recentEmails.map((e, i) => `${i+1}. From: ${e.from}, Subject: ${e.subject}, Date: ${e.date}`).join('\n')}
+
+CALLS (${recentCalls.length}):
+${recentCalls.map((c, i) => `${i+1}. Contact: ${c.contact}, Type: ${c.type}, Duration: ${c.duration}, Date: ${c.date}`).join('\n')}
+
+MESSAGES (${recentMessages.length}):
+${recentMessages.map((m, i) => `${i+1}. From: ${m.from}, Date: ${m.date}`).join('\n')}
+
+VENDORS:
+${vendorInfo.map((v, i) => `${i+1}. ${v.name} - ${v.company} (${v.specialty})`).join('\n')}
+
+Generate ONE specific, actionable insight based on actual patterns in this data.`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      max_tokens: 150,
+      temperature: 0.7
+    });
+
+    const insight = completion.choices[0]?.message?.content?.trim();
+
+    if (!insight) {
+      throw new Error('Failed to generate insight');
+    }
+
+    res.json({
+      success: true,
+      insight: insight,
+      usage: completion.usage
+    });
+
+  } catch (error) {
+    console.error('AI insights error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate AI insights',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;
