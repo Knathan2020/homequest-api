@@ -204,14 +204,15 @@ QUIT Y
   private async createAppBundle(): Promise<void> {
     try {
       const token = await this.getAccessToken();
-      const appBundleName = `${this.nickname}.convert2dto3dbundle`; // Must be lowercase
+      const appBundleBaseName = 'convert2dto3dbundle'; // Base name (no owner prefix)
+      const appBundleFullId = `${this.nickname}.${appBundleBaseName}+prod`; // Fully qualified ID
 
       console.log('📦 Creating app bundle...');
 
-      // Check if app bundle exists
+      // Check if app bundle exists (use full ID for GET)
       try {
         const existing = await axios.get(
-          `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleName}`,
+          `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleFullId}`,
           {
             headers: { Authorization: `Bearer ${token}` }
           }
@@ -256,11 +257,11 @@ QUIT Y
 
       const zipBuffer = zip.toBuffer();
 
-      // Create app bundle
+      // Create app bundle (use base name only when creating)
       const response = await axios.post(
         `${this.baseUrl}/da/us-east/v3/appbundles`,
         {
-          id: appBundleName,
+          id: appBundleBaseName,
           engine: 'Autodesk.AutoCAD+24',
           description: 'Converts 2D floor plans to 3D by extruding polylines'
         },
