@@ -39,8 +39,8 @@ interface FloorPlanAnalysisSchema {
     confidence: number;
   }>;
   measurements: {
-    scale?: number;
-    unit?: string;
+    scale: number;
+    unit: string;
     imageWidth: number;
     imageHeight: number;
   };
@@ -96,7 +96,7 @@ DETECTION RULES:
 - Rooms: Detect enclosed spaces. Provide polygon vertices in clockwise order.
 - Doors: Find door symbols (arcs, swing marks). Mark center position.
 - Windows: Find window symbols (parallel lines, rectangles). Mark center position.
-- Measurements: Extract any dimension text if visible.
+- Measurements: Extract scale and unit from dimension text. If not visible, use scale: 1.0 and unit: "pixels".
 
 Be precise with coordinates and conservative with confidence scores (0.0 to 1.0).`
           },
@@ -239,12 +239,12 @@ Be precise with coordinates and conservative with confidence scores (0.0 to 1.0)
                 measurements: {
                   type: "object",
                   properties: {
-                    scale: { type: ["number", "null"] },
-                    unit: { type: ["string", "null"] },
+                    scale: { type: "number" },
+                    unit: { type: "string" },
                     imageWidth: { type: "number" },
                     imageHeight: { type: "number" }
                   },
-                  required: ["imageWidth", "imageHeight"],
+                  required: ["scale", "unit", "imageWidth", "imageHeight"],
                   additionalProperties: false
                 },
                 metadata: {
