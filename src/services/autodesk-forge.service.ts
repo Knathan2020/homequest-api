@@ -100,18 +100,19 @@ export class AutodeskForgeService {
   async uploadFile(fileBuffer: Buffer, fileName: string): Promise<string> {
     try {
       const token = await this.getAccessToken();
-      const bucketKey = `homequest_${Date.now()}`.toLowerCase();
-      const objectKey = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+      // Use a persistent bucket instead of creating new ones
+      const bucketKey = 'homequest_floorplans';
+      const objectKey = `${Date.now()}_${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
       console.log(`📤 Uploading ${fileName} to Autodesk...`);
 
-      // Create bucket (or use existing)
+      // Create bucket only once (or use existing)
       try {
         await axios.post(
           `${this.baseUrl}/oss/v2/buckets`,
           {
             bucketKey,
-            policyKey: 'transient' // Files auto-delete after 24 hours
+            policyKey: 'persistent' // Keep files, don't auto-delete
           },
           {
             headers: {
@@ -125,6 +126,11 @@ export class AutodeskForgeService {
         if (error.response?.status === 409) {
           console.log(`📦 Using existing bucket: ${bucketKey}`);
         } else {
+          console.error('❌ Bucket creation failed:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data
+          });
           throw error;
         }
       }
