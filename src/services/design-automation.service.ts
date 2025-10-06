@@ -204,7 +204,7 @@ QUIT Y
   private async createAppBundle(): Promise<void> {
     try {
       const token = await this.getAccessToken();
-      const appBundleName = `${this.nickname}.Convert2Dto3DBundle`;
+      const appBundleName = `${this.nickname}.convert2dto3dbundle`; // Must be lowercase
 
       console.log('📦 Creating app bundle...');
 
@@ -252,7 +252,7 @@ QUIT Y
       // Create zip file with script
       const zip = new AdmZip();
       zip.addFile('PackageContents.xml', Buffer.from(packageXml));
-      zip.addFile('Convert2Dto3D.scr', Buffer.from(this.createAutoCADScript()));
+      zip.addFile('convert2dto3d.scr', Buffer.from(this.createAutoCADScript()));
 
       const zipBuffer = zip.toBuffer();
 
@@ -300,8 +300,8 @@ QUIT Y
   private async createActivity(): Promise<void> {
     try {
       const token = await this.getAccessToken();
-      const activityName = `${this.nickname}.Convert2Dto3DActivity`;
-      const appBundleName = `${this.nickname}.Convert2Dto3DBundle`;
+      const activityName = `${this.nickname}.convert2dto3dactivity`; // Must be lowercase
+      const appBundleName = `${this.nickname}.convert2dto3dbundle`; // Must be lowercase
 
       console.log('⚙️ Creating activity...');
 
@@ -324,7 +324,7 @@ QUIT Y
         `${this.baseUrl}/da/us-east/v3/activities`,
         {
           id: activityName,
-          commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[Convert2Dto3D].path)" /o "$(args[outputFile].path)"'],
+          commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[' + appBundleName + '].path)\\convert2dto3d.scr" /o "$(args[outputFile].path)"'],
           engine: 'Autodesk.AutoCAD+24',
           appbundles: [`${appBundleName}+prod`],
           parameters: {
@@ -379,7 +379,7 @@ QUIT Y
 
       // Step 4: Create workitem
       const token = await this.getAccessToken();
-      const activityName = `${this.nickname}.Convert2Dto3DActivity+prod`;
+      const activityName = `${this.nickname}.convert2dto3dactivity+prod`; // Must be lowercase
 
       console.log('⚙️ Creating workitem...');
 
