@@ -471,14 +471,22 @@ export class AutodeskForgeService {
         throw new Error(`Translation ${status.status}: ${status.progress}`);
       }
 
-      // Step 4: Get metadata
-      const metadata = await this.getModelMetadata(urn);
-
-      // Step 5: Get properties for first view (usually the main model)
+      // Step 4: Get metadata (optional - PDFs may not have extractable metadata)
+      let metadata: any[] = [];
       let floorplanData = null;
-      if (metadata.length > 0 && metadata[0].guid) {
-        const properties = await this.getModelProperties(urn, metadata[0].guid);
-        floorplanData = this.extractFloorplanData(properties);
+
+      try {
+        metadata = await this.getModelMetadata(urn);
+        console.log(`📊 Metadata retrieved: ${metadata.length} items`);
+
+        // Step 5: Get properties for first view (usually the main model)
+        if (metadata.length > 0 && metadata[0].guid) {
+          const properties = await this.getModelProperties(urn, metadata[0].guid);
+          floorplanData = this.extractFloorplanData(properties);
+        }
+      } catch (error: any) {
+        console.warn(`⚠️ Metadata extraction failed (expected for PDFs): ${error.message}`);
+        // Continue anyway - viewer will still work with just the URN
       }
 
       const token = await this.getAccessToken();
