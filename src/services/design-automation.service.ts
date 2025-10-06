@@ -1,9 +1,9 @@
 import axios from 'axios';
-import FormData from 'form-data';
+import AdmZip from 'adm-zip';
 
 /**
  * Autodesk Design Automation Service
- * Uses AutoCAD engine to convert PDFs to DWG with PDFIMPORT
+ * Runs AutoCAD in the cloud to convert 2D DWG to 3D
  * API Docs: https://aps.autodesk.com/en/docs/design-automation/v3
  */
 export class DesignAutomationService {
@@ -11,6 +11,7 @@ export class DesignAutomationService {
   private clientSecret: string;
   private baseUrl = 'https://developer.api.autodesk.com';
   private tokenCache: { access_token: string; expires_at: number } | null = null;
+  private nickname = 'homequest'; // Your unique app nickname
 
   constructor() {
     this.clientId = process.env.AUTODESK_CLIENT_ID || '';
@@ -22,7 +23,7 @@ export class DesignAutomationService {
   }
 
   /**
-   * Get OAuth token
+   * Get OAuth token with code:all scope
    */
   private async getAccessToken(): Promise<string> {
     if (this.tokenCache && this.tokenCache.expires_at > Date.now()) {
@@ -30,7 +31,7 @@ export class DesignAutomationService {
     }
 
     try {
-      console.log('🔑 Getting Autodesk access token...');
+      console.log('🔑 Getting Autodesk access token for Design Automation...');
 
       const response = await axios.post(
         `${this.baseUrl}/authentication/v2/token`,
@@ -52,6 +53,7 @@ export class DesignAutomationService {
         expires_at: Date.now() + (response.data.expires_in * 1000) - 60000
       };
 
+      console.log('✅ Token obtained with code:all scope');
       return this.tokenCache.access_token;
     } catch (error: any) {
       console.error('❌ Failed to get token:', error.response?.data || error.message);
@@ -60,15 +62,15 @@ export class DesignAutomationService {
   }
 
   /**
-   * Upload PDF to OSS bucket
+   * Upload file to OSS bucket
    */
-  private async uploadPdfToOss(pdfBuffer: Buffer, fileName: string): Promise<string> {
+  private async uploadToOss(fileBuffer: Buffer, fileName: string): Promise<string> {
     try {
       const token = await this.getAccessToken();
       const bucketKey = 'homequest_designautomation';
       const objectKey = `${Date.now()}_${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
-      console.log(`📤 Uploading PDF to OSS bucket...`);
+      console.log(`📤 Uploading ${fileName} to OSS...`);
 
       // Create bucket (or use existing)
       try {
@@ -82,8 +84,13 @@ export class DesignAutomationService {
             }
           }
         );
+        console.log(`✅ Created bucket: ${bucketKey}`);
       } catch (error: any) {
-        if (error.response?.status !== 409) throw error;
+        if (error.response?.status === 409) {
+          console.log(`📦 Using existing bucket: ${bucketKey}`);
+        } else {
+          throw error;
+        }
       }
 
       // Get signed S3 URL
@@ -95,16 +102,16 @@ export class DesignAutomationService {
       );
 
       // Upload to S3
-      await axios.put(signedUrlResponse.data.urls[0], pdfBuffer, {
+      await axios.put(signedUrlResponse.data.urls[0], fileBuffer, {
         headers: { 'Content-Type': 'application/octet-stream' }
       });
 
       // Complete upload
-      await axios.post(
+      const completeResponse = await axios.post(
         `${this.baseUrl}/oss/v2/buckets/${bucketKey}/objects/${objectKey}/signeds3upload`,
         {
           uploadKey: signedUrlResponse.data.uploadKey,
-          size: pdfBuffer.length
+          size: fileBuffer.length
         },
         {
           headers: {
@@ -114,53 +121,30 @@ export class DesignAutomationService {
         }
       );
 
-      const objectId = `urn:adsk.objects:os.object:${bucketKey}/${objectKey}`;
-      const urn = Buffer.from(objectId).toString('base64').replace(/=/g, '');
-
-      console.log(`✅ PDF uploaded. URN: ${urn}`);
-      return urn;
+      const objectId = completeResponse.data.objectId;
+      console.log(`✅ Uploaded: ${objectId}`);
+      return objectId;
     } catch (error: any) {
-      console.error('❌ Upload failed:', error.message);
-      throw new Error('Failed to upload PDF to OSS');
+      console.error('❌ Upload failed:', error.response?.data || error.message);
+      throw new Error('Failed to upload to OSS');
     }
   }
 
   /**
-   * Convert PDF to DWG using Design Automation with AutoCAD PDFIMPORT
+   * Create signed URL for reading
    */
-  async convertPdfToDwg(pdfBuffer: Buffer, fileName: string): Promise<Buffer> {
+  private async createSignedUrl(objectId: string, access: 'read' | 'write' = 'read'): Promise<string> {
     try {
-      console.log(`🚀 Converting ${fileName} using AutoCAD Design Automation...`);
-
-      // Step 1: Upload PDF
-      const pdfUrn = await this.uploadPdfToOss(pdfBuffer, fileName);
-
-      // Step 2: Create workitem for PDF import
       const token = await this.getAccessToken();
-      
-      console.log('⚙️ Creating Design Automation workitem...');
-      
-      const workItem = {
-        activityId: 'Autodesk.AutoCAD+24', // AutoCAD 2024
-        arguments: {
-          inputPdf: {
-            url: `https://developer.api.autodesk.com/oss/v2/signedresources/${pdfUrn}?region=US`,
-            verb: 'get'
-          },
-          outputDwg: {
-            url: `https://developer.api.autodesk.com/oss/v2/signedresources/${pdfUrn}_output.dwg?region=US`,
-            verb: 'put'
-          },
-          onComplete: {
-            verb: 'post',
-            url: 'https://webhook.site/...' // Optional webhook
-          }
-        }
-      };
+      const [, bucketKey, objectKey] = objectId.match(/urn:adsk\.objects:os\.object:([^\/]+)\/(.+)/) || [];
 
-      const workitemResponse = await axios.post(
-        `${this.baseUrl}/da/us-east/v3/workitems`,
-        workItem,
+      if (!bucketKey || !objectKey) {
+        throw new Error('Invalid object ID');
+      }
+
+      const response = await axios.post(
+        `${this.baseUrl}/oss/v2/buckets/${bucketKey}/objects/${objectKey}/signed`,
+        { minutesExpiration: 60 },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -169,19 +153,298 @@ export class DesignAutomationService {
         }
       );
 
-      // Note: Design Automation v3 is complex and requires:
-      // 1. Creating an AppBundle (custom AutoCAD plugin)
-      // 2. Creating an Activity (defines the task)
-      // 3. Creating WorkItem (executes the task)
-      
-      // For now, let's use a simpler approach: Model Derivative API
-      console.log('⚠️ Design Automation requires custom AppBundle. Using Model Derivative instead...');
-      
-      return pdfBuffer; // Return original for now
+      return response.data.signedUrl;
+    } catch (error: any) {
+      console.error('❌ Failed to create signed URL:', error.response?.data || error.message);
+      throw new Error('Failed to create signed URL');
+    }
+  }
+
+  /**
+   * Create AutoCAD script to convert 2D to 3D
+   */
+  private createAutoCADScript(): string {
+    // AutoCAD Script (.scr) that:
+    // 1. Opens the input DWG
+    // 2. Selects all closed polylines
+    // 3. Extrudes them to create 3D walls
+    // 4. Saves as output DWG
+    return `
+; AutoCAD Script to convert 2D floor plan to 3D
+; This script extrudes all closed polylines to create 3D walls
+
+; Set units and environment
+UNITS 2 4
+
+; Select all closed polylines (walls)
+; Filter for closed LWPOLYLINEs and POLYLINEs
+(setq ss (ssget "_X" '((0 . "LWPOLYLINE,POLYLINE") (-4 . "&") (70 . 1))))
+
+; If polylines found, extrude them
+(if ss
+  (progn
+    (setq i 0)
+    (repeat (sslength ss)
+      (setq ent (ssname ss i))
+      (command "._EXTRUDE" ent "" "96" "") ; Extrude to 96 inches (8 feet)
+      (setq i (1+ i))
+    )
+  )
+)
+
+; Save and close
+QSAVE
+QUIT Y
+`.trim();
+  }
+
+  /**
+   * Create app bundle containing AutoCAD script
+   */
+  private async createAppBundle(): Promise<void> {
+    try {
+      const token = await this.getAccessToken();
+      const appBundleName = `${this.nickname}.Convert2Dto3DBundle`;
+
+      console.log('📦 Creating app bundle...');
+
+      // Check if app bundle exists
+      try {
+        const existing = await axios.get(
+          `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleName}`,
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+        console.log('✅ App bundle already exists');
+        return;
+      } catch (error: any) {
+        if (error.response?.status !== 404) throw error;
+        console.log('📝 App bundle not found, creating new one...');
+      }
+
+      // Create PackageContents.xml
+      const packageXml = `<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage
+  Name="Convert2Dto3D"
+  Description="Converts 2D DWG floor plans to 3D"
+  Author="HomeQuest"
+  ProductCode="{12345678-1234-1234-1234-123456789012}"
+  HelpFile="./help.txt"
+  ProductVersion="1.0.0"
+  SchemaVersion="1.0">
+  <CompanyDetails
+    Name="HomeQuest"
+    Url="https://homequesttech.com"
+    Email="support@homequesttech.com" />
+  <RuntimeRequirements
+    OS="Win64"
+    Platform="AutoCAD"
+    SeriesMin="R24.0"
+    SeriesMax="R24.0" />
+  <Components>
+    <RuntimeRequirements
+      OS="Win64"
+      Platform="AutoCAD" />
+  </Components>
+</ApplicationPackage>`;
+
+      // Create zip file with script
+      const zip = new AdmZip();
+      zip.addFile('PackageContents.xml', Buffer.from(packageXml));
+      zip.addFile('Convert2Dto3D.scr', Buffer.from(this.createAutoCADScript()));
+
+      const zipBuffer = zip.toBuffer();
+
+      // Create app bundle
+      const response = await axios.post(
+        `${this.baseUrl}/da/us-east/v3/appbundles`,
+        {
+          id: appBundleName,
+          engine: 'Autodesk.AutoCAD+24',
+          description: 'Converts 2D floor plans to 3D by extruding polylines'
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Upload bundle to signed URL
+      const uploadUrl = response.data.uploadParameters.url;
+      const formData = response.data.uploadParameters.formData;
+
+      console.log('📤 Uploading app bundle...');
+
+      const form = new (require('form-data'))();
+      Object.keys(formData).forEach(key => form.append(key, formData[key]));
+      form.append('file', zipBuffer, 'bundle.zip');
+
+      await axios.post(uploadUrl, form, {
+        headers: form.getHeaders()
+      });
+
+      console.log('✅ App bundle created successfully');
 
     } catch (error: any) {
-      console.error('❌ Design Automation conversion failed:', error.message);
-      throw new Error(`PDF to DWG conversion failed: ${error.message}`);
+      console.error('❌ Failed to create app bundle:', error.response?.data || error.message);
+      throw new Error('Failed to create app bundle');
+    }
+  }
+
+  /**
+   * Create activity that runs the app bundle
+   */
+  private async createActivity(): Promise<void> {
+    try {
+      const token = await this.getAccessToken();
+      const activityName = `${this.nickname}.Convert2Dto3DActivity`;
+      const appBundleName = `${this.nickname}.Convert2Dto3DBundle`;
+
+      console.log('⚙️ Creating activity...');
+
+      // Check if activity exists
+      try {
+        await axios.get(
+          `${this.baseUrl}/da/us-east/v3/activities/${activityName}`,
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+        console.log('✅ Activity already exists');
+        return;
+      } catch (error: any) {
+        if (error.response?.status !== 404) throw error;
+      }
+
+      // Create activity
+      await axios.post(
+        `${this.baseUrl}/da/us-east/v3/activities`,
+        {
+          id: activityName,
+          commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[Convert2Dto3D].path)" /o "$(args[outputFile].path)"'],
+          engine: 'Autodesk.AutoCAD+24',
+          appbundles: [`${appBundleName}+prod`],
+          parameters: {
+            inputFile: {
+              verb: 'get',
+              description: 'Input 2D DWG file',
+              required: true,
+              localName: 'input.dwg'
+            },
+            outputFile: {
+              verb: 'put',
+              description: 'Output 3D DWG file',
+              required: true,
+              localName: 'output.dwg'
+            }
+          }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('✅ Activity created successfully');
+
+    } catch (error: any) {
+      console.error('❌ Failed to create activity:', error.response?.data || error.message);
+      throw new Error('Failed to create activity');
+    }
+  }
+
+  /**
+   * Convert 2D DWG to 3D using Design Automation
+   */
+  async convert2DTo3D(dwgBuffer: Buffer, fileName: string): Promise<Buffer> {
+    try {
+      console.log(`\n🚀 Converting ${fileName} from 2D to 3D using AutoCAD...`);
+
+      // Step 1: Setup app bundle and activity (one-time setup)
+      await this.createAppBundle();
+      await this.createActivity();
+
+      // Step 2: Upload input DWG
+      const inputObjectId = await this.uploadToOss(dwgBuffer, fileName);
+      const inputUrl = await this.createSignedUrl(inputObjectId, 'read');
+
+      // Step 3: Create output object
+      const outputObjectId = await this.uploadToOss(Buffer.from(''), `output_${fileName}`);
+      const outputUrl = await this.createSignedUrl(outputObjectId, 'write');
+
+      // Step 4: Create workitem
+      const token = await this.getAccessToken();
+      const activityName = `${this.nickname}.Convert2Dto3DActivity+prod`;
+
+      console.log('⚙️ Creating workitem...');
+
+      const workitemResponse = await axios.post(
+        `${this.baseUrl}/da/us-east/v3/workitems`,
+        {
+          activityId: activityName,
+          arguments: {
+            inputFile: {
+              url: inputUrl,
+              verb: 'get'
+            },
+            outputFile: {
+              url: outputUrl,
+              verb: 'put'
+            }
+          }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const workitemId = workitemResponse.data.id;
+      console.log(`⏳ Workitem created: ${workitemId}`);
+
+      // Step 5: Poll for completion
+      let status = 'pending';
+      let attempts = 0;
+      const maxAttempts = 60; // 5 minutes max
+
+      while ((status === 'pending' || status === 'inprogress') && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+
+        const statusResponse = await axios.get(
+          `${this.baseUrl}/da/us-east/v3/workitems/${workitemId}`,
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+
+        status = statusResponse.data.status;
+        console.log(`⏳ Status: ${status}`);
+        attempts++;
+      }
+
+      if (status !== 'success') {
+        throw new Error(`Workitem failed with status: ${status}`);
+      }
+
+      // Step 6: Download result
+      console.log('📥 Downloading 3D DWG...');
+      const resultUrl = await this.createSignedUrl(outputObjectId, 'read');
+      const resultResponse = await axios.get(resultUrl, { responseType: 'arraybuffer' });
+
+      console.log('✅ 2D to 3D conversion complete!\n');
+      return Buffer.from(resultResponse.data);
+
+    } catch (error: any) {
+      console.error('❌ Design Automation failed:', error.response?.data || error.message);
+      console.log('⚠️ Falling back to original 2D file...');
+      return dwgBuffer; // Return original if conversion fails
     }
   }
 }

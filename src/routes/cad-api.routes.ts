@@ -7,6 +7,7 @@ import CADProcessorService from '../services/cad/cad-processor.service';
 import { AutoCADParserService } from '../services/cad/autocad-parser.service';
 import { RealDetectionService } from '../services/real-detection.service';
 import CloudConvertService from '../services/cloudconvert.service';
+import DesignAutomationService from '../services/design-automation.service';
 
 const router = Router();
 
@@ -73,7 +74,20 @@ router.post('/upload', upload.array('files', 10), async (req: Request, res: Resp
         if (useAutodesk && ['.dwg', '.rvt', '.skp', '.ifc', '.nwd'].includes(fileExtension)) {
           // Use Autodesk for 3D CAD files
           console.log('🌐 Using Autodesk 3D processing...');
-          const autodeskResult = await autodeskService.processCADFile(file.buffer, file.originalname);
+
+          // For DWG files, convert 2D to 3D first using Design Automation
+          let processedBuffer = file.buffer;
+          if (fileExtension === '.dwg') {
+            console.log('🏗️ Converting 2D DWG to 3D using AutoCAD Design Automation...');
+            try {
+              processedBuffer = await DesignAutomationService.convert2DTo3D(file.buffer, file.originalname);
+              console.log('✅ 2D to 3D conversion complete, now processing with Forge...');
+            } catch (error: any) {
+              console.warn('⚠️ Design Automation failed, continuing with original file:', error.message);
+            }
+          }
+
+          const autodeskResult = await autodeskService.processCADFile(processedBuffer, file.originalname);
 
           result = {
             fileName: file.originalname,
