@@ -5,6 +5,7 @@
 
 import { RealDetectionService } from './real-detection.service';
 import { billionDollarDetector } from './billion-dollar-detection.service';
+import { gptVisionDetector } from './gpt-vision-detection.service';
 import { getPdfConverterService } from './pdf-converter.service';
 import JobDatabaseService from './job-database.service';
 import * as fs from 'fs';
@@ -102,55 +103,78 @@ export class JobProcessorService {
       job.progress = 30;
       this.updateJobInMemory(job);
       
-      // Process the image with BOTH detection services
+      // Process the image with detection services (GPT-4 Vision → Billion Dollar → Real Detection)
       console.log('🔍 Processing image with detection services...');
-      
-      // Try billion dollar detector first for highest accuracy
+
       let detectionResult;
-      let usedBillionDollar = false;
-      
+      let detectionMethod = 'unknown';
+
+      // Try GPT-4 Vision first (fastest, most reliable)
       try {
-        console.log('💎 Using Billion Dollar Detection Service...');
-        const billionResult = await billionDollarDetector.detectFloorPlan(imagePath);
-        
-        // Convert billion dollar format to standard format
+        console.log('👁️ Using GPT-4 Vision Detection Service...');
+        const visionResult = await gptVisionDetector.detectFloorPlan(imagePath);
+
         detectionResult = {
-          walls: billionResult.walls.map(w => ({
-            id: w.id,
-            start: w.start,
-            end: w.end,
-            thickness: w.thickness,
-            type: w.type,
-            confidence: w.confidence
-          })),
-          rooms: billionResult.rooms.map(r => ({
-            id: r.id,
-            name: r.name,
-            type: r.type,
-            vertices: r.vertices,
-            area: r.area
-          })),
-          doors: billionResult.doors.map(d => ({
-            id: d.id,
-            position: d.position,
-            width: d.width,
-            orientation: d.orientation,
-            confidence: d.confidence
-          })),
-          windows: billionResult.windows,
-          fixtures: billionResult.fixtures,
+          walls: visionResult.walls,
+          rooms: visionResult.rooms,
+          doors: visionResult.doors,
+          windows: visionResult.windows,
+          fixtures: [],
           text: [],
-          measurements: billionResult.measurements,
-          metadata: billionResult.metadata
+          measurements: visionResult.measurements,
+          metadata: visionResult.metadata
         };
-        usedBillionDollar = true;
-        console.log(`✅ Billion Dollar Detection: ${billionResult.walls.length} walls, ${billionResult.rooms.length} rooms, confidence: ${billionResult.metadata.confidence}%`);
-      } catch (billionError) {
-        console.log('⚠️ Billion Dollar Detection failed, falling back to Real Detection...');
-        console.error(billionError);
-        
-        // Fallback to Real Detection Service
-        detectionResult = await this.detector.detectFloorPlan(imagePath);
+        detectionMethod = 'gpt-4-vision';
+        console.log(`✅ GPT-4 Vision: ${visionResult.walls.length} walls, ${visionResult.rooms.length} rooms, confidence: ${visionResult.metadata.confidence}`);
+      } catch (visionError) {
+        console.log('⚠️ GPT-4 Vision failed, falling back to Billion Dollar Detection...');
+        console.error(visionError);
+
+        // Try Billion Dollar detector as fallback
+        try {
+          console.log('💎 Using Billion Dollar Detection Service...');
+          const billionResult = await billionDollarDetector.detectFloorPlan(imagePath);
+
+          // Convert billion dollar format to standard format
+          detectionResult = {
+            walls: billionResult.walls.map(w => ({
+              id: w.id,
+              start: w.start,
+              end: w.end,
+              thickness: w.thickness,
+              type: w.type,
+              confidence: w.confidence
+            })),
+            rooms: billionResult.rooms.map(r => ({
+              id: r.id,
+              name: r.name,
+              type: r.type,
+              vertices: r.vertices,
+              area: r.area
+            })),
+            doors: billionResult.doors.map(d => ({
+              id: d.id,
+              position: d.position,
+              width: d.width,
+              orientation: d.orientation,
+              confidence: d.confidence
+            })),
+            windows: billionResult.windows,
+            fixtures: billionResult.fixtures,
+            text: [],
+            measurements: billionResult.measurements,
+            metadata: billionResult.metadata
+          };
+          detectionMethod = 'billion-dollar-ai';
+          console.log(`✅ Billion Dollar Detection: ${billionResult.walls.length} walls, ${billionResult.rooms.length} rooms, confidence: ${billionResult.metadata.confidence}%`);
+        } catch (billionError) {
+          console.log('⚠️ Billion Dollar Detection failed, falling back to Real Detection...');
+          console.error(billionError);
+
+          // Final fallback to Real Detection Service
+          detectionResult = await this.detector.detectFloorPlan(imagePath);
+          detectionMethod = 'real-detection';
+        }
       }
       
       // Update progress
@@ -187,8 +211,8 @@ export class JobProcessorService {
           totalArea: detectionResult.rooms?.reduce((sum, r) => sum + (r.area || 0), 0) || 0,
           suggestions: this.generateSuggestions(detectionResult),
           violations: [],
-          confidence: usedBillionDollar ? detectionResult.metadata?.confidence || 95 : 85,
-          detectionMethod: usedBillionDollar ? 'billion-dollar-ai' : 'standard'
+          confidence: detectionResult.metadata?.confidence || 85,
+          detectionMethod: detectionMethod
         },
         measurements: detectionResult.measurements || {},
         metadata: {
