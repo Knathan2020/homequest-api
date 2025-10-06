@@ -345,8 +345,22 @@ export class AutodeskForgeService {
     let totalArea = 0;
 
     try {
-      if (properties.collection) {
-        for (const item of properties.collection) {
+      // Handle undefined/null properties
+      if (!properties) {
+        console.warn('⚠️ Properties is null/undefined');
+        return { walls, doors, windows, stairs, rooms, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
+      }
+
+      // Check if collection exists directly or nested
+      const collection = properties.collection || properties.data?.collection || null;
+
+      if (!collection) {
+        console.warn('⚠️ No collection found in properties. Keys:', Object.keys(properties));
+        return { walls, doors, windows, stairs, rooms, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
+      }
+
+      if (collection) {
+        for (const item of collection) {
           const props = item.properties || {};
           const name = item.name?.toLowerCase() || '';
           const category = props.Category?.toLowerCase() || '';
@@ -482,6 +496,8 @@ export class AutodeskForgeService {
         // Step 5: Get properties for first view (usually the main model)
         if (metadata.length > 0 && metadata[0].guid) {
           const properties = await this.getModelProperties(urn, metadata[0].guid);
+          console.log('📋 Properties response type:', typeof properties);
+          console.log('📋 Properties keys:', properties ? Object.keys(properties) : 'null/undefined');
           floorplanData = this.extractFloorplanData(properties);
         }
       } catch (error: any) {

@@ -6,6 +6,7 @@ import AutodeskForgeService from '../services/autodesk-forge.service';
 import CADProcessorService from '../services/cad/cad-processor.service';
 import { AutoCADParserService } from '../services/cad/autocad-parser.service';
 import { RealDetectionService } from '../services/real-detection.service';
+import CloudConvertService from '../services/cloudconvert.service';
 
 const router = Router();
 
@@ -141,31 +142,61 @@ router.post('/upload', upload.array('files', 10), async (req: Request, res: Resp
           };
 
         } else if (fileExtension === '.pdf') {
-          // PDF processing - Send to Autodesk for 3D viewing
-          console.log('📄 Processing PDF with Autodesk...');
+          // PDF processing - Convert to DWG first, then process with Autodesk
+          console.log('📄 Processing PDF: Converting to DWG for data extraction...');
 
-          const autodeskResult = await autodeskService.processCADFile(file.buffer, file.originalname);
+          try {
+            // Step 1: Convert PDF to DWG
+            const dwgBuffer = await CloudConvertService.convertPdfToDwg(file.buffer, file.originalname);
+            const dwgFileName = file.originalname.replace('.pdf', '.dwg');
 
-          result = {
-            fileName: file.originalname,
-            fileType: 'pdf',
-            fileSize: file.size,
-            success: autodeskResult.success,
-            processingMethod: 'autodesk-forge',
-            urn: autodeskResult.urn,
-            viewerUrl: autodeskResult.viewerUrl,
-            data: {
-              walls: autodeskResult.floorplanData?.walls || [],
-              doors: autodeskResult.floorplanData?.doors || [],
-              windows: autodeskResult.floorplanData?.windows || [],
-              stairs: autodeskResult.floorplanData?.stairs || [],
-              rooms: autodeskResult.floorplanData?.rooms || [],
-              metadata: autodeskResult.metadata || {},
-              supports3D: true
-            },
-            translationStatus: autodeskResult.status,
-            error: autodeskResult.error
-          };
+            // Step 2: Process DWG with Autodesk to extract CAD data
+            console.log('🔧 Processing converted DWG with Autodesk...');
+            const autodeskResult = await autodeskService.processCADFile(dwgBuffer, dwgFileName);
+
+            result = {
+              fileName: file.originalname,
+              fileType: 'pdf',
+              fileSize: file.size,
+              success: autodeskResult.success,
+              processingMethod: 'cloudconvert-dwg-autodesk',
+              urn: autodeskResult.urn,
+              viewerUrl: autodeskResult.viewerUrl,
+              data: {
+                walls: autodeskResult.floorplanData?.walls || [],
+                doors: autodeskResult.floorplanData?.doors || [],
+                windows: autodeskResult.floorplanData?.windows || [],
+                stairs: autodeskResult.floorplanData?.stairs || [],
+                rooms: autodeskResult.floorplanData?.rooms || [],
+                metadata: autodeskResult.metadata || {},
+                supports3D: true
+              },
+              translationStatus: autodeskResult.status,
+              error: autodeskResult.error
+            };
+
+          } catch (error: any) {
+            console.error('❌ PDF to DWG conversion failed:', error.message);
+            result = {
+              fileName: file.originalname,
+              fileType: 'pdf',
+              fileSize: file.size,
+              success: false,
+              processingMethod: 'cloudconvert-dwg-autodesk',
+              urn: '',
+              data: {
+                walls: [],
+                doors: [],
+                windows: [],
+                stairs: [],
+                rooms: [],
+                metadata: {},
+                supports3D: false
+              },
+              translationStatus: 'failed',
+              error: `PDF conversion failed: ${error.message}`
+            };
+          }
 
         } else if (['.jpg', '.jpeg', '.png', '.webp', '.tiff'].includes(fileExtension)) {
           // Image processing - AI detection
