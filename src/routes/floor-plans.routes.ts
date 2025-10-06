@@ -7,6 +7,7 @@ import { jobProcessor } from '../services/job-processor.service';
 import JobDatabaseService from '../services/job-database.service';
 import CADProcessorService from '../services/cad/cad-processor.service';
 import { AutoCADParserService } from '../services/cad/autocad-parser.service';
+import autodeskDWGParser from '../services/cad/autodesk-dwg-parser.service';
 import Bull from 'bull';
 import fs from 'fs';
 import path from 'path';
@@ -696,8 +697,57 @@ router.post('/upload-cad', upload.single('cadFile'), async (req: any, res: any) 
         result.dxfParsingError = dxfError.message;
         result.parserUsed = 'imagemagick-fallback';
       }
+    } else if (fileExtension === '.dwg') {
+      console.log('🏗️ Using Autodesk Forge API for DWG file parsing');
+
+      try {
+        // Parse DWG file using Autodesk Forge API for detailed floor plan data
+        floorPlanData = await autodeskDWGParser.parseDWG(tempPath);
+
+        console.log('✅ DWG parsing successful:', {
+          walls: floorPlanData.walls.length,
+          rooms: floorPlanData.rooms.length,
+          doors: floorPlanData.doors.length,
+          windows: floorPlanData.windows.length,
+          textLabels: floorPlanData.textLabels.length,
+          urn: floorPlanData.metadata.urn
+        });
+
+        // Create a result object with Forge data
+        result = {
+          success: true,
+          outputPath: tempPath,
+          metadata: {
+            fileName: fileName,
+            fileType: 'dwg' as const,
+            layers: floorPlanData.metadata.layers,
+            units: floorPlanData.metadata.units,
+            scale: floorPlanData.metadata.scale
+          },
+          floorPlanData: floorPlanData,
+          enhancedParsing: true,
+          parserUsed: 'autodesk-forge',
+          urn: floorPlanData.metadata.urn,
+          viewerUrl: floorPlanData.metadata.viewerUrl
+        };
+
+      } catch (dwgError: any) {
+        console.error('❌ DWG parsing failed, falling back to standard CAD processing:', dwgError.message);
+
+        // Fallback to standard processing
+        const processingOptions = {
+          outputFormat: 'png' as const,
+          resolution: 300,
+          scale: 1.0,
+          includeMetadata: true
+        };
+
+        result = await cadProcessor.processCADFile(tempPath, processingOptions);
+        result.dwgParsingError = dwgError.message;
+        result.parserUsed = 'imagemagick-fallback';
+      }
     } else {
-      // Standard CAD processing for other formats
+      // Standard CAD processing for other formats (SKP, PDF, etc.)
       const processingOptions = {
         outputFormat: 'png' as const,
         resolution: 300,
@@ -728,6 +778,11 @@ router.post('/upload-cad', upload.single('cadFile'), async (req: any, res: any) 
           floorPlanData: result.floorPlanData || null,
           enhancedParsing: result.enhancedParsing || false,
           parserUsed: result.parserUsed || 'imagemagick-standard',
+          urn: result.urn || null,
+          viewerUrl: result.viewerUrl || null,
+          walls: result.floorPlanData?.walls || [],
+          doors: result.floorPlanData?.doors || [],
+          windows: result.floorPlanData?.windows || [],
           cadToolsAvailable: await cadProcessor.checkCADToolsAvailability()
         }
       });
