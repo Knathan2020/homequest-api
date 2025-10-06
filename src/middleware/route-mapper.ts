@@ -13,9 +13,8 @@ const ROUTE_MAPPINGS: Record<string, string> = {
   '/api/analyze-floorplan': '/api/floor-plans/upload',
   '/api/floor-plans/analyze': '/api/floor-plans/upload',
 
-  // CAD Processing
+  // CAD Processing (spatial routes only - /api/cad/* goes directly to cad-api.routes)
   '/api/spatial/upload-cad': '/api/floor-plans/upload-cad',
-  '/api/cad/upload': '/api/floor-plans/upload-cad',
 
   // Job Status
   '/api/spatial/job': '/api/floor-plans/job',
