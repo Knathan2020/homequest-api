@@ -103,62 +103,70 @@ export class JobProcessorService {
       job.progress = 30;
       this.updateJobInMemory(job);
       
-      // Process the image with detection services (GPT-4 Vision → Billion Dollar → Real Detection)
-      console.log('🔍 Processing image with detection services...');
+      // HYBRID DETECTION: Run OpenCV + GPT-4 Vision in parallel, then merge
+      console.log('🔍 Running HYBRID detection (OpenCV + GPT-4 Vision)...');
 
       let detectionResult;
-      let detectionMethod = 'unknown';
+      let detectionMethod = 'hybrid';
 
-      // Try GPT-4 Vision first (fastest, most reliable)
-      try {
-        console.log('👁️ Using GPT-4 Vision Detection Service...');
-        const visionResult = await gptVisionDetector.detectFloorPlan(imagePath);
+      // Run BOTH detections in parallel for best results
+      const [opencvResult, gptResult] = await Promise.allSettled([
+        this.detector.detectFloorPlan(imagePath),
+        gptVisionDetector.detectFloorPlan(imagePath)
+      ]);
 
+      // Check what succeeded
+      const opencvSuccess = opencvResult.status === 'fulfilled';
+      const gptSuccess = gptResult.status === 'fulfilled';
+
+      console.log(`📊 Detection results: OpenCV ${opencvSuccess ? '✅' : '❌'}, GPT-4 Vision ${gptSuccess ? '✅' : '❌'}`);
+
+      if (opencvSuccess && gptSuccess) {
+        // BEST CASE: Both worked - merge results intelligently
+        const opencv = opencvResult.value;
+        const gpt = gptResult.value;
+
+        console.log(`🔀 Merging results:`);
+        console.log(`   OpenCV: ${opencv.walls?.length || 0} walls, ${opencv.rooms?.length || 0} rooms`);
+        console.log(`   GPT-4:  ${gpt.walls.length} walls, ${gpt.rooms.length} rooms`);
+
+        detectionResult = this.mergeDetectionResults(opencv, gpt);
+        detectionMethod = 'hybrid-opencv-gpt4';
+        console.log(`✅ HYBRID: ${detectionResult.walls?.length || 0} walls, ${detectionResult.rooms?.length || 0} rooms`);
+
+      } else if (opencvSuccess) {
+        // OpenCV worked, GPT failed - use OpenCV only
+        console.log('⚠️ GPT-4 Vision failed, using OpenCV results only');
+        detectionResult = opencvResult.value;
+        detectionMethod = 'opencv-only';
+        console.log(`✅ OpenCV: ${detectionResult.walls?.length || 0} walls, ${detectionResult.rooms?.length || 0} rooms`);
+
+      } else if (gptSuccess) {
+        // GPT worked, OpenCV failed - use GPT only
+        console.log('⚠️ OpenCV failed, using GPT-4 Vision results only');
+        const gpt = gptResult.value;
         detectionResult = {
-          walls: visionResult.walls,
-          rooms: visionResult.rooms,
-          doors: visionResult.doors,
-          windows: visionResult.windows,
+          walls: gpt.walls,
+          rooms: gpt.rooms,
+          doors: gpt.doors,
+          windows: gpt.windows,
           fixtures: [],
           text: [],
-          measurements: visionResult.measurements,
-          metadata: visionResult.metadata
+          measurements: gpt.measurements,
+          metadata: gpt.metadata
         };
-        detectionMethod = 'gpt-4-vision';
-        console.log(`✅ GPT-4 Vision: ${visionResult.walls.length} walls, ${visionResult.rooms.length} rooms, confidence: ${visionResult.metadata.confidence}`);
-      } catch (visionError) {
-        console.log('⚠️ GPT-4 Vision failed, falling back to Billion Dollar Detection...');
-        console.error(visionError);
+        detectionMethod = 'gpt4-only';
+        console.log(`✅ GPT-4: ${gpt.walls.length} walls, ${gpt.rooms.length} rooms`);
 
-        // Try Billion Dollar detector as fallback
+      } else {
+        // Both failed - try Billion Dollar as final fallback
+        console.log('❌ Both OpenCV and GPT-4 failed, trying Billion Dollar Detection...');
         try {
-          console.log('💎 Using Billion Dollar Detection Service...');
           const billionResult = await billionDollarDetector.detectFloorPlan(imagePath);
-
-          // Convert billion dollar format to standard format
           detectionResult = {
-            walls: billionResult.walls.map(w => ({
-              id: w.id,
-              start: w.start,
-              end: w.end,
-              thickness: w.thickness,
-              type: w.type,
-              confidence: w.confidence
-            })),
-            rooms: billionResult.rooms.map(r => ({
-              id: r.id,
-              name: r.name,
-              type: r.type,
-              vertices: r.vertices,
-              area: r.area
-            })),
-            doors: billionResult.doors.map(d => ({
-              id: d.id,
-              position: d.position,
-              width: d.width,
-              orientation: d.orientation,
-              confidence: d.confidence
-            })),
+            walls: billionResult.walls,
+            rooms: billionResult.rooms,
+            doors: billionResult.doors,
             windows: billionResult.windows,
             fixtures: billionResult.fixtures,
             text: [],
@@ -166,14 +174,10 @@ export class JobProcessorService {
             metadata: billionResult.metadata
           };
           detectionMethod = 'billion-dollar-ai';
-          console.log(`✅ Billion Dollar Detection: ${billionResult.walls.length} walls, ${billionResult.rooms.length} rooms, confidence: ${billionResult.metadata.confidence}%`);
+          console.log(`✅ Billion Dollar: ${billionResult.walls.length} walls, ${billionResult.rooms.length} rooms`);
         } catch (billionError) {
-          console.log('⚠️ Billion Dollar Detection failed, falling back to Real Detection...');
-          console.error(billionError);
-
-          // Final fallback to Real Detection Service
-          detectionResult = await this.detector.detectFloorPlan(imagePath);
-          detectionMethod = 'real-detection';
+          console.error('❌ All detection methods failed');
+          throw new Error('All detection methods failed');
         }
       }
       
@@ -295,27 +299,179 @@ export class JobProcessorService {
    */
   private generateSuggestions(detectionResult: any): string[] {
     const suggestions = [];
-    
+
     if (!detectionResult.rooms || detectionResult.rooms.length === 0) {
       suggestions.push('No rooms detected - try uploading a clearer floor plan image');
     }
-    
+
     if (!detectionResult.walls || detectionResult.walls.length < 4) {
       suggestions.push('Few walls detected - ensure the floor plan has clear wall lines');
     }
-    
+
     if (detectionResult.rooms && detectionResult.rooms.length > 0) {
       const unnamedRooms = detectionResult.rooms.filter(r => !r.label || r.label.includes('Room'));
       if (unnamedRooms.length > 0) {
         suggestions.push(`${unnamedRooms.length} rooms need labels - add room names for better identification`);
       }
     }
-    
+
     if (!detectionResult.doors || detectionResult.doors.length === 0) {
       suggestions.push('No doors detected - doors help with navigation flow analysis');
     }
-    
+
     return suggestions;
+  }
+
+  /**
+   * Merge OpenCV and GPT-4 Vision detection results
+   * Strategy: Use OpenCV's precise walls, GPT-4's intelligent room naming
+   */
+  private mergeDetectionResults(opencv: any, gpt: any): any {
+    // Use OpenCV's walls (more accurate coordinates)
+    const walls = opencv.walls || [];
+
+    // Enhance OpenCV rooms with GPT-4's intelligent naming
+    const rooms = (opencv.rooms || []).map((opencvRoom: any) => {
+      // Try to find matching GPT room by spatial overlap
+      let matchingGptRoom: any = null;
+      let maxOverlap = 0;
+
+      for (const gptRoom of gpt.rooms) {
+        const overlap = this.calculateRoomOverlap(opencvRoom, gptRoom);
+        if (overlap > maxOverlap) {
+          maxOverlap = overlap;
+          matchingGptRoom = gptRoom;
+        }
+      }
+
+      // If we found a good match (>30% overlap), use GPT's naming
+      if (matchingGptRoom && maxOverlap > 0.3) {
+        return {
+          ...opencvRoom,
+          label: matchingGptRoom.name || opencvRoom.label,
+          type: matchingGptRoom.type || opencvRoom.type,
+          area: matchingGptRoom.area || opencvRoom.area,
+          confidence: Math.max(opencvRoom.confidence || 0, matchingGptRoom.confidence || 0)
+        };
+      }
+
+      return opencvRoom;
+    });
+
+    // Merge doors from both sources (remove duplicates)
+    const doors = this.mergePositionalElements(
+      opencv.doors || [],
+      gpt.doors || [],
+      50 // Distance threshold in pixels
+    );
+
+    // Merge windows from both sources (remove duplicates)
+    const windows = this.mergePositionalElements(
+      opencv.windows || [],
+      gpt.windows || [],
+      50 // Distance threshold in pixels
+    );
+
+    // Use OpenCV's fixtures and text since GPT doesn't provide these
+    const fixtures = opencv.fixtures || [];
+    const text = opencv.text || [];
+
+    // Combine measurements (prefer GPT if available and valid)
+    const measurements = gpt.measurements && gpt.measurements.scale > 0
+      ? gpt.measurements
+      : opencv.measurements || {};
+
+    // Combine metadata
+    const metadata = {
+      ...opencv.metadata,
+      ...gpt.metadata,
+      confidence: Math.max(opencv.metadata?.confidence || 0, gpt.metadata?.confidence || 0),
+      detectionMethod: 'hybrid-opencv-gpt4',
+      opencvWalls: walls.length,
+      gptRooms: gpt.rooms.length,
+      mergedRooms: rooms.length
+    };
+
+    return {
+      walls,
+      rooms,
+      doors,
+      windows,
+      fixtures,
+      text,
+      measurements,
+      metadata
+    };
+  }
+
+  /**
+   * Calculate overlap between two rooms (simplified bounding box overlap)
+   */
+  private calculateRoomOverlap(room1: any, room2: any): number {
+    // Get bounding boxes for both rooms
+    const bbox1 = this.getBoundingBox(room1.vertices || room1.polygon || []);
+    const bbox2 = this.getBoundingBox(room2.vertices || []);
+
+    // Calculate intersection area
+    const xOverlap = Math.max(0, Math.min(bbox1.maxX, bbox2.maxX) - Math.max(bbox1.minX, bbox2.minX));
+    const yOverlap = Math.max(0, Math.min(bbox1.maxY, bbox2.maxY) - Math.max(bbox1.minY, bbox2.minY));
+    const intersectionArea = xOverlap * yOverlap;
+
+    // Calculate union area
+    const area1 = (bbox1.maxX - bbox1.minX) * (bbox1.maxY - bbox1.minY);
+    const area2 = (bbox2.maxX - bbox2.minX) * (bbox2.maxY - bbox2.minY);
+    const unionArea = area1 + area2 - intersectionArea;
+
+    // Return intersection over union (IoU)
+    return unionArea > 0 ? intersectionArea / unionArea : 0;
+  }
+
+  /**
+   * Get bounding box from vertices
+   */
+  private getBoundingBox(vertices: Array<{x: number, y: number}>): {minX: number, maxX: number, minY: number, maxY: number} {
+    if (!vertices || vertices.length === 0) {
+      return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+    }
+
+    const xs = vertices.map(v => v.x);
+    const ys = vertices.map(v => v.y);
+
+    return {
+      minX: Math.min(...xs),
+      maxX: Math.max(...xs),
+      minY: Math.min(...ys),
+      maxY: Math.max(...ys)
+    };
+  }
+
+  /**
+   * Merge positional elements (doors/windows) from two sources
+   * Removes duplicates based on distance threshold
+   */
+  private mergePositionalElements(elements1: any[], elements2: any[], distanceThreshold: number): any[] {
+    const merged = [...elements1];
+
+    for (const elem2 of elements2) {
+      const pos2 = elem2.position || { x: elem2.x, y: elem2.y };
+
+      // Check if this element is close to any existing element
+      const isDuplicate = merged.some(elem1 => {
+        const pos1 = elem1.position || { x: elem1.x, y: elem1.y };
+        const distance = Math.sqrt(
+          Math.pow(pos1.x - pos2.x, 2) +
+          Math.pow(pos1.y - pos2.y, 2)
+        );
+        return distance < distanceThreshold;
+      });
+
+      // If not a duplicate, add it
+      if (!isDuplicate) {
+        merged.push(elem2);
+      }
+    }
+
+    return merged;
   }
 }
 
