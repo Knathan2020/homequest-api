@@ -302,43 +302,62 @@ export class AutodeskForgeService {
 
   /**
    * Get properties for specific model view (guid)
+   * Will retry if properties are still being generated (202 status)
    */
-  async getModelProperties(urn: string, guid: string): Promise<any> {
-    try {
-      const token = await this.getAccessToken();
+  async getModelProperties(urn: string, guid: string, maxRetries: number = 5): Promise<any> {
+    const token = await this.getAccessToken();
+    let retryCount = 0;
 
-      console.log(`🏗️ Fetching properties for GUID: ${guid}`);
+    while (retryCount < maxRetries) {
+      try {
+        console.log(`🏗️ Fetching properties for GUID: ${guid} (attempt ${retryCount + 1}/${maxRetries})`);
 
-      const response = await axios.get(
-        `${this.baseUrl}/modelderivative/v2/designdata/${urn}/metadata/${guid}/properties`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
+        const response = await axios.get(
+          `${this.baseUrl}/modelderivative/v2/designdata/${urn}/metadata/${guid}/properties`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`
+            },
+            validateStatus: (status) => status === 200 || status === 202 // Accept both 200 and 202
+          }
+        );
+
+        // Log the full response to see structure
+        console.log('📋 Raw response status:', response.status);
+        console.log('📋 Response data keys:', response.data ? Object.keys(response.data) : 'no data');
+
+        // If 202 (Accepted), properties are still being generated - retry
+        if (response.status === 202) {
+          console.log('⏳ Properties still being generated (202), waiting 3 seconds before retry...');
+          retryCount++;
+          if (retryCount < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
+            continue;
+          } else {
+            console.warn('⚠️ Max retries reached, properties may not be complete');
+            return response.data; // Return what we have
           }
         }
-      );
 
-      // Log the full response to see structure
-      console.log('📋 Raw response status:', response.status);
-      console.log('📋 Response data keys:', response.data ? Object.keys(response.data) : 'no data');
-      console.log('📋 Response.data.data exists?', !!response.data?.data);
+        // 200 OK - properties are ready
+        if (response.data.data) {
+          console.log('✅ Properties ready! Using response.data.data');
+          return response.data.data;
+        } else if (response.data.collection) {
+          console.log('✅ Properties ready! Using response.data.collection');
+          return { collection: response.data.collection };
+        } else {
+          console.log('✅ Properties ready! Using full response.data');
+          return response.data;
+        }
 
-      // Check multiple possible paths
-      if (response.data.data) {
-        console.log('📋 Using response.data.data');
-        return response.data.data;
-      } else if (response.data.collection) {
-        console.log('📋 Using response.data.collection (alternate path)');
-        return { collection: response.data.collection };
-      } else {
-        console.log('📋 Using full response.data');
-        return response.data;
+      } catch (error: any) {
+        console.error('❌ Failed to get properties:', error.response?.data || error.message);
+        throw new Error('Failed to get model properties');
       }
-
-    } catch (error: any) {
-      console.error('❌ Failed to get properties:', error.response?.data || error.message);
-      throw new Error('Failed to get model properties');
     }
+
+    throw new Error('Failed to get properties after max retries');
   }
 
   /**
@@ -367,10 +386,18 @@ export class AutodeskForgeService {
       }
 
       // Check if collection exists directly or nested
-      const collection = properties.collection || properties.data?.collection || null;
+      // Autodesk API can return: collection, data.collection, or result (when still processing)
+      const collection = properties.collection || properties.data?.collection || properties.result || null;
 
       if (!collection) {
         console.warn('⚠️ No collection found in properties. Keys:', Object.keys(properties));
+        console.warn('📋 Full properties object:', JSON.stringify(properties).substring(0, 500));
+        return { walls, doors, windows, stairs, rooms, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
+      }
+
+      // If result is "Accepted" (202 status), properties are still being generated
+      if (collection === 'Accepted' || typeof collection === 'string') {
+        console.warn('⚠️ Properties still being generated (202 Accepted). Retry in a few seconds.');
         return { walls, doors, windows, stairs, rooms, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
       }
 
