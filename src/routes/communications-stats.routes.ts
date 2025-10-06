@@ -56,4 +56,38 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// Get recent activity (calls, SMS, appointments - NO EMAILS for privacy)
+router.get('/recent-activity', async (req, res) => {
+  try {
+    const { teamId, limit = 10 } = req.query;
+
+    if (!teamId) {
+      return res.status(400).json({ error: 'teamId is required' });
+    }
+
+    // Get recent activity from team_activity table (where we log everything)
+    const { data: activities, error } = await supabase
+      .from('team_activity')
+      .select('*')
+      .eq('team_id', teamId)
+      .order('created_at', { ascending: false })
+      .limit(Number(limit));
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      activities: activities || []
+    });
+  } catch (error: any) {
+    console.error('Error fetching recent activity:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
