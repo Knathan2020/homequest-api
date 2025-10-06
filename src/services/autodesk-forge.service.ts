@@ -465,7 +465,7 @@ export class AutodeskForgeService {
         status = await this.getTranslationStatus(urn);
         attempts++;
         console.log(`⏳ Translation status: ${status.status} (${status.progress})`);
-      } while (status.status === 'inprogress' && attempts < maxAttempts);
+      } while ((status.status === 'inprogress' || status.status === 'pending') && attempts < maxAttempts);
 
       if (status.status !== 'success') {
         throw new Error(`Translation ${status.status}: ${status.progress}`);
