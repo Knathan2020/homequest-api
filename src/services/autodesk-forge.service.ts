@@ -402,24 +402,46 @@ export class AutodeskForgeService {
       }
 
       if (collection) {
+        console.log(`📊 Processing ${collection.length} items from collection`);
+
+        // Log first few items to see structure
+        if (collection.length > 0) {
+          console.log('📋 Sample item structure:', JSON.stringify(collection[0]).substring(0, 500));
+        }
+
+        // Track unique layers
+        const layersFound = new Set<string>();
+
         for (const item of collection) {
           const props = item.properties || {};
           const name = item.name?.toLowerCase() || '';
           const category = props.Category?.toLowerCase() || '';
+          const layer = (props.Layer || '').toUpperCase(); // AutoCAD uses layer names!
+          const entityType = props['Entity Type'] || '';
 
-          // Classify elements
-          if (category.includes('wall') || name.includes('wall')) {
+          // Track layers for debugging
+          if (layer) layersFound.add(layer);
+
+          // AutoCAD classification - check Layer names (most important for DWG files!)
+          const isWallLayer = layer.includes('WALL') || layer.includes('A-WALL') || layer.includes('ARCH-WALL');
+          const isDoorLayer = layer.includes('DOOR') || layer.includes('A-DOOR');
+          const isWindowLayer = layer.includes('WINDOW') || layer.includes('WIND') || layer.includes('A-WIND');
+          const isStairLayer = layer.includes('STAIR') || layer.includes('STRS') || layer.includes('A-FLOR');
+
+          // Classify elements (check Layer first for AutoCAD, then Category for Revit)
+          if (isWallLayer || category.includes('wall') || name.includes('wall') || entityType === 'AcDbLine' || entityType === 'AcDbPolyline') {
             walls.push({
               id: item.objectid,
               name: item.name,
-              type: props['Type Name'] || 'unknown',
+              type: props['Type Name'] || entityType || 'unknown',
               length: props.Length || 0,
               height: props.Height || 0,
               thickness: props.Width || 0,
               material: props.Material || 'unknown',
-              layer: props.Layer || 'default'
+              layer: props.Layer || 'default',
+              entityType: entityType
             });
-          } else if (category.includes('door') || name.includes('door')) {
+          } else if (isDoorLayer || category.includes('door') || name.includes('door')) {
             doors.push({
               id: item.objectid,
               name: item.name,
@@ -428,7 +450,7 @@ export class AutodeskForgeService {
               height: props.Height || 0,
               layer: props.Layer || 'default'
             });
-          } else if (category.includes('window') || name.includes('window')) {
+          } else if (isWindowLayer || category.includes('window') || name.includes('window')) {
             windows.push({
               id: item.objectid,
               name: item.name,
@@ -437,7 +459,7 @@ export class AutodeskForgeService {
               height: props.Height || 0,
               layer: props.Layer || 'default'
             });
-          } else if (category.includes('stair') || name.includes('stair') || category.includes('ramp')) {
+          } else if (isStairLayer || category.includes('stair') || name.includes('stair') || category.includes('ramp')) {
             stairs.push({
               id: item.objectid,
               name: item.name,
@@ -465,6 +487,9 @@ export class AutodeskForgeService {
             });
           }
         }
+
+        // Log layers found for debugging
+        console.log(`📋 Layers found in DWG: [${Array.from(layersFound).join(', ')}]`);
       }
 
       console.log(`📊 Extracted: ${walls.length} walls, ${doors.length} doors, ${windows.length} windows, ${stairs.length} stairs, ${rooms.length} rooms`);
