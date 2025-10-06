@@ -359,12 +359,20 @@ class NylasEmailService {
     bcc?: string[]
   ): Promise<boolean> {
     try {
+      console.log('📧 Nylas sendEmail called with:');
+      console.log('  TO:', to);
+      console.log('  CC:', cc);
+      console.log('  BCC:', bcc);
+      console.log('  Subject:', subject);
+      console.log('  UserId:', userId);
+
       const accounts = await this.getUserAccounts(userId);
       if (accounts.length === 0) throw new Error('No connected email account');
 
       const account = accounts[0];
+      console.log('📧 Using account:', account.email, 'with grantId:', account.grantId);
 
-      await nylas.messages.send({
+      const result = await nylas.messages.send({
         identifier: account.grantId,
         requestBody: {
           to: to.map(email => ({ email })),
@@ -375,9 +383,14 @@ class NylasEmailService {
         }
       });
 
+      console.log('✅ Nylas send result:', result);
       return true;
     } catch (error) {
-      console.error('Failed to send email:', error);
+      console.error('❌ Failed to send email:', error);
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
       return false;
     }
   }

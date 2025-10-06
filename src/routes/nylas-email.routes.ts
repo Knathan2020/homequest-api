@@ -332,6 +332,9 @@ router.post('/send-email', async (req: Request, res: Response) => {
   try {
     const { userId, to, subject, body, cc, bcc } = req.body;
 
+    console.log('📧 BACKEND /api/nylas/send-email received:');
+    console.log('  Request body:', { userId, to, cc, bcc, subject: subject?.substring(0, 50) });
+
     if (!userId || !to || !subject || !body) {
       return res.status(400).json({
         success: false,
@@ -339,6 +342,7 @@ router.post('/send-email', async (req: Request, res: Response) => {
       });
     }
 
+    console.log('📧 Calling nylasEmailService.sendEmail...');
     const success = await nylasEmailService.sendEmail(to, subject, body, userId, cc, bcc);
 
     if (success) {
