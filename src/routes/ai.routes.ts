@@ -339,21 +339,13 @@ Return only the JSON object with the extracted appointment data.`;
 router.post('/insights', async (req: Request, res: Response) => {
   try {
     const {
-      emails = [],
       calls = [],
       messages = [],
       vendors = [],
       limit = 5
     } = req.body;
 
-    // Create context from recent communications
-    const recentEmails = emails.slice(0, limit).map((e: any) => ({
-      from: e.from,
-      subject: e.subject,
-      date: e.date,
-      snippet: e.snippet || e.body?.substring(0, 100)
-    }));
-
+    // Create context from recent communications (NO EMAILS - kept private)
     const recentCalls = calls.slice(0, limit).map((c: any) => ({
       contact: c.contact,
       type: c.type,
@@ -387,21 +379,18 @@ Focus on:
 
 Return ONLY the insight text (1-2 sentences max), no formatting, no quotes. Be specific and reference actual names/companies from the data.`;
 
-    const userPrompt = `Recent communications:
-
-EMAILS (${recentEmails.length}):
-${recentEmails.map((e, i) => `${i+1}. From: ${e.from}, Subject: ${e.subject}, Date: ${e.date}`).join('\n')}
+    const userPrompt = `Recent communications (EMAILS EXCLUDED FOR PRIVACY):
 
 CALLS (${recentCalls.length}):
-${recentCalls.map((c, i) => `${i+1}. Contact: ${c.contact}, Type: ${c.type}, Duration: ${c.duration}, Date: ${c.date}`).join('\n')}
+${recentCalls.map((c: any, i: number) => `${i+1}. Contact: ${c.contact || c.vendor}, Type: ${c.type}, Duration: ${c.duration}, Date: ${c.date || c.time}`).join('\n')}
 
-MESSAGES (${recentMessages.length}):
-${recentMessages.map((m, i) => `${i+1}. From: ${m.from}, Date: ${m.date}`).join('\n')}
+MESSAGES/SMS (${recentMessages.length}):
+${recentMessages.map((m: any, i: number) => `${i+1}. From: ${m.from || m.vendor}, Date: ${m.date || m.time}`).join('\n')}
 
 VENDORS:
-${vendorInfo.map((v, i) => `${i+1}. ${v.name} - ${v.company} (${v.specialty})`).join('\n')}
+${vendorInfo.map((v: any, i: number) => `${i+1}. ${v.name} - ${v.company} (${v.specialty})`).join('\n')}
 
-Generate ONE specific, actionable insight based on actual patterns in this data.`;
+Generate ONE specific, actionable insight based on actual patterns in this data. Focus on call and SMS patterns since emails are kept private.`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
