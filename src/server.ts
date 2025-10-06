@@ -822,18 +822,6 @@ app.post('/api/ai/analyze-email', async (req, res) => {
   res.json({ sentiment: 'neutral', priority: 'medium', suggestedActions: [] });
 });
 
-app.post('/api/ai/generate-response', async (req, res) => {
-  res.json({ response: 'AI generated response', confidence: 0.95 });
-});
-
-app.post('/api/ai/analyze-message', async (req, res) => {
-  res.json({ intent: 'inquiry', entities: [], sentiment: 'positive' });
-});
-
-app.get('/api/ai-assistant/dashboard-data', async (req, res) => {
-  res.json({ metrics: { totalProjects: 5, activeProjects: 3 } });
-});
-
 // Notifications
 app.post('/api/notifications', async (req, res) => {
   res.json({ success: true, notification: { id: Date.now() } });
