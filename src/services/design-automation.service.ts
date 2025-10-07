@@ -167,8 +167,10 @@ export class DesignAutomationService {
    */
   private createAutoCADScript(): string {
     // AutoCAD Script (.scr) for Design Automation
-    // Minimal script - just save the file to prove pipeline works
-    return `_QSAVE
+    // Use SAVEAS to explicitly save to output file
+    // The /o flag in command line specifies output path
+    return `_SAVEAS 2018 output.dwg
+
 `.trim();
   }
 
