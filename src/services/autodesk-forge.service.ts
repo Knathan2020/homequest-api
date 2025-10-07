@@ -825,6 +825,11 @@ export class AutodeskForgeService {
               console.log('  All Area props:', props.Area, generalProps.Area);
             }
 
+            // Extract position coordinates for 3D rendering
+            const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
+            const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
+            const positionZ = generalProps['Position Z'] || props['Position Z'] || generalProps.PositionZ || props.PositionZ || 0;
+
             // Debug: Log why this was classified as a room and its area
             const roomName = itemName || 'Unnamed Room';
             const matchReason = isRoomLayer ? 'LAYER' :
@@ -841,7 +846,9 @@ export class AutodeskForgeService {
               level: props.Level || generalProps.Level || 'Ground Floor',
               number: props.Number || props['Room Number'] || generalProps.Number || '',
               type: props['Room Type'] || generalProps['Room Type'] || 'general',
-              layer: layer
+              layer: layer,
+              position: (positionX !== undefined && positionY !== undefined) ?
+                { x: positionX, y: positionY, z: positionZ } : null
             });
           } else if (category.includes('text') || name.includes('text') || category.includes('mtext') || name.includes('mtext')) {
             // Extract text labels (room names, annotations, etc.)
