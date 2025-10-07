@@ -584,8 +584,8 @@ export class AutodeskForgeService {
           const isDoorLayer = /DOOR|PORTE|PUERTA|TÜR/i.test(layer);
           const isWindowLayer = /WINDOW|WIND|FENÊTRE|VENTANA|FENSTER/i.test(layer);
           const isStairLayer = /STAIR|STRS|ESCALIER|ESCALERA|TREPPE|FLOR/i.test(layer);
-          const isRoomLayer = /ROOM|AREA|SPACE/i.test(layer);
           const isTextLayer = /TEXT|IDEN|RNUM|LABEL/i.test(layer);
+          const isRoomLayer = !isTextLayer && /ROOM|SPACE/i.test(layer); // Don't match AREA-TEXT as room layer
 
           // Classify elements (check Layer first for AutoCAD, then Category for Revit)
           if (isWallLayer || category.includes('wall') || name.includes('wall') || entityType === 'AcDbLine' || entityType === 'AcDbPolyline') {
@@ -705,8 +705,11 @@ export class AutodeskForgeService {
             });
           } else if (category.includes('text') || name.includes('text') || category.includes('mtext') || name.includes('mtext')) {
             // Extract text labels (room names, annotations, etc.)
-            const text = props.Text || props.Contents || props.TextString || item.name || '';
-            if (text && text.trim()) {
+            // Text can be at props.Text.Contents (object) or props.Text (string)
+            const text = props.Text?.Contents || generalProps.Text?.Contents ||
+                        (typeof props.Text === 'string' ? props.Text : '') ||
+                        props.Contents || props.TextString || item.name || '';
+            if (text && typeof text === 'string' && text.trim()) {
               textLabels.push({
                 id: item.objectid,
                 text: text.trim(),
@@ -740,8 +743,16 @@ export class AutodeskForgeService {
           }
 
           // Check for any property that might contain text
-          const textString = generalProps['Text String'] || generalProps.Contents || generalProps.Text ||
-                            props['Text String'] || props.Contents || props.Text || item.name;
+          // Handle Text as object with Contents property or as direct string
+          const textString = generalProps['Text String'] ||
+                            generalProps.Text?.Contents ||
+                            (typeof generalProps.Text === 'string' ? generalProps.Text : '') ||
+                            generalProps.Contents ||
+                            props['Text String'] ||
+                            props.Text?.Contents ||
+                            (typeof props.Text === 'string' ? props.Text : '') ||
+                            props.Contents ||
+                            item.name;
 
           // Check if this looks like a room label (contains letters and maybe numbers/SF)
           const looksLikeRoomText = textString && typeof textString === 'string' &&
