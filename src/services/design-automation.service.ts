@@ -270,8 +270,8 @@ FILEDIA
 
       console.log('📦 Creating app bundle...');
 
-      // Check if app bundle exists (check base name first)
-      let needsRecreation = false;
+      // Always force recreation to pick up script changes
+      let needsRecreation = true;
       try {
         const existing = await axios.get(
           `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleBaseName}`,
@@ -279,17 +279,12 @@ FILEDIA
             headers: { Authorization: `Bearer ${token}` }
           }
         );
-        console.log('✅ App bundle already exists, using existing bundle');
-        return;
+        console.log('🔄 App bundle exists, forcing recreation to use updated script');
       } catch (error: any) {
-        if (error.response?.status === 400) {
-          console.log('⚠️ Cannot query app bundle (400 error), assuming it needs recreation');
-          needsRecreation = true;
-        } else if (error.response?.status !== 404) {
-          console.log('⚠️ Error checking bundle, will attempt recreation:', error.message);
-          needsRecreation = true;
-        } else {
+        if (error.response?.status === 404) {
           console.log('📝 App bundle not found, creating new one...');
+        } else {
+          console.log('⚠️ Error checking bundle, will create new one:', error.message);
         }
       }
 
