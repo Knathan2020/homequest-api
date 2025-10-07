@@ -590,6 +590,18 @@ export class AutodeskForgeService {
           const isTextEntity = isTextLayer || entityType === 'AcDbText' || entityType === 'AcDbMText' ||
                               entityType === 'Text' || entityType === 'MText';
 
+          // Debug: Log first item on a text layer to see structure
+          if (textLabels.length === 0 && isTextLayer) {
+            console.log('🔍 DEBUG - First text layer item:');
+            console.log('  Layer:', layer);
+            console.log('  Entity Type:', entityType);
+            console.log('  General props keys:', Object.keys(generalProps));
+            console.log('  Props keys:', Object.keys(props));
+            console.log('  Full generalProps:', JSON.stringify(generalProps));
+            console.log('  Full props:', JSON.stringify(props));
+            console.log('  Item name:', item.name);
+          }
+
           // Check for any property that might contain text
           const textString = generalProps['Text String'] || generalProps.Contents || generalProps.Text ||
                             props['Text String'] || props.Contents || props.Text || item.name;
