@@ -583,18 +583,32 @@ export class AutodeskForgeService {
           }
 
           // Extract text entities (room labels, dimensions, notes)
-          if (entityType === 'AcDbText' || entityType === 'AcDbMText' || entityType === 'Text') {
-            const textString = generalProps['Text String'] || generalProps.Contents || props['Text String'] || props.Contents;
+          // Check for any property that might contain text
+          const textString = generalProps['Text String'] || generalProps.Contents || generalProps.Text ||
+                            props['Text String'] || props.Contents || props.Text || item.name;
+
+          // Check if this looks like a room label (contains letters and maybe numbers/SF)
+          const looksLikeRoomText = textString && typeof textString === 'string' &&
+                                   /[A-Za-z]{2,}/.test(textString) && // At least 2 letters
+                                   textString.length > 2 && textString.length < 100;
+
+          if (looksLikeRoomText) {
             const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
             const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
 
-            if (textString && positionX !== undefined && positionY !== undefined) {
+            if (positionX !== undefined && positionY !== undefined) {
               textLabels.push({
                 id: item.objectid,
                 text: textString,
                 position: { x: positionX, y: positionY },
-                layer: layer
+                layer: layer,
+                entityType: entityType
               });
+
+              // Debug: Log first few room texts found
+              if (textLabels.length <= 5) {
+                console.log(`📝 Found room text #${textLabels.length}: "${textString}" at (${positionX.toFixed(1)}, ${positionY.toFixed(1)}) [${entityType}]`);
+              }
             }
           }
         }
