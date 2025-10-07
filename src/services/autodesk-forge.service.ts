@@ -557,15 +557,28 @@ export class AutodeskForgeService {
         // Track unique layers
         const layersFound = new Set<string>();
 
-        // FIRST PASS: Detect all room layers to pick the most authoritative one
+        // FIRST PASS: Detect all room layers and count geometry vs text entities
         const allRoomLayers = new Set<string>();
+        const layerGeometryCounts: { [layer: string]: number } = {};
+
         for (const item of collection) {
           const props = item.properties || {};
           const generalProps = props.General || {};
           const layer = (generalProps.Layer || props.Layer || '').toUpperCase();
+          const entityType = generalProps.Name || props['Entity Type'] || '';
 
           if (layer && /ROOM|SPACE/i.test(layer) && !/TEXT|IDEN|RNUM|LABEL/i.test(layer)) {
             allRoomLayers.add(layer);
+
+            // Count non-text entities (actual geometry)
+            const itemName = item.name || '';
+            const isTextEntity = entityType === 'AcDbText' || entityType === 'AcDbMText' ||
+                                entityType === 'Text' || entityType === 'MText' ||
+                                itemName.includes('Text [') || itemName.includes('MText [');
+
+            if (!isTextEntity) {
+              layerGeometryCounts[layer] = (layerGeometryCounts[layer] || 0) + 1;
+            }
           }
         }
 
@@ -584,29 +597,26 @@ export class AutodeskForgeService {
             prefixGroups[prefix].push(layer);
           }
 
-          // If we have duplicate prefixes (e.g., multiple ROOMS-* layers), pick the most authoritative one
+          // If we have duplicate prefixes (e.g., multiple ROOMS-* layers), pick the one with most geometry
           const hasDuplicatePrefixes = Object.values(prefixGroups).some(group => group.length > 1);
 
           if (hasDuplicatePrefixes) {
-            console.log('🔍 Multiple room layers detected, selecting most authoritative...');
+            console.log('🔍 Multiple room layers detected, selecting layer with most geometry...');
             console.log('   All room layers:', roomLayerArray);
+            console.log('   Geometry counts:', layerGeometryCounts);
 
-            // Priority: INFORMATION > CATEGORY > DATA > first alphabetically
-            const priorityKeywords = ['INFORMATION', 'INFO', 'CATEGORY', 'DATA'];
+            // Sort by geometry count (descending)
+            const sortedByGeometry = roomLayerArray
+              .filter(layer => (layerGeometryCounts[layer] || 0) > 0) // Only layers with geometry
+              .sort((a, b) => (layerGeometryCounts[b] || 0) - (layerGeometryCounts[a] || 0));
 
-            for (const keyword of priorityKeywords) {
-              const match = roomLayerArray.find(layer => layer.includes(keyword));
-              if (match) {
-                authoritativeRoomLayers = [match];
-                console.log(`✅ Selected authoritative room layer: ${match}`);
-                break;
-              }
-            }
-
-            // If no priority match, pick first alphabetically
-            if (authoritativeRoomLayers.length === 0) {
+            if (sortedByGeometry.length > 0) {
+              authoritativeRoomLayers = [sortedByGeometry[0]];
+              console.log(`✅ Selected layer with most geometry: ${authoritativeRoomLayers[0]} (${layerGeometryCounts[authoritativeRoomLayers[0]]} entities)`);
+            } else {
+              // Fallback: pick first alphabetically if no geometry found
               authoritativeRoomLayers = [roomLayerArray.sort()[0]];
-              console.log(`✅ Selected first room layer alphabetically: ${authoritativeRoomLayers[0]}`);
+              console.log(`⚠️ No geometry found, using first layer: ${authoritativeRoomLayers[0]}`);
             }
           } else {
             // No duplicates, use all room layers
