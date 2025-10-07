@@ -422,6 +422,14 @@ export class AutodeskForgeService {
           const layer = (generalProps.Layer || props.Layer || '').toUpperCase();
           const entityType = generalProps.Name || props['Entity Type'] || '';
 
+          // Debug: Log first wall entity's full properties to see what's available
+          if (walls.length === 0 && (layer.includes('WALL') || layer.includes('A-WALL'))) {
+            console.log('🔍 DEBUG - First wall entity properties:');
+            console.log('  General props keys:', Object.keys(generalProps));
+            console.log('  Props keys:', Object.keys(props));
+            console.log('  Full generalProps:', JSON.stringify(generalProps).substring(0, 1000));
+          }
+
           // Track layers for debugging
           if (layer) layersFound.add(layer);
 
@@ -433,46 +441,99 @@ export class AutodeskForgeService {
 
           // Classify elements (check Layer first for AutoCAD, then Category for Revit)
           if (isWallLayer || category.includes('wall') || name.includes('wall') || entityType === 'AcDbLine' || entityType === 'AcDbPolyline') {
+            // Extract geometry coordinates
+            const startPoint = generalProps['Start Point'] || props['Start Point'] || generalProps.StartPoint || props.StartPoint;
+            const endPoint = generalProps['End Point'] || props['End Point'] || generalProps.EndPoint || props.EndPoint;
+            const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
+            const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
+
+            // Parse coordinates - they might be strings like "123.456, 789.012, 0.000"
+            let start = null;
+            let end = null;
+
+            if (startPoint && endPoint) {
+              // Parse coordinate strings
+              const parseCoords = (coordStr: any) => {
+                if (typeof coordStr === 'string') {
+                  const parts = coordStr.split(',').map(s => parseFloat(s.trim()));
+                  return { x: parts[0] || 0, y: parts[1] || 0, z: parts[2] || 0 };
+                } else if (coordStr && typeof coordStr === 'object' && 'x' in coordStr) {
+                  return { x: coordStr.x || 0, y: coordStr.y || 0, z: coordStr.z || 0 };
+                }
+                return null;
+              };
+
+              start = parseCoords(startPoint);
+              end = parseCoords(endPoint);
+            } else if (positionX !== undefined && positionY !== undefined) {
+              // Single position - assume it's a point entity
+              start = { x: positionX, y: positionY, z: 0 };
+              end = { x: positionX + (props.Length || 100), y: positionY, z: 0 }; // Estimate end point
+            }
+
             walls.push({
               id: item.objectid,
               name: item.name,
               type: props['Type Name'] || entityType || 'unknown',
               length: props.Length || 0,
-              height: props.Height || 0,
-              thickness: props.Width || 0,
+              height: props.Height || props.Thickness || generalProps.Thickness || 96, // Default 96 inches if not found
+              thickness: props.Width || props.Thickness || generalProps.Thickness || 6,
               material: props.Material || 'unknown',
               layer: props.Layer || 'default',
-              entityType: entityType
+              entityType: entityType,
+              start,
+              end
             });
           } else if (isDoorLayer || category.includes('door') || name.includes('door')) {
+            // Extract door position
+            const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
+            const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
+            const positionZ = generalProps['Position Z'] || props['Position Z'] || generalProps.PositionZ || props.PositionZ || 0;
+
             doors.push({
               id: item.objectid,
               name: item.name,
               type: props['Type Name'] || 'unknown',
-              width: props.Width || 0,
-              height: props.Height || 0,
-              layer: props.Layer || 'default'
+              width: props.Width || 36,
+              height: props.Height || 80,
+              layer: props.Layer || 'default',
+              position: (positionX !== undefined && positionY !== undefined) ?
+                { x: positionX, y: positionY, z: positionZ } : null
             });
           } else if (isWindowLayer || category.includes('window') || name.includes('window')) {
+            // Extract window position
+            const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
+            const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
+            const positionZ = generalProps['Position Z'] || props['Position Z'] || generalProps.PositionZ || props.PositionZ || 48;
+
             windows.push({
               id: item.objectid,
               name: item.name,
               type: props['Type Name'] || 'unknown',
-              width: props.Width || 0,
-              height: props.Height || 0,
-              layer: props.Layer || 'default'
+              width: props.Width || 36,
+              height: props.Height || 48,
+              layer: props.Layer || 'default',
+              position: (positionX !== undefined && positionY !== undefined) ?
+                { x: positionX, y: positionY, z: positionZ } : null
             });
           } else if (isStairLayer || category.includes('stair') || name.includes('stair') || category.includes('ramp')) {
+            // Extract stair position
+            const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
+            const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
+            const positionZ = generalProps['Position Z'] || props['Position Z'] || generalProps.PositionZ || props.PositionZ || 0;
+
             stairs.push({
               id: item.objectid,
               name: item.name,
               type: props['Type Name'] || 'unknown',
-              numberOfRisers: props['Actual Number of Risers'] || props['Number of Risers'] || 0,
-              numberOfTreads: props['Actual Number of Treads'] || 0,
-              height: props.Height || props['Actual Riser Height'] || 0,
-              width: props.Width || props['Actual Tread Depth'] || 0,
+              numberOfRisers: props['Actual Number of Risers'] || props['Number of Risers'] || 12,
+              numberOfTreads: props['Actual Number of Treads'] || 11,
+              height: props.Height || props['Actual Riser Height'] || 7,
+              width: props.Width || props['Actual Tread Depth'] || 36,
               level: props.Level || props['Base Level'] || 'Unknown',
-              layer: props.Layer || 'default'
+              layer: props.Layer || 'default',
+              position: (positionX !== undefined && positionY !== undefined) ?
+                { x: positionX, y: positionY, z: positionZ } : null
             });
           } else if (category.includes('room') || category.includes('space')) {
             const area = props.Area || 0;
