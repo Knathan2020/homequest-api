@@ -200,11 +200,57 @@ export class DesignAutomationService {
    */
   private createAutoCADScript(): string {
     // AutoCAD Script (.scr) for Design Automation
-    // Based on official Autodesk sample: design.automation-asp.net-cabinet-sample
-    // _.SaveAs with blank line accepts default format, then filename
-    // No blank line after filename to avoid triggering second SaveAs
+    // Converts 2D floor plan polylines to 3D by setting thickness
+    // Strategy: Freeze all layers except target, select all visible, set thickness
+    // Wall height: 96" (8ft), Door/Window height: 84" (7ft)
     return `FILEDIA
 0
+LAYER
+F
+*
+T
+A-WALL
+
+CHPROP
+ALL
+
+T
+96
+
+LAYER
+F
+*
+T
+A-DOOR
+
+CHPROP
+ALL
+
+T
+84
+
+LAYER
+F
+*
+T
+A-GLAZ
+
+CHPROP
+ALL
+
+T
+84
+
+LAYER
+T
+*
+
+-VIEW
+_SW
+_.ZOOM
+_E
+_.VSCURRENT
+_Realistic
 _.SaveAs
 
 output.dwg
