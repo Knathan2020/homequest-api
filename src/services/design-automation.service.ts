@@ -167,12 +167,8 @@ export class DesignAutomationService {
    */
   private createAutoCADScript(): string {
     // AutoCAD Script (.scr) for Design Automation
-    // Pure command format, no LISP
-    return `FILEDIA 0
-CMDECHO 0
-_.-VSCURRENT _2D
-_ZOOM _E
-_QSAVE
+    // Minimal script - just save the file to prove pipeline works
+    return `_QSAVE
 `.trim();
   }
 
