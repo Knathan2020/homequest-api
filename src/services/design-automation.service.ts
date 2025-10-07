@@ -146,7 +146,10 @@ export class DesignAutomationService {
 
       const response = await axios.post(
         `${this.baseUrl}/oss/v2/buckets/${bucketKey}/objects/${objectKey}/signed`,
-        { minutesExpiration: 60 },
+        {
+          minutesExpiration: 60,
+          access: access
+        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
