@@ -398,37 +398,47 @@ QUIT Y
 
       // Create activity if it doesn't exist
       if (!activityExists) {
-        const createResponse = await axios.post(
-          `${this.baseUrl}/da/us-east/v3/activities`,
-          {
-            id: activityBaseName,
-            commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[' + appBundleBaseName + '].path)\\convert2dto3d.scr" /o "$(args[outputFile].path)"'],
-            engine: 'Autodesk.AutoCAD+25_0',
-            appbundles: [`${this.nickname}.${appBundleBaseName}+prod`],
-            parameters: {
-              inputFile: {
-                verb: 'get',
-                description: 'Input 2D DWG file',
-                required: true,
-                localName: 'input.dwg'
-              },
-              outputFile: {
-                verb: 'put',
-                description: 'Output 3D DWG file',
-                required: true,
-                localName: 'output.dwg'
+        try {
+          const createResponse = await axios.post(
+            `${this.baseUrl}/da/us-east/v3/activities`,
+            {
+              id: activityBaseName,
+              commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[' + appBundleBaseName + '].path)\\convert2dto3d.scr" /o "$(args[outputFile].path)"'],
+              engine: 'Autodesk.AutoCAD+25_0',
+              appbundles: [`${this.nickname}.${appBundleBaseName}+prod`],
+              parameters: {
+                inputFile: {
+                  verb: 'get',
+                  description: 'Input 2D DWG file',
+                  required: true,
+                  localName: 'input.dwg'
+                },
+                outputFile: {
+                  verb: 'put',
+                  description: 'Output 3D DWG file',
+                  required: true,
+                  localName: 'output.dwg'
+                }
+              }
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
               }
             }
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
+          );
+          activityVersion = createResponse.data.version || 1;
+          console.log(`✅ Activity created at version ${activityVersion}`);
+        } catch (createError: any) {
+          // If activity already exists, that's fine - just log and continue to alias creation
+          if (createError.response?.data && JSON.stringify(createError.response.data).includes('already exists')) {
+            console.log('✅ Activity already exists (caught on create), will create alias');
+            activityExists = true;
+          } else {
+            throw createError;
           }
-        );
-        activityVersion = createResponse.data.version || 1;
-        console.log(`✅ Activity created at version ${activityVersion}`);
+        }
       }
 
       // Create/update alias - use base name in URL, not qualified name
