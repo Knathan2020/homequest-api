@@ -169,12 +169,12 @@ export class DesignAutomationService {
     // AutoCAD Script (.scr) for Design Automation
     // Based on official Autodesk sample: design.automation-asp.net-cabinet-sample
     // _.SaveAs with blank line accepts default format, then filename
+    // No blank line after filename to avoid triggering second SaveAs
     return `FILEDIA
 0
 _.SaveAs
 
 output.dwg
-
 FILEDIA
 1
 `;
