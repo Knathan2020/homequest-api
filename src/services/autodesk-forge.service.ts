@@ -463,11 +463,12 @@ export class AutodeskForgeService {
           // Track layers for debugging
           if (layer) layersFound.add(layer);
 
-          // AutoCAD classification - check Layer names (most important for DWG files!)
-          const isWallLayer = layer.includes('WALL') || layer.includes('A-WALL') || layer.includes('ARCH-WALL');
-          const isDoorLayer = layer.includes('DOOR') || layer.includes('A-DOOR');
-          const isWindowLayer = layer.includes('WINDOW') || layer.includes('WIND') || layer.includes('A-WIND');
-          const isStairLayer = layer.includes('STAIR') || layer.includes('STRS') || layer.includes('A-FLOR');
+          // AutoCAD classification - check Layer names (flexible pattern matching)
+          // Supports: AIA standards (A-WALL), generic (WALLS), prefixed (0-WALL, ARCH_WALL), etc.
+          const isWallLayer = /WALL|PAROI|MURO|WAND/i.test(layer); // English, French, Spanish, German
+          const isDoorLayer = /DOOR|PORTE|PUERTA|TÜR/i.test(layer);
+          const isWindowLayer = /WINDOW|WIND|FENÊTRE|VENTANA|FENSTER/i.test(layer);
+          const isStairLayer = /STAIR|STRS|ESCALIER|ESCALERA|TREPPE|FLOR/i.test(layer);
 
           // Classify elements (check Layer first for AutoCAD, then Category for Revit)
           if (isWallLayer || category.includes('wall') || name.includes('wall') || entityType === 'AcDbLine' || entityType === 'AcDbPolyline') {
