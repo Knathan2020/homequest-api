@@ -684,11 +684,21 @@ export class AutodeskForgeService {
                 { x: positionX, y: positionY, z: positionZ } : null
             });
           } else if (isRoomLayer || category.includes('room') || category.includes('space')) {
+            // Skip text entities - they're labels, not rooms (even if on ROOMS-INFORMATION layer)
+            const itemName = item.name || props.Name || generalProps.Name || '';
+            const isTextEntity = entityType === 'AcDbText' || entityType === 'AcDbMText' ||
+                                entityType === 'Text' || entityType === 'MText' ||
+                                itemName.includes('Text [') || itemName.includes('MText [');
+
+            if (isTextEntity) {
+              continue; // Text labels should be extracted as textLabels, not rooms
+            }
+
             const area = props.Area || generalProps.Area || 0;
             totalArea += area;
 
             // Debug: Log why this was classified as a room
-            const roomName = item.name || props.Name || generalProps.Name || 'Unnamed Room';
+            const roomName = itemName || 'Unnamed Room';
             const matchReason = isRoomLayer ? 'LAYER' : (category.includes('room') ? 'CATEGORY:room' : 'CATEGORY:space');
             console.log(`🏠 Room #${rooms.length + 1}: "${roomName}" on layer "${layer}" (matched by: ${matchReason}, category: "${category}")`);
 
