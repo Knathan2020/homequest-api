@@ -389,6 +389,40 @@ export class AutodeskForgeService {
   }
 
   /**
+   * Get all available viewables/layouts from a model
+   */
+  async getModelViewables(urn: string): Promise<any[]> {
+    try {
+      const token = await this.getAccessToken();
+
+      console.log('📋 Getting viewables for URN:', urn);
+
+      const response = await axios.get(
+        `${this.baseUrl}/modelderivative/v2/designdata/${urn}/metadata`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const metadata = response.data?.data?.metadata || [];
+      console.log(`📄 Found ${metadata.length} viewable(s) in model:`);
+
+      metadata.forEach((viewable: any, index: number) => {
+        console.log(`  ${index + 1}. ${viewable.name} (GUID: ${viewable.guid})`);
+        console.log(`     Role: ${viewable.role}, Type: ${viewable.type}`);
+      });
+
+      return metadata;
+
+    } catch (error: any) {
+      console.error('❌ Failed to get viewables:', error.response?.data || error.message);
+      return [];
+    }
+  }
+
+  /**
    * Extract floorplan data from model properties
    */
   extractFloorplanData(properties: any): {

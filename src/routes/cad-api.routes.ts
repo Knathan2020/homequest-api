@@ -539,6 +539,41 @@ router.get('/get-token', async (_req: Request, res: Response) => {
   }
 });
 
+/**
+ * @route   GET /api/cad/viewables/:urn
+ * @desc    Get all available layouts/sheets from a DWG file
+ * @access  Public
+ */
+router.get('/viewables/:urn', async (req: Request, res: Response) => {
+  try {
+    const { urn } = req.params;
+
+    if (!urn) {
+      return res.status(400).json({
+        success: false,
+        error: 'URN is required'
+      });
+    }
+
+    console.log(`📋 Getting viewables for URN: ${urn}`);
+
+    const viewables = await (autodeskService as any).getModelViewables(urn);
+
+    return res.status(200).json({
+      success: true,
+      viewables,
+      count: viewables.length
+    });
+
+  } catch (error: any) {
+    console.error('❌ Failed to get viewables:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get viewables'
+    });
+  }
+});
+
 // Helper functions
 function calculatePerimeter(boundary: Array<{ x: number; y: number }>): number {
   let perimeter = 0;
