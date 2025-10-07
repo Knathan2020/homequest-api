@@ -331,15 +331,16 @@ QUIT Y
   private async createActivity(): Promise<void> {
     try {
       const token = await this.getAccessToken();
-      const activityName = `${this.nickname}.convert2dto3dactivity`; // Must be lowercase
-      const appBundleName = `${this.nickname}.convert2dto3dbundle`; // Must be lowercase
+      const activityBaseName = 'convert2dto3dactivity'; // Base name only
+      const appBundleBaseName = 'convert2dto3dbundle'; // Base name only
+      const activityFullId = `${this.nickname}.${activityBaseName}+prod`;
 
       console.log('⚙️ Creating activity...');
 
       // Check if activity exists
       try {
         await axios.get(
-          `${this.baseUrl}/da/us-east/v3/activities/${activityName}`,
+          `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}`,
           {
             headers: { Authorization: `Bearer ${token}` }
           }
@@ -347,17 +348,20 @@ QUIT Y
         console.log('✅ Activity already exists');
         return;
       } catch (error: any) {
-        if (error.response?.status !== 404) throw error;
+        if (error.response?.status !== 404) {
+          console.log('⚠️ Error checking activity, attempting to use existing:', error.message);
+          return;
+        }
       }
 
-      // Create activity
+      // Create activity (use base name when creating)
       await axios.post(
         `${this.baseUrl}/da/us-east/v3/activities`,
         {
-          id: activityName,
-          commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[' + appBundleName + '].path)\\convert2dto3d.scr" /o "$(args[outputFile].path)"'],
-          engine: 'Autodesk.AutoCAD+24',
-          appbundles: [`${appBundleName}+prod`],
+          id: activityBaseName,
+          commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[' + appBundleBaseName + '].path)\\convert2dto3d.scr" /o "$(args[outputFile].path)"'],
+          engine: 'Autodesk.AutoCAD+25_0',
+          appbundles: [`${this.nickname}.${appBundleBaseName}+prod`],
           parameters: {
             inputFile: {
               verb: 'get',
@@ -372,6 +376,23 @@ QUIT Y
               localName: 'output.dwg'
             }
           }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('✅ Activity created, creating alias...');
+
+      // Create alias for activity
+      await axios.post(
+        `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
+        {
+          id: 'prod',
+          version: 1
         },
         {
           headers: {
