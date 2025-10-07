@@ -204,7 +204,7 @@ QUIT Y
   private async createAppBundle(): Promise<void> {
     try {
       const token = await this.getAccessToken();
-      const appBundleName = `homequestconvert2dto3d`; // Simple lowercase name, no dots
+      const appBundleName = `${this.nickname}.convert2dto3dbundle`; // Must include nickname prefix
 
       console.log('📦 Creating app bundle...');
 

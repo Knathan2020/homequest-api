@@ -597,8 +597,11 @@ export class AutodeskForgeService {
           const hasStairProperties = (props['Number of Risers'] || props['Actual Number of Risers'] ||
                                      generalProps['Number of Risers']);
 
-          // Classify elements (check Layer first, then properties as fallback, then Category for Revit)
-          if (isWallLayer || hasWallProperties || category.includes('wall') || name.includes('wall') ||
+          // Classify elements (Layer takes PRIORITY, then properties as fallback for unlabeled layers)
+          // Important: Check if on a DIFFERENT layer first to avoid misclassification
+          if ((isWallLayer && !isRoomLayer && !isDoorLayer && !isStairLayer) ||
+              (!isRoomLayer && !isDoorLayer && !isStairLayer && hasWallProperties) ||
+              category.includes('wall') || name.includes('wall') ||
               entityType === 'AcDbLine' || entityType === 'AcDbPolyline') {
             // Extract geometry coordinates
             const startPoint = generalProps['Start Point'] || props['Start Point'] || generalProps.StartPoint || props.StartPoint;
@@ -654,7 +657,9 @@ export class AutodeskForgeService {
               start,
               end
             });
-          } else if (isDoorLayer || hasDoorProperties || category.includes('door') || name.includes('door')) {
+          } else if ((isDoorLayer && !isRoomLayer) ||
+                     (!isRoomLayer && hasDoorProperties) ||
+                     category.includes('door') || name.includes('door')) {
             // Extract door position
             const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
             const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
@@ -686,7 +691,9 @@ export class AutodeskForgeService {
               position: (positionX !== undefined && positionY !== undefined) ?
                 { x: positionX, y: positionY, z: positionZ } : null
             });
-          } else if (isStairLayer || hasStairProperties || category.includes('stair') || name.includes('stair') || category.includes('ramp')) {
+          } else if ((isStairLayer && !isRoomLayer) ||
+                     (!isRoomLayer && hasStairProperties) ||
+                     category.includes('stair') || name.includes('stair') || category.includes('ramp')) {
             // Extract stair position
             const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
             const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
