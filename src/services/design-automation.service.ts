@@ -353,16 +353,18 @@ QUIT Y
         }
       }
 
-      // Check if base activity exists (without alias)
+      // Check if base activity exists (without alias) and get its version
       let activityExists = false;
+      let activityVersion = 1;
       try {
-        await axios.get(
+        const activityResponse = await axios.get(
           `${this.baseUrl}/da/us-east/v3/activities/${this.nickname}.${activityBaseName}`,
           {
             headers: { Authorization: `Bearer ${token}` }
           }
         );
-        console.log('✅ Base activity exists, will create/update alias');
+        activityVersion = activityResponse.data.version || 1;
+        console.log(`✅ Base activity exists at version ${activityVersion}`);
         activityExists = true;
       } catch (error: any) {
         if (error.response?.status === 404) {
@@ -375,7 +377,7 @@ QUIT Y
 
       // Create activity if it doesn't exist
       if (!activityExists) {
-        await axios.post(
+        const createResponse = await axios.post(
           `${this.baseUrl}/da/us-east/v3/activities`,
           {
             id: activityBaseName,
@@ -404,17 +406,18 @@ QUIT Y
             }
           }
         );
-        console.log('✅ Activity created');
+        activityVersion = createResponse.data.version || 1;
+        console.log(`✅ Activity created at version ${activityVersion}`);
       }
 
       // Create/update alias - use base name in URL, not qualified name
-      console.log(`📝 Creating alias for activity: ${activityBaseName}`);
+      console.log(`📝 Creating alias for activity: ${activityBaseName} (version ${activityVersion})`);
       try {
         await axios.post(
           `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
           {
             id: 'prod',
-            version: 1
+            version: activityVersion
           },
           {
             headers: {
@@ -445,7 +448,7 @@ QUIT Y
             `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
             {
               id: 'prod',
-              version: 1
+              version: activityVersion
             },
             {
               headers: {
