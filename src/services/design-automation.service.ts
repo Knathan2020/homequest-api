@@ -494,28 +494,34 @@ QUIT Y
         }
       }
 
-      // Verify activity+alias is accessible
-      console.log('🔍 Verifying activity+alias is accessible...');
+      // Verify alias exists by listing aliases
+      console.log('🔍 Verifying alias exists...');
       let verified = false;
       for (let i = 0; i < 5; i++) {
         try {
-          await axios.get(
-            `${this.baseUrl}/da/us-east/v3/activities/${activityFullId}`,
+          const aliasListResponse = await axios.get(
+            `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
             {
               headers: { Authorization: `Bearer ${token}` }
             }
           );
-          console.log(`✅ Activity+alias verified (attempt ${i + 1})`);
-          verified = true;
-          break;
+          const aliases = aliasListResponse.data.data || [];
+          const prodAlias = aliases.find((a: any) => a.id === 'prod');
+          if (prodAlias) {
+            console.log(`✅ Alias 'prod' verified (version ${prodAlias.version})`);
+            verified = true;
+            break;
+          } else {
+            console.log(`⏳ Alias 'prod' not found in list (attempt ${i + 1}/5), waiting 2 seconds...`);
+          }
         } catch (error: any) {
-          console.log(`⏳ Activity+alias not ready yet (attempt ${i + 1}/5), waiting 2 seconds...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          console.log(`⏳ Could not list aliases (attempt ${i + 1}/5), waiting 2 seconds...`);
         }
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
 
       if (!verified) {
-        console.warn('⚠️ Could not verify activity+alias after 5 attempts, proceeding anyway');
+        console.warn('⚠️ Could not verify alias after 5 attempts, proceeding anyway');
       }
 
       console.log('✅ Activity setup complete');
