@@ -133,6 +133,36 @@ export class DesignAutomationService {
   }
 
   /**
+   * Create signed S3 upload URL for Design Automation output
+   */
+  private async createOutputUploadUrl(fileName: string): Promise<{ url: string; bucketKey: string; objectKey: string; uploadKey: string }> {
+    try {
+      const token = await this.getAccessToken();
+      const bucketKey = 'homequest_designautomation';
+      const objectKey = `${Date.now()}_${fileName.replace(/\s+/g, '_')}`;
+
+      // Get signed S3 upload URL (without actually uploading)
+      const response = await axios.get(
+        `${this.baseUrl}/oss/v2/buckets/${bucketKey}/objects/${encodeURIComponent(objectKey)}/signeds3upload`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      // Return upload URL and metadata needed for completion
+      return {
+        url: response.data.urls[0],
+        bucketKey,
+        objectKey,
+        uploadKey: response.data.uploadKey
+      };
+    } catch (error: any) {
+      console.error('❌ Failed to create upload URL:', error.response?.data || error.message);
+      throw new Error('Failed to create upload URL');
+    }
+  }
+
+  /**
    * Create signed URL for reading
    */
   private async createSignedUrl(objectId: string, access: 'read' | 'write' | 'readwrite' = 'read'): Promise<string> {
@@ -621,9 +651,8 @@ FILEDIA
       const inputObjectId = await this.uploadToOss(dwgBuffer, fileName);
       const inputUrl = await this.createSignedUrl(inputObjectId, 'read');
 
-      // Step 3: Create output object
-      const outputObjectId = await this.uploadToOss(Buffer.from(''), `output_${fileName}`);
-      const outputUrl = await this.createSignedUrl(outputObjectId, 'readwrite');
+      // Step 3: Create signed S3 upload URL for output (without uploading)
+      const outputInfo = await this.createOutputUploadUrl(`output_${fileName}`);
 
       // Step 4: Create workitem
       const token = await this.getAccessToken();
@@ -645,7 +674,7 @@ FILEDIA
                 verb: 'get'
               },
               outputFile: {
-                url: outputUrl,
+                url: outputInfo.url,
                 verb: 'put'
               }
             }
@@ -735,9 +764,27 @@ FILEDIA
         throw new Error(`Workitem failed with status: ${status}`);
       }
 
-      // Step 6: Download result
-      console.log('📥 Downloading 3D DWG...');
-      const resultUrl = await this.createSignedUrl(outputObjectId, 'read');
+      // Step 6: Complete the upload and download result
+      console.log('📥 Completing upload and downloading 3D DWG...');
+
+      // Complete the S3 upload
+      const completeResponse = await axios.post(
+        `${this.baseUrl}/oss/v2/buckets/${outputInfo.bucketKey}/objects/${encodeURIComponent(outputInfo.objectKey)}/signeds3upload`,
+        {
+          uploadKey: outputInfo.uploadKey,
+          size: 0 // Size will be determined by what Design Automation uploaded
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Create signed URL for downloading
+      const objectId = completeResponse.data.objectId;
+      const resultUrl = await this.createSignedUrl(objectId, 'read');
       const resultResponse = await axios.get(resultUrl, { responseType: 'arraybuffer' });
 
       console.log('✅ 2D to 3D conversion complete!\n');
