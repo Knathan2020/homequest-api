@@ -199,39 +199,40 @@ export class DesignAutomationService {
    * Create AutoLISP code to apply thickness to entities by layer
    */
   private createAutoLISP(): string {
-    return `(defun C:APPLY3D ()
-  (command "._ZOOM" "_E")
-
-  ; Process A-WALL layer - 96" height
-  (setq ss (ssget "_X" (list (cons 8 "A-WALL"))))
+    return `; Apply 3D thickness to floor plan entities
+(defun apply-thickness-to-layer (layername height / ss cnt ent)
+  (setq ss (ssget "_X" (list (cons 8 layername))))
   (if ss
     (progn
-      (command "._CHPROP" ss "" "T" 96 "")
-      (princ (strcat "\\nApplied 96\" thickness to " (itoa (sslength ss)) " entities on A-WALL"))
+      (setq cnt 0)
+      (repeat (sslength ss)
+        (setq ent (ssname ss cnt))
+        (command "._CHANGE" ent "" "P" "T" height "")
+        (setq cnt (1+ cnt))
+      )
+      (princ (strcat "\\n" layername ": Applied " (itoa height) "\" thickness to " (itoa (sslength ss)) " entities"))
     )
+    (princ (strcat "\\n" layername ": No entities found"))
   )
-
-  ; Process A-DOOR layer - 84" height
-  (setq ss (ssget "_X" (list (cons 8 "A-DOOR"))))
-  (if ss
-    (progn
-      (command "._CHPROP" ss "" "T" 84 "")
-      (princ (strcat "\\nApplied 84\" thickness to " (itoa (sslength ss)) " entities on A-DOOR"))
-    )
-  )
-
-  ; Process A-GLAZ layer (windows) - 84" height
-  (setq ss (ssget "_X" (list (cons 8 "A-GLAZ"))))
-  (if ss
-    (progn
-      (command "._CHPROP" ss "" "T" 84 "")
-      (princ (strcat "\\nApplied 84\" thickness to " (itoa (sslength ss)) " entities on A-GLAZ"))
-    )
-  )
-
-  (princ "\\n3D conversion complete")
   (princ)
 )
+
+; Main function
+(defun C:APPLY3D ()
+  (princ "\\n=== Starting 3D Conversion ===")
+  (command "._ZOOM" "_E")
+
+  ; Apply to each layer
+  (apply-thickness-to-layer "A-WALL" 96)
+  (apply-thickness-to-layer "A-DOOR" 84)
+  (apply-thickness-to-layer "A-GLAZ" 84)
+
+  (princ "\\n=== 3D Conversion Complete ===")
+  (princ)
+)
+
+; Auto-execute on load
+(C:APPLY3D)
 `;
   }
 
@@ -242,13 +243,12 @@ export class DesignAutomationService {
     // AutoCAD Script (.scr) for Design Automation
     // Loads AutoLISP and applies 3D thickness to layers
     // Wall height: 96" (8ft), Door/Window height: 84" (7ft)
-    // Saves in TOP view so users can toggle between 2D/3D in viewer
+    // Saves in SW Isometric view to see 3D geometry
     return `FILEDIA
 0
 (load "convert2dto3d.lsp")
-APPLY3D
 -VIEW
-_TOP
+_SW
 _.ZOOM
 _E
 _.VSCURRENT
