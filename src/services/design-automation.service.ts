@@ -167,9 +167,13 @@ export class DesignAutomationService {
    */
   private createAutoCADScript(): string {
     // AutoCAD Script (.scr) for Design Automation
-    // Use SAVEAS to explicitly save to output file
-    // The /o flag in command line specifies output path
-    return `_SAVEAS 2018 output.dwg
+    // Set FILEDIA to 0 to disable dialog boxes (non-interactive mode)
+    // Then use SAVEAS to save to output file
+    return `FILEDIA
+0
+_SAVEAS
+2018
+output.dwg
 
 `.trim();
   }
