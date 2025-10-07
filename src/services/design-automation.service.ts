@@ -11,13 +11,11 @@ export class DesignAutomationService {
   private clientSecret: string;
   private baseUrl = 'https://developer.api.autodesk.com';
   private tokenCache: { access_token: string; expires_at: number } | null = null;
-  private nickname = 'homequest'; // Nickname for display
-  private ownerId: string; // Actual owner ID (client ID)
+  private nickname = 'homequest'; // Your unique app nickname
 
   constructor() {
     this.clientId = process.env.AUTODESK_CLIENT_ID || '';
     this.clientSecret = process.env.AUTODESK_CLIENT_SECRET || '';
-    this.ownerId = this.clientId; // Owner ID is the client ID
 
     if (!this.clientId || !this.clientSecret) {
       console.warn('⚠️ Autodesk credentials not configured');
@@ -133,39 +131,9 @@ export class DesignAutomationService {
   }
 
   /**
-   * Create signed S3 upload URL for Design Automation output
-   */
-  private async createOutputUploadUrl(fileName: string): Promise<{ url: string; bucketKey: string; objectKey: string; uploadKey: string }> {
-    try {
-      const token = await this.getAccessToken();
-      const bucketKey = 'homequest_designautomation';
-      const objectKey = `${Date.now()}_${fileName.replace(/\s+/g, '_')}`;
-
-      // Get signed S3 upload URL (without actually uploading)
-      const response = await axios.get(
-        `${this.baseUrl}/oss/v2/buckets/${bucketKey}/objects/${encodeURIComponent(objectKey)}/signeds3upload`,
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-
-      // Return upload URL and metadata needed for completion
-      return {
-        url: response.data.urls[0],
-        bucketKey,
-        objectKey,
-        uploadKey: response.data.uploadKey
-      };
-    } catch (error: any) {
-      console.error('❌ Failed to create upload URL:', error.response?.data || error.message);
-      throw new Error('Failed to create upload URL');
-    }
-  }
-
-  /**
    * Create signed URL for reading
    */
-  private async createSignedUrl(objectId: string, access: 'read' | 'write' | 'readwrite' = 'read'): Promise<string> {
+  private async createSignedUrl(objectId: string, access: 'read' | 'write' = 'read'): Promise<string> {
     try {
       const token = await this.getAccessToken();
       const [, bucketKey, objectKey] = objectId.match(/urn:adsk\.objects:os\.object:([^\/]+)\/(.+)/) || [];
@@ -176,10 +144,7 @@ export class DesignAutomationService {
 
       const response = await axios.post(
         `${this.baseUrl}/oss/v2/buckets/${bucketKey}/objects/${objectKey}/signed`,
-        {
-          minutesExpiration: 60,
-          access: access
-        },
+        { minutesExpiration: 60 },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -196,69 +161,41 @@ export class DesignAutomationService {
   }
 
   /**
-   * Create AutoLISP code to apply thickness to entities by layer
-   */
-  private createAutoLISP(): string {
-    return `; Apply 3D thickness to floor plan entities
-(defun apply-thickness-to-layer (layername height / ss cnt ent)
-  (setq ss (ssget "_X" (list (cons 8 layername))))
-  (if ss
-    (progn
-      (setq cnt 0)
-      (repeat (sslength ss)
-        (setq ent (ssname ss cnt))
-        (command "._CHANGE" ent "" "P" "T" height "")
-        (setq cnt (1+ cnt))
-      )
-      (princ (strcat "\\n" layername ": Applied " (itoa height) "\" thickness to " (itoa (sslength ss)) " entities"))
-    )
-    (princ (strcat "\\n" layername ": No entities found"))
-  )
-  (princ)
-)
-
-; Main function
-(defun C:APPLY3D ()
-  (princ "\\n=== Starting 3D Conversion ===")
-  (command "._ZOOM" "_E")
-
-  ; Apply to each layer
-  (apply-thickness-to-layer "A-WALL" 96)
-  (apply-thickness-to-layer "A-DOOR" 84)
-  (apply-thickness-to-layer "A-GLAZ" 84)
-
-  (princ "\\n=== 3D Conversion Complete ===")
-  (princ)
-)
-
-; Auto-execute on load
-(C:APPLY3D)
-`;
-  }
-
-  /**
    * Create AutoCAD script to convert 2D to 3D
    */
   private createAutoCADScript(): string {
-    // AutoCAD Script (.scr) for Design Automation
-    // Loads AutoLISP and applies 3D thickness to layers
-    // Wall height: 96" (8ft), Door/Window height: 84" (7ft)
-    // Saves in SW Isometric view to see 3D geometry
-    return `FILEDIA
-0
-(load "convert2dto3d.lsp")
--VIEW
-_SW
-_.ZOOM
-_E
-_.VSCURRENT
-_Realistic
-_.SaveAs
+    // AutoCAD Script (.scr) that:
+    // 1. Opens the input DWG
+    // 2. Selects all closed polylines
+    // 3. Extrudes them to create 3D walls
+    // 4. Saves as output DWG
+    return `
+; AutoCAD Script to convert 2D floor plan to 3D
+; This script extrudes all closed polylines to create 3D walls
 
-output.dwg
-FILEDIA
-1
-`;
+; Set units and environment
+UNITS 2 4
+
+; Select all closed polylines (walls)
+; Filter for closed LWPOLYLINEs and POLYLINEs
+(setq ss (ssget "_X" '((0 . "LWPOLYLINE,POLYLINE") (-4 . "&") (70 . 1))))
+
+; If polylines found, extrude them
+(if ss
+  (progn
+    (setq i 0)
+    (repeat (sslength ss)
+      (setq ent (ssname ss i))
+      (command "._EXTRUDE" ent "" "96" "") ; Extrude to 96 inches (8 feet)
+      (setq i (1+ i))
+    )
+  )
+)
+
+; Save and close
+QSAVE
+QUIT Y
+`.trim();
   }
 
   /**
@@ -267,58 +204,23 @@ FILEDIA
   private async createAppBundle(): Promise<void> {
     try {
       const token = await this.getAccessToken();
-      const appBundleBaseName = 'convert2dto3dbundle'; // Base name (no owner prefix)
-      const appBundleFullId = `${this.ownerId}.${appBundleBaseName}+prod`; // Fully qualified ID
+      const appBundleName = `homequestconvert2dto3d`; // Simple lowercase name, no dots
 
       console.log('📦 Creating app bundle...');
 
-      // Always force recreation to pick up script changes
-      let needsRecreation = true;
+      // Check if app bundle exists
       try {
         const existing = await axios.get(
-          `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleBaseName}`,
+          `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleName}`,
           {
             headers: { Authorization: `Bearer ${token}` }
           }
         );
-        console.log('🔄 App bundle exists, forcing recreation to use updated script');
+        console.log('✅ App bundle already exists');
+        return;
       } catch (error: any) {
-        if (error.response?.status === 404) {
-          console.log('📝 App bundle not found, creating new one...');
-        } else {
-          console.log('⚠️ Error checking bundle, will create new one:', error.message);
-        }
-      }
-
-      // Delete app bundle if it needs recreation
-      if (needsRecreation) {
-        console.log('🗑️ Deleting old app bundle to recreate...');
-        try {
-          // Delete all aliases first
-          const aliasListResponse = await axios.get(
-            `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleBaseName}/aliases`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          const aliases = aliasListResponse.data.data || [];
-          for (const alias of aliases) {
-            if (alias.id !== '$LATEST') {
-              await axios.delete(
-                `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleBaseName}/aliases/${alias.id}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              console.log(`✅ Deleted app bundle alias: ${alias.id}`);
-            }
-          }
-
-          // Delete all versions of the app bundle
-          await axios.delete(
-            `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleBaseName}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          console.log('✅ Deleted old app bundle');
-        } catch (deleteError: any) {
-          console.log('⚠️ Error deleting app bundle:', deleteError.response?.data || deleteError.message);
-        }
+        if (error.response?.status !== 404) throw error;
+        console.log('📝 App bundle not found, creating new one...');
       }
 
       // Create PackageContents.xml
@@ -347,20 +249,19 @@ FILEDIA
   </Components>
 </ApplicationPackage>`;
 
-      // Create zip file with script and AutoLISP
+      // Create zip file with script
       const zip = new AdmZip();
       zip.addFile('PackageContents.xml', Buffer.from(packageXml));
-      zip.addFile('convert2dto3d.lsp', Buffer.from(this.createAutoLISP()));
       zip.addFile('convert2dto3d.scr', Buffer.from(this.createAutoCADScript()));
 
       const zipBuffer = zip.toBuffer();
 
-      // Create app bundle (use base name only when creating)
+      // Create app bundle
       const response = await axios.post(
         `${this.baseUrl}/da/us-east/v3/appbundles`,
         {
-          id: appBundleBaseName,
-          engine: 'Autodesk.AutoCAD+25_0',  // AutoCAD 2025 - exact format from Autodesk docs
+          id: appBundleName,
+          engine: 'Autodesk.AutoCAD+24',
           description: 'Converts 2D floor plans to 3D by extruding polylines'
         },
         {
@@ -372,45 +273,18 @@ FILEDIA
       );
 
       // Upload bundle to signed URL
-      console.log('📋 App bundle response:', JSON.stringify(response.data).substring(0, 300));
+      const uploadUrl = response.data.uploadParameters.url;
+      const formData = response.data.uploadParameters.formData;
 
-      const uploadParams = response.data.uploadParameters;
-      if (!uploadParams || !uploadParams.endpointURL) {
-        console.error('❌ No upload parameters in response:', response.data);
-        throw new Error('No upload URL provided by Autodesk');
-      }
-
-      const uploadUrl = uploadParams.endpointURL;
-      const formData = uploadParams.formData || {};
-
-      console.log('📤 Uploading app bundle to:', uploadUrl.substring(0, 50) + '...');
+      console.log('📤 Uploading app bundle...');
 
       const form = new (require('form-data'))();
       Object.keys(formData).forEach(key => form.append(key, formData[key]));
       form.append('file', zipBuffer, 'bundle.zip');
 
       await axios.post(uploadUrl, form, {
-        headers: form.getHeaders(),
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity
+        headers: form.getHeaders()
       });
-
-      console.log('✅ App bundle uploaded successfully');
-
-      // Mark the alias as ready
-      await axios.post(
-        `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleBaseName}/aliases`,
-        {
-          id: 'prod',
-          version: 1
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
 
       console.log('✅ App bundle created successfully');
 
@@ -426,253 +300,57 @@ FILEDIA
   private async createActivity(): Promise<void> {
     try {
       const token = await this.getAccessToken();
-      const activityBaseName = 'convert2dto3dactivity'; // Base name only
-      const appBundleBaseName = 'convert2dto3dbundle'; // Base name only
-      const activityFullId = `${this.ownerId}.${activityBaseName}+prod`;
+      const activityName = `${this.nickname}.convert2dto3dactivity`; // Must be lowercase
+      const appBundleName = `${this.nickname}.convert2dto3dbundle`; // Must be lowercase
 
-      console.log('⚙️ Setting up activity...');
+      console.log('⚙️ Creating activity...');
 
-      // Check if activity+alias combo exists
-      let needsRecreation = false;
+      // Check if activity exists
       try {
-        const existingActivity = await axios.get(
-          `${this.baseUrl}/da/us-east/v3/activities/${this.ownerId}.${activityBaseName}`,
+        await axios.get(
+          `${this.baseUrl}/da/us-east/v3/activities/${activityName}`,
           {
             headers: { Authorization: `Bearer ${token}` }
           }
         );
-
-        // Check if app bundle reference is correct
-        const appbundles = existingActivity.data.appbundles || [];
-        const correctAppBundle = `${this.ownerId}.${appBundleBaseName}+prod`;
-        if (!appbundles.includes(correctAppBundle)) {
-          console.log(`⚠️ Activity exists but has wrong app bundle reference. Expected: ${correctAppBundle}, Got: ${appbundles.join(', ')}`);
-          needsRecreation = true;
-        } else {
-          console.log('✅ Activity with correct configuration already exists');
-          return;
-        }
+        console.log('✅ Activity already exists');
+        return;
       } catch (error: any) {
-        if (error.response?.status === 400) {
-          // 400 means we can't query it properly - assume it needs recreation
-          console.log(`⚠️ Cannot query activity (400 error), assuming it needs recreation`);
-          needsRecreation = true;
-        } else if (error.response?.status !== 404) {
-          console.log(`⚠️ Error checking activity (${error.response?.status}), will attempt recreation`);
-          needsRecreation = true;
-        }
+        if (error.response?.status !== 404) throw error;
       }
 
-      // Delete activity if it needs recreation
-      if (needsRecreation) {
-        console.log('🗑️ Deleting old activity to recreate with correct app bundle...');
-        try {
-          // Delete all aliases first
-          const aliasListResponse = await axios.get(
-            `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          const aliases = aliasListResponse.data.data || [];
-          for (const alias of aliases) {
-            if (alias.id !== '$LATEST') {
-              await axios.delete(
-                `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases/${alias.id}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              console.log(`✅ Deleted alias: ${alias.id}`);
-            }
-          }
-
-          // Delete all versions of the activity
-          await axios.delete(
-            `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          console.log('✅ Deleted old activity');
-        } catch (deleteError: any) {
-          console.log('⚠️ Error deleting activity:', deleteError.response?.data || deleteError.message);
-        }
-      }
-
-      // Check if base activity exists (without alias) and get its version
-      let activityExists = needsRecreation ? false : false; // Force recreation if needed
-      let activityVersion = 1;
-
-      if (!needsRecreation) {
-        try {
-        const activityResponse = await axios.get(
-          `${this.baseUrl}/da/us-east/v3/activities/${this.ownerId}.${activityBaseName}`,
-          {
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        );
-        activityVersion = activityResponse.data.version || 1;
-        console.log(`✅ Base activity exists at version ${activityVersion}`);
-        activityExists = true;
-      } catch (error: any) {
-        if (error.response?.status === 404) {
-          console.log('📝 Base activity not found, creating new one...');
-        } else {
-          console.log(`⚠️ Error checking base activity (${error.response?.status}):`, error.response?.data);
-          // Try listing all activities to find it
-          try {
-            const listResponse = await axios.get(
-              `${this.baseUrl}/da/us-east/v3/activities`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            const activities = listResponse.data.data || [];
-            const matchingActivity = activities.find((act: any) =>
-              act.id === `${this.ownerId}.${activityBaseName}` ||
-              act.id === activityBaseName
-            );
-            if (matchingActivity) {
-              activityVersion = matchingActivity.version || 1;
-              console.log(`✅ Found activity in list at version ${activityVersion}`);
-              activityExists = true;
-            } else {
-              console.log('📝 Activity not in list, will create new one');
-            }
-          } catch (listError) {
-            console.log('⚠️ Could not list activities, assuming activity exists');
-            activityExists = true;
-          }
-        }
-      }
-      } // End of if (!needsRecreation)
-
-      // Create activity if it doesn't exist
-      if (!activityExists) {
-        try {
-          const createResponse = await axios.post(
-            `${this.baseUrl}/da/us-east/v3/activities`,
-            {
-              id: activityBaseName,
-              commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[' + appBundleBaseName + '].path)\\convert2dto3d.scr"'],
-              engine: 'Autodesk.AutoCAD+25_0',
-              appbundles: [`${this.ownerId}.${appBundleBaseName}+prod`],
-              parameters: {
-                inputFile: {
-                  verb: 'get',
-                  description: 'Input 2D DWG file',
-                  required: true,
-                  localName: 'input.dwg'
-                },
-                outputFile: {
-                  verb: 'put',
-                  description: 'Output 3D DWG file',
-                  required: true,
-                  localName: 'output.dwg'
-                }
-              }
+      // Create activity
+      await axios.post(
+        `${this.baseUrl}/da/us-east/v3/activities`,
+        {
+          id: activityName,
+          commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[' + appBundleName + '].path)\\convert2dto3d.scr" /o "$(args[outputFile].path)"'],
+          engine: 'Autodesk.AutoCAD+24',
+          appbundles: [`${appBundleName}+prod`],
+          parameters: {
+            inputFile: {
+              verb: 'get',
+              description: 'Input 2D DWG file',
+              required: true,
+              localName: 'input.dwg'
             },
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              }
+            outputFile: {
+              verb: 'put',
+              description: 'Output 3D DWG file',
+              required: true,
+              localName: 'output.dwg'
             }
-          );
-          activityVersion = createResponse.data.version || 1;
-          console.log(`✅ Activity created at version ${activityVersion}`);
-        } catch (createError: any) {
-          // If activity already exists, that's fine - just log and continue to alias creation
-          if (createError.response?.data && JSON.stringify(createError.response.data).includes('already exists')) {
-            console.log('✅ Activity already exists (caught on create), will create alias');
-            activityExists = true;
-          } else {
-            throw createError;
+          }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
           }
         }
-      }
+      );
 
-      // Create/update alias - use base name in URL, not qualified name
-      console.log(`📝 Creating alias for activity: ${activityBaseName} (version ${activityVersion})`);
-      try {
-        await axios.post(
-          `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
-          {
-            id: 'prod',
-            version: activityVersion
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        console.log('✅ Alias created');
-      } catch (error: any) {
-        // If alias already exists, delete it and recreate
-        if (error.response?.data && JSON.stringify(error.response.data).includes('already exists')) {
-          console.log('📝 Alias exists, deleting and recreating...');
-          try {
-            await axios.delete(
-              `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases/prod`,
-              {
-                headers: { Authorization: `Bearer ${token}` }
-              }
-            );
-            console.log('✅ Old alias deleted');
-          } catch (deleteError) {
-            console.log('⚠️ Could not delete alias, proceeding anyway');
-          }
-
-          // Recreate alias
-          await axios.post(
-            `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
-            {
-              id: 'prod',
-              version: activityVersion
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              }
-            }
-          );
-          console.log('✅ Alias recreated');
-        } else {
-          throw error;
-        }
-      }
-
-      // Verify alias exists by listing aliases
-      console.log('🔍 Verifying alias exists...');
-      let verified = false;
-      for (let i = 0; i < 5; i++) {
-        try {
-          const aliasListResponse = await axios.get(
-            `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
-            {
-              headers: { Authorization: `Bearer ${token}` }
-            }
-          );
-          const aliases = aliasListResponse.data.data || [];
-          console.log(`📋 Found ${aliases.length} aliases:`, aliases.map((a: any) => `${a.id} (v${a.version})`).join(', '));
-          const prodAlias = aliases.find((a: any) => a.id === 'prod');
-          if (prodAlias) {
-            console.log(`✅ Alias 'prod' full object:`, JSON.stringify(prodAlias));
-            console.log(`📋 Alias keys:`, Object.keys(prodAlias));
-            // Also log the full list response to see the activity ID
-            console.log(`📋 Full alias list response:`, JSON.stringify(aliasListResponse.data).substring(0, 500));
-            verified = true;
-            break;
-          } else {
-            console.log(`⏳ Alias 'prod' not found in list (attempt ${i + 1}/5), waiting 2 seconds...`);
-          }
-        } catch (error: any) {
-          console.log(`⏳ Could not list aliases (attempt ${i + 1}/5), waiting 2 seconds...`);
-        }
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-
-      if (!verified) {
-        console.warn('⚠️ Could not verify alias after 5 attempts, proceeding anyway');
-      }
-
-      console.log('✅ Activity setup complete');
+      console.log('✅ Activity created successfully');
 
     } catch (error: any) {
       console.error('❌ Failed to create activity:', error.response?.data || error.message);
@@ -695,71 +373,38 @@ FILEDIA
       const inputObjectId = await this.uploadToOss(dwgBuffer, fileName);
       const inputUrl = await this.createSignedUrl(inputObjectId, 'read');
 
-      // Step 3: Create signed S3 upload URL for output (without uploading)
-      const outputInfo = await this.createOutputUploadUrl(`output_${fileName}`);
+      // Step 3: Create output object
+      const outputObjectId = await this.uploadToOss(Buffer.from(''), `output_${fileName}`);
+      const outputUrl = await this.createSignedUrl(outputObjectId, 'write');
 
       // Step 4: Create workitem
       const token = await this.getAccessToken();
-      // Try without nickname prefix first, then with prefix if it fails
-      const activityNameWithoutPrefix = `convert2dto3dactivity+prod`;
-      const activityNameWithPrefix = `${this.ownerId}.convert2dto3dactivity+prod`;
+      const activityName = `${this.nickname}.convert2dto3dactivity+prod`; // Must be lowercase
 
-      console.log(`⚙️ Trying workitem with activity: ${activityNameWithoutPrefix}`);
+      console.log('⚙️ Creating workitem...');
 
-      let workitemResponse;
-      try {
-        workitemResponse = await axios.post(
-          `${this.baseUrl}/da/us-east/v3/workitems`,
-          {
-            activityId: activityNameWithoutPrefix,
-            arguments: {
-              inputFile: {
-                url: inputUrl,
-                verb: 'get'
-              },
-              outputFile: {
-                url: outputInfo.url,
-                verb: 'put'
-              }
-            }
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
+      const workitemResponse = await axios.post(
+        `${this.baseUrl}/da/us-east/v3/workitems`,
+        {
+          activityId: activityName,
+          arguments: {
+            inputFile: {
+              url: inputUrl,
+              verb: 'get'
+            },
+            outputFile: {
+              url: outputUrl,
+              verb: 'put'
             }
           }
-        );
-      } catch (error: any) {
-        // If base name fails, try with prefix
-        if (error.response?.data?.activityId) {
-          console.log(`⚠️ Activity not found without prefix, trying with prefix: ${activityNameWithPrefix}`);
-          workitemResponse = await axios.post(
-            `${this.baseUrl}/da/us-east/v3/workitems`,
-            {
-              activityId: activityNameWithPrefix,
-              arguments: {
-                inputFile: {
-                  url: inputUrl,
-                  verb: 'get'
-                },
-                outputFile: {
-                  url: outputInfo.url,
-                  verb: 'put'
-                }
-              }
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              }
-            }
-          );
-        } else {
-          throw error;
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         }
-      }
+      );
 
       const workitemId = workitemResponse.data.id;
       console.log(`⏳ Workitem created: ${workitemId}`);
@@ -785,49 +430,12 @@ FILEDIA
       }
 
       if (status !== 'success') {
-        // Fetch the detailed report to see what failed
-        const finalStatus = await axios.get(
-          `${this.baseUrl}/da/us-east/v3/workitems/${workitemId}`,
-          {
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        );
-
-        console.log('📋 Workitem final status:', JSON.stringify(finalStatus.data, null, 2).substring(0, 2000));
-
-        // Try to fetch the report if available
-        if (finalStatus.data.reportUrl) {
-          try {
-            const reportResponse = await axios.get(finalStatus.data.reportUrl);
-            console.log('📋 Workitem report:', reportResponse.data);
-          } catch (reportError) {
-            console.log('⚠️ Could not fetch report');
-          }
-        }
-
         throw new Error(`Workitem failed with status: ${status}`);
       }
 
-      // Step 6: Complete the upload and download result
-      console.log('📥 Completing upload and downloading 3D DWG...');
-
-      // Complete the S3 upload (don't specify size - let Autodesk detect it)
-      const completeResponse = await axios.post(
-        `${this.baseUrl}/oss/v2/buckets/${outputInfo.bucketKey}/objects/${encodeURIComponent(outputInfo.objectKey)}/signeds3upload`,
-        {
-          uploadKey: outputInfo.uploadKey
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      // Create signed URL for downloading
-      const objectId = completeResponse.data.objectId;
-      const resultUrl = await this.createSignedUrl(objectId, 'read');
+      // Step 6: Download result
+      console.log('📥 Downloading 3D DWG...');
+      const resultUrl = await this.createSignedUrl(outputObjectId, 'read');
       const resultResponse = await axios.get(resultUrl, { responseType: 'arraybuffer' });
 
       console.log('✅ 2D to 3D conversion complete!\n');

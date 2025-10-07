@@ -687,6 +687,11 @@ export class AutodeskForgeService {
             const area = props.Area || generalProps.Area || 0;
             totalArea += area;
 
+            // Debug: Log why this was classified as a room
+            const roomName = item.name || props.Name || generalProps.Name || 'Unnamed Room';
+            const matchReason = isRoomLayer ? 'LAYER' : (category.includes('room') ? 'CATEGORY:room' : 'CATEGORY:space');
+            console.log(`🏠 Room #${rooms.length + 1}: "${roomName}" on layer "${layer}" (matched by: ${matchReason}, category: "${category}")`);
+
             rooms.push({
               id: item.objectid,
               name: item.name || props.Name || generalProps.Name || 'Unnamed Room',
