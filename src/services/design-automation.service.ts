@@ -705,6 +705,26 @@ _QSAVE
       }
 
       if (status !== 'success') {
+        // Fetch the detailed report to see what failed
+        const finalStatus = await axios.get(
+          `${this.baseUrl}/da/us-east/v3/workitems/${workitemId}`,
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+
+        console.log('📋 Workitem final status:', JSON.stringify(finalStatus.data, null, 2).substring(0, 2000));
+
+        // Try to fetch the report if available
+        if (finalStatus.data.reportUrl) {
+          try {
+            const reportResponse = await axios.get(finalStatus.data.reportUrl);
+            console.log('📋 Workitem report:', reportResponse.data);
+          } catch (reportError) {
+            console.log('⚠️ Could not fetch report');
+          }
+        }
+
         throw new Error(`Workitem failed with status: ${status}`);
       }
 
