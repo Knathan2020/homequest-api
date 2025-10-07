@@ -350,10 +350,10 @@ QUIT Y
       } catch (error: any) {
         // Only continue to create if 404 (not found)
         if (error.response?.status !== 404) {
-          console.log(`⚠️ Got ${error.response?.status} checking activity, will try to create it anyway`);
-        } else {
-          console.log('📝 Activity not found, creating new one...');
+          console.log(`⚠️ Got ${error.response?.status} checking activity, assuming it exists`);
+          return; // Activity likely exists, skip creation
         }
+        console.log('📝 Activity not found (404), creating new one...');
       }
 
       // Create activity (use base name when creating)
