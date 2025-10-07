@@ -445,11 +445,31 @@ QUIT Y
         }
       }
 
-      console.log('✅ Activity created successfully');
+      // Verify activity+alias is accessible
+      console.log('🔍 Verifying activity+alias is accessible...');
+      let verified = false;
+      for (let i = 0; i < 5; i++) {
+        try {
+          await axios.get(
+            `${this.baseUrl}/da/us-east/v3/activities/${activityFullId}`,
+            {
+              headers: { Authorization: `Bearer ${token}` }
+            }
+          );
+          console.log(`✅ Activity+alias verified (attempt ${i + 1})`);
+          verified = true;
+          break;
+        } catch (error: any) {
+          console.log(`⏳ Activity+alias not ready yet (attempt ${i + 1}/5), waiting 2 seconds...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
 
-      // Wait for alias to propagate
-      console.log('⏳ Waiting 3 seconds for activity alias to propagate...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      if (!verified) {
+        console.warn('⚠️ Could not verify activity+alias after 5 attempts, proceeding anyway');
+      }
+
+      console.log('✅ Activity setup complete');
 
     } catch (error: any) {
       console.error('❌ Failed to create activity:', error.response?.data || error.message);
