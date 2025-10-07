@@ -168,13 +168,12 @@ export class DesignAutomationService {
   private createAutoCADScript(): string {
     // AutoCAD Script (.scr) for Design Automation
     // Set FILEDIA to 0 to disable dialog boxes (non-interactive mode)
-    // Then use SAVEAS to save to output file
+    // Use SaveAs with quoted path for non-interactive save
     return `FILEDIA
 0
-_SAVEAS
-2018
-output.dwg
-
+SaveAs "output.dwg"
+FILEDIA
+1
 `.trim();
   }
 
