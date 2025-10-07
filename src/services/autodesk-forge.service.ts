@@ -389,6 +389,75 @@ export class AutodeskForgeService {
   }
 
   /**
+   * Detect floor number from viewable name
+   */
+  private detectFloorNumber(viewableName: string): number | null {
+    const name = viewableName.toLowerCase();
+
+    // Common patterns for floor numbers
+    const patterns = [
+      /\bfirst\s+floor\b/i,
+      /\bfloor\s+1\b/i,
+      /\blevel\s+1\b/i,
+      /\b1st\s+floor\b/i,
+      /\bsecond\s+floor\b/i,
+      /\bfloor\s+2\b/i,
+      /\blevel\s+2\b/i,
+      /\b2nd\s+floor\b/i,
+      /\bthird\s+floor\b/i,
+      /\bfloor\s+3\b/i,
+      /\blevel\s+3\b/i,
+      /\b3rd\s+floor\b/i,
+      /\bbasement\b/i,
+      /\bground\s+floor\b/i,
+      /\bupper\s+floor\b/i,
+      /\blower\s+floor\b/i
+    ];
+
+    // Extract floor number
+    if (/\bfirst\s+floor\b|floor\s+1\b|level\s+1\b|1st\s+floor\b|ground\s+floor\b/i.test(name)) {
+      return 1;
+    } else if (/\bsecond\s+floor\b|floor\s+2\b|level\s+2\b|2nd\s+floor\b|upper\s+floor\b/i.test(name)) {
+      return 2;
+    } else if (/\bthird\s+floor\b|floor\s+3\b|level\s+3\b|3rd\s+floor\b/i.test(name)) {
+      return 3;
+    } else if (/\bbasement\b|lower\s+floor\b/i.test(name)) {
+      return 0; // Basement = Floor 0
+    }
+
+    // Try extracting number from "Floor X" or "Level X"
+    const match = name.match(/(?:floor|level)\s+(\d+)/i);
+    if (match) {
+      return parseInt(match[1], 10);
+    }
+
+    return null; // No floor detected
+  }
+
+  /**
+   * Categorize viewable by type (floor plan, site plan, elevation, etc.)
+   */
+  private categorizeViewable(viewableName: string): string {
+    const name = viewableName.toLowerCase();
+
+    if (/site\s+plan|plot\s+plan|property|lot/i.test(name)) {
+      return 'site';
+    } else if (/elevation|facade/i.test(name)) {
+      return 'elevation';
+    } else if (/section|detail/i.test(name)) {
+      return 'detail';
+    } else if (/roof\s+plan/i.test(name)) {
+      return 'roof';
+    } else if (/floor\s+plan|level|story/i.test(name)) {
+      return 'floor';
+    } else if (/cover|title/i.test(name)) {
+      return 'cover';
+    }
+
+    return 'other';
+  }
+
+  /**
    * Get all available viewables/layouts from a model
    */
   async getModelViewables(urn: string): Promise<any[]> {
@@ -409,12 +478,24 @@ export class AutodeskForgeService {
       const metadata = response.data?.data?.metadata || [];
       console.log(`📄 Found ${metadata.length} viewable(s) in model:`);
 
-      metadata.forEach((viewable: any, index: number) => {
+      // Enhance metadata with floor detection and categorization
+      const enhancedMetadata = metadata.map((viewable: any, index: number) => {
+        const floorNumber = this.detectFloorNumber(viewable.name);
+        const category = this.categorizeViewable(viewable.name);
+
         console.log(`  ${index + 1}. ${viewable.name} (GUID: ${viewable.guid})`);
         console.log(`     Role: ${viewable.role}, Type: ${viewable.type}`);
+        console.log(`     Category: ${category}, Floor: ${floorNumber !== null ? floorNumber : 'N/A'}`);
+
+        return {
+          ...viewable,
+          floorNumber,
+          category,
+          isFloorPlan: category === 'floor'
+        };
       });
 
-      return metadata;
+      return enhancedMetadata;
 
     } catch (error: any) {
       console.error('❌ Failed to get viewables:', error.response?.data || error.message);
