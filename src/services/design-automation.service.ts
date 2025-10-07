@@ -318,12 +318,12 @@ QUIT Y
       console.log('📋 App bundle response:', JSON.stringify(response.data).substring(0, 300));
 
       const uploadParams = response.data.uploadParameters;
-      if (!uploadParams || !uploadParams.url) {
+      if (!uploadParams || !uploadParams.endpointURL) {
         console.error('❌ No upload parameters in response:', response.data);
         throw new Error('No upload URL provided by Autodesk');
       }
 
-      const uploadUrl = uploadParams.url;
+      const uploadUrl = uploadParams.endpointURL;
       const formData = uploadParams.formData || {};
 
       console.log('📤 Uploading app bundle to:', uploadUrl.substring(0, 50) + '...');
