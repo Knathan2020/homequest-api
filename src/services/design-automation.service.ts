@@ -407,12 +407,13 @@ QUIT Y
         console.log('✅ Activity created');
       }
 
-      // Create/update alias (use PATCH to update if exists)
-      console.log('📝 Creating/updating alias...');
+      // Create/update alias - try POST first, delete and recreate if exists
+      console.log('📝 Creating alias...');
       try {
-        await axios.patch(
-          `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases/prod`,
+        await axios.post(
+          `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
           {
+            id: 'prod',
             version: 1
           },
           {
@@ -422,10 +423,24 @@ QUIT Y
             }
           }
         );
-        console.log('✅ Alias updated');
+        console.log('✅ Alias created');
       } catch (error: any) {
-        // If PATCH fails, try POST to create
-        if (error.response?.status === 404) {
+        // If alias already exists, delete it and recreate
+        if (error.response?.data && JSON.stringify(error.response.data).includes('already exists')) {
+          console.log('📝 Alias exists, deleting and recreating...');
+          try {
+            await axios.delete(
+              `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases/prod`,
+              {
+                headers: { Authorization: `Bearer ${token}` }
+              }
+            );
+            console.log('✅ Old alias deleted');
+          } catch (deleteError) {
+            console.log('⚠️ Could not delete alias, proceeding anyway');
+          }
+
+          // Recreate alias
           await axios.post(
             `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
             {
@@ -439,7 +454,7 @@ QUIT Y
               }
             }
           );
-          console.log('✅ Alias created');
+          console.log('✅ Alias recreated');
         } else {
           throw error;
         }
