@@ -340,25 +340,68 @@ QUIT Y
       console.log('⚙️ Setting up activity...');
 
       // Check if activity+alias combo exists
+      let needsRecreation = false;
       try {
-        await axios.get(
-          `${this.baseUrl}/da/us-east/v3/activities/${activityFullId}`,
+        const existingActivity = await axios.get(
+          `${this.baseUrl}/da/us-east/v3/activities/${this.ownerId}.${activityBaseName}`,
           {
             headers: { Authorization: `Bearer ${token}` }
           }
         );
-        console.log('✅ Activity with alias already exists');
-        return;
+
+        // Check if app bundle reference is correct
+        const appbundles = existingActivity.data.appbundles || [];
+        const correctAppBundle = `${this.ownerId}.${appBundleBaseName}+prod`;
+        if (!appbundles.includes(correctAppBundle)) {
+          console.log(`⚠️ Activity exists but has wrong app bundle reference. Expected: ${correctAppBundle}, Got: ${appbundles.join(', ')}`);
+          needsRecreation = true;
+        } else {
+          console.log('✅ Activity with correct configuration already exists');
+          return;
+        }
       } catch (error: any) {
         if (error.response?.status !== 404) {
-          console.log(`⚠️ Error checking activity+alias (${error.response?.status}), will check base activity`);
+          console.log(`⚠️ Error checking activity (${error.response?.status}), will check base activity`);
+        }
+      }
+
+      // Delete activity if it needs recreation
+      if (needsRecreation) {
+        console.log('🗑️ Deleting old activity to recreate with correct app bundle...');
+        try {
+          // Delete all aliases first
+          const aliasListResponse = await axios.get(
+            `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const aliases = aliasListResponse.data.data || [];
+          for (const alias of aliases) {
+            if (alias.id !== '$LATEST') {
+              await axios.delete(
+                `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases/${alias.id}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              console.log(`✅ Deleted alias: ${alias.id}`);
+            }
+          }
+
+          // Delete all versions of the activity
+          await axios.delete(
+            `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          console.log('✅ Deleted old activity');
+        } catch (deleteError: any) {
+          console.log('⚠️ Error deleting activity:', deleteError.response?.data || deleteError.message);
         }
       }
 
       // Check if base activity exists (without alias) and get its version
-      let activityExists = false;
+      let activityExists = needsRecreation ? false : false; // Force recreation if needed
       let activityVersion = 1;
-      try {
+
+      if (!needsRecreation) {
+        try {
         const activityResponse = await axios.get(
           `${this.baseUrl}/da/us-east/v3/activities/${this.ownerId}.${activityBaseName}`,
           {
@@ -397,6 +440,7 @@ QUIT Y
           }
         }
       }
+      } // End of if (!needsRecreation)
 
       // Create activity if it doesn't exist
       if (!activityExists) {
