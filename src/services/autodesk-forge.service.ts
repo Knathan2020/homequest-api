@@ -728,9 +728,10 @@ export class AutodeskForgeService {
             const perimeter = props.Perimeter || generalProps.Perimeter || 0;
             const volume = props.Volume || generalProps.Volume || 0;
 
-            // Skip if no room properties (avoids false positives from hasRoomProperties fallback)
-            if (area === 0 && perimeter === 0) {
-              continue; // Not a room, just on a room layer with no properties
+            // Only skip if matched by properties (not layer) AND has no properties
+            // If on a ROOM layer, trust it's a room even without area/perimeter
+            if (!isRoomLayer && hasRoomProperties && area === 0 && perimeter === 0) {
+              continue; // Property-based match with no actual properties - false positive
             }
 
             totalArea += area;
