@@ -553,32 +553,66 @@ QUIT Y
 
       // Step 4: Create workitem
       const token = await this.getAccessToken();
-      const activityName = `${this.nickname}.convert2dto3dactivity+prod`;
+      // Try without nickname prefix first, then with prefix if it fails
+      const activityNameWithoutPrefix = `convert2dto3dactivity+prod`;
+      const activityNameWithPrefix = `${this.nickname}.convert2dto3dactivity+prod`;
 
-      console.log(`⚙️ Creating workitem with activity: ${activityName}`);
+      console.log(`⚙️ Trying workitem with activity: ${activityNameWithoutPrefix}`);
 
-      const workitemResponse = await axios.post(
-        `${this.baseUrl}/da/us-east/v3/workitems`,
-        {
-          activityId: activityName,
-          arguments: {
-            inputFile: {
-              url: inputUrl,
-              verb: 'get'
-            },
-            outputFile: {
-              url: outputUrl,
-              verb: 'put'
+      let workitemResponse;
+      try {
+        workitemResponse = await axios.post(
+          `${this.baseUrl}/da/us-east/v3/workitems`,
+          {
+            activityId: activityNameWithoutPrefix,
+            arguments: {
+              inputFile: {
+                url: inputUrl,
+                verb: 'get'
+              },
+              outputFile: {
+                url: outputUrl,
+                verb: 'put'
+              }
+            }
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
             }
           }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+        );
+      } catch (error: any) {
+        // If base name fails, try with prefix
+        if (error.response?.data?.activityId) {
+          console.log(`⚠️ Activity not found without prefix, trying with prefix: ${activityNameWithPrefix}`);
+          workitemResponse = await axios.post(
+            `${this.baseUrl}/da/us-east/v3/workitems`,
+            {
+              activityId: activityNameWithPrefix,
+              arguments: {
+                inputFile: {
+                  url: inputUrl,
+                  verb: 'get'
+                },
+                outputFile: {
+                  url: outputUrl,
+                  verb: 'put'
+                }
+              }
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+        } else {
+          throw error;
         }
-      );
+      }
 
       const workitemId = workitemResponse.data.id;
       console.log(`⏳ Workitem created: ${workitemId}`);
