@@ -212,6 +212,7 @@ QUIT Y
       console.log('📦 Creating app bundle...');
 
       // Check if app bundle exists (check base name first)
+      let needsRecreation = false;
       try {
         const existing = await axios.get(
           `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleBaseName}`,
@@ -222,11 +223,46 @@ QUIT Y
         console.log('✅ App bundle already exists, using existing bundle');
         return;
       } catch (error: any) {
-        if (error.response?.status !== 404) {
-          console.log('⚠️ Error checking bundle, attempting to use existing:', error.message);
-          return; // Assume it exists if we can't check
+        if (error.response?.status === 400) {
+          console.log('⚠️ Cannot query app bundle (400 error), assuming it needs recreation');
+          needsRecreation = true;
+        } else if (error.response?.status !== 404) {
+          console.log('⚠️ Error checking bundle, will attempt recreation:', error.message);
+          needsRecreation = true;
+        } else {
+          console.log('📝 App bundle not found, creating new one...');
         }
-        console.log('📝 App bundle not found, creating new one...');
+      }
+
+      // Delete app bundle if it needs recreation
+      if (needsRecreation) {
+        console.log('🗑️ Deleting old app bundle to recreate...');
+        try {
+          // Delete all aliases first
+          const aliasListResponse = await axios.get(
+            `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleBaseName}/aliases`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const aliases = aliasListResponse.data.data || [];
+          for (const alias of aliases) {
+            if (alias.id !== '$LATEST') {
+              await axios.delete(
+                `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleBaseName}/aliases/${alias.id}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              console.log(`✅ Deleted app bundle alias: ${alias.id}`);
+            }
+          }
+
+          // Delete all versions of the app bundle
+          await axios.delete(
+            `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleBaseName}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          console.log('✅ Deleted old app bundle');
+        } catch (deleteError: any) {
+          console.log('⚠️ Error deleting app bundle:', deleteError.response?.data || deleteError.message);
+        }
       }
 
       // Create PackageContents.xml
