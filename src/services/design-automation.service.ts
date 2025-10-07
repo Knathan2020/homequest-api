@@ -168,10 +168,12 @@ export class DesignAutomationService {
   private createAutoCADScript(): string {
     // AutoCAD Script (.scr) for Design Automation
     // Set FILEDIA to 0 to disable dialog boxes (non-interactive mode)
-    // Use SaveAs with quoted path for non-interactive save
+    // SaveAs requires: format, then filename (each on separate line)
     return `FILEDIA
 0
-SaveAs "output.dwg"
+SaveAs
+2018
+output.dwg
 FILEDIA
 1
 `.trim();
@@ -467,7 +469,7 @@ FILEDIA
             `${this.baseUrl}/da/us-east/v3/activities`,
             {
               id: activityBaseName,
-              commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[' + appBundleBaseName + '].path)\\convert2dto3d.scr" /o "$(args[outputFile].path)"'],
+              commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[' + appBundleBaseName + '].path)\\convert2dto3d.scr"'],
               engine: 'Autodesk.AutoCAD+25_0',
               appbundles: [`${this.ownerId}.${appBundleBaseName}+prod`],
               parameters: {
