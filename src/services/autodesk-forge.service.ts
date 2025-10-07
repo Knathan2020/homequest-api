@@ -361,6 +361,34 @@ export class AutodeskForgeService {
   }
 
   /**
+   * Get object tree (contains geometry hierarchy and bounding boxes)
+   */
+  async getObjectTree(urn: string, guid: string): Promise<any> {
+    try {
+      const token = await this.getAccessToken();
+
+      console.log(`🌳 Fetching object tree for GUID: ${guid}`);
+
+      const response = await axios.get(
+        `${this.baseUrl}/modelderivative/v2/designdata/${urn}/metadata/${guid}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.api+json'
+          }
+        }
+      );
+
+      console.log('✅ Object tree retrieved');
+      return response.data?.data?.objects || [];
+
+    } catch (error: any) {
+      console.error('❌ Failed to get object tree:', error.response?.data || error.message);
+      return [];
+    }
+  }
+
+  /**
    * Extract floorplan data from model properties
    */
   extractFloorplanData(properties: any): {
@@ -369,6 +397,7 @@ export class AutodeskForgeService {
     windows: any[];
     stairs: any[];
     rooms: any[];
+    textLabels: any[];
     measurements: any;
   } {
     const walls: any[] = [];
@@ -376,6 +405,7 @@ export class AutodeskForgeService {
     const windows: any[] = [];
     const stairs: any[] = [];
     const rooms: any[] = [];
+    const textLabels: any[] = [];
     let totalArea = 0;
 
     try {
@@ -550,13 +580,29 @@ export class AutodeskForgeService {
               type: props['Room Type'] || 'general'
             });
           }
+
+          // Extract text entities (room labels, dimensions, notes)
+          if (entityType === 'AcDbText' || entityType === 'AcDbMText' || entityType === 'Text') {
+            const textString = generalProps['Text String'] || generalProps.Contents || props['Text String'] || props.Contents;
+            const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
+            const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
+
+            if (textString && positionX !== undefined && positionY !== undefined) {
+              textLabels.push({
+                id: item.objectid,
+                text: textString,
+                position: { x: positionX, y: positionY },
+                layer: layer
+              });
+            }
+          }
         }
 
         // Log layers found for debugging
         console.log(`📋 Layers found in DWG: [${Array.from(layersFound).join(', ')}]`);
       }
 
-      console.log(`📊 Extracted: ${walls.length} walls, ${doors.length} doors, ${windows.length} windows, ${stairs.length} stairs, ${rooms.length} rooms`);
+      console.log(`📊 Extracted: ${walls.length} walls, ${doors.length} doors, ${windows.length} windows, ${stairs.length} stairs, ${rooms.length} rooms, ${textLabels.length} text labels`);
 
     } catch (error) {
       console.warn('⚠️ Error extracting floorplan data:', error);
@@ -568,6 +614,7 @@ export class AutodeskForgeService {
       windows,
       stairs,
       rooms,
+      textLabels,
       measurements: {
         totalArea,
         totalRooms: rooms.length,
@@ -577,6 +624,101 @@ export class AutodeskForgeService {
         totalStairs: stairs.length
       }
     };
+  }
+
+  /**
+   * Use GPT Vision to analyze floor plan and identify rooms
+   */
+  async analyzeFloorPlanWithGPT(urn: string, textLabels: any[]): Promise<any[]> {
+    try {
+      const token = await this.getAccessToken();
+
+      console.log('🤖 Analyzing floor plan with GPT Vision...');
+
+      // Get thumbnail from Autodesk Forge
+      const thumbnailUrl = `${this.baseUrl}/modelderivative/v2/designdata/${urn}/thumbnail?width=1024&height=1024`;
+
+      const thumbnailResponse = await axios.get(thumbnailUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        responseType: 'arraybuffer'
+      });
+
+      const base64Image = Buffer.from(thumbnailResponse.data).toString('base64');
+
+      // Prepare text labels summary for GPT
+      const textSummary = textLabels.map(t => `"${t.text}" at position (${Math.round(t.position.x)}, ${Math.round(t.position.y)})`).join('\n');
+
+      // Call OpenAI GPT-4 Vision
+      const openaiApiKey = process.env.OPENAI_API_KEY;
+      if (!openaiApiKey) {
+        console.warn('⚠️ OPENAI_API_KEY not set, skipping GPT Vision analysis');
+        return [];
+      }
+
+      const gptResponse = await axios.post(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `Analyze this architectural floor plan and identify all rooms. For each room, provide:
+1. Room name/label (from text on the plan)
+2. Room type (bedroom, bathroom, kitchen, living room, dining room, office, closet, hallway, garage, etc.)
+3. Approximate location (northwest, northeast, southwest, southeast, center, etc.)
+4. Estimated dimensions if visible
+
+Text labels found in the plan:
+${textSummary}
+
+Return ONLY a JSON array with this structure:
+[
+  {
+    "name": "Master Bedroom",
+    "type": "bedroom",
+    "location": "northwest",
+    "area_estimate": "200-250 sqft",
+    "confidence": 0.95
+  }
+]`
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:image/png;base64,${base64Image}`
+                  }
+                }
+              ]
+            }
+          ],
+          max_tokens: 2000
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${openaiApiKey}`
+          }
+        }
+      );
+
+      const gptContent = gptResponse.data.choices[0]?.message?.content || '[]';
+
+      // Extract JSON from response (GPT sometimes wraps it in markdown)
+      const jsonMatch = gptContent.match(/\[[\s\S]*\]/);
+      const rooms = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+
+      console.log(`✅ GPT Vision identified ${rooms.length} rooms`);
+      return rooms;
+
+    } catch (error: any) {
+      console.error('❌ GPT Vision analysis failed:', error.response?.data || error.message);
+      return [];
+    }
   }
 
   /**
@@ -630,6 +772,25 @@ export class AutodeskForgeService {
           console.log('📋 Properties response type:', typeof properties);
           console.log('📋 Properties keys:', properties ? Object.keys(properties) : 'null/undefined');
           floorplanData = this.extractFloorplanData(properties);
+
+          // Step 6: Use GPT Vision to identify rooms from text labels
+          if (floorplanData && floorplanData.textLabels && floorplanData.textLabels.length > 0) {
+            const gptRooms = await this.analyzeFloorPlanWithGPT(urn, floorplanData.textLabels);
+
+            // Merge GPT-detected rooms with existing room data
+            if (gptRooms.length > 0) {
+              floorplanData.rooms = gptRooms.map(room => ({
+                id: `gpt-room-${room.name.toLowerCase().replace(/\s+/g, '-')}`,
+                name: room.name,
+                type: room.type,
+                location: room.location,
+                area_estimate: room.area_estimate,
+                confidence: room.confidence,
+                source: 'gpt-vision'
+              }));
+              console.log(`🤖 GPT Vision enhanced room detection: ${floorplanData.rooms.length} rooms identified`);
+            }
+          }
         }
       } catch (error: any) {
         console.warn(`⚠️ Metadata extraction failed (expected for PDFs): ${error.message}`);
