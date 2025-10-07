@@ -203,6 +203,7 @@ export class DesignAutomationService {
     // Converts 2D floor plan polylines to 3D by setting thickness
     // Strategy: Freeze all layers except target, select all visible, set thickness
     // Wall height: 96" (8ft), Door/Window height: 84" (7ft)
+    // Saves in TOP view so users can toggle between 2D/3D in viewer
     return `FILEDIA
 0
 LAYER
@@ -246,7 +247,7 @@ T
 *
 
 -VIEW
-_SW
+_TOP
 _.ZOOM
 _E
 _.VSCURRENT
