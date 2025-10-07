@@ -613,6 +613,17 @@ export class AutodeskForgeService {
 
               start = parseCoords(startPoint);
               end = parseCoords(endPoint);
+
+              // Debug: Log first wall coordinates to determine units
+              if (walls.length === 0) {
+                console.log('🔍 FIRST WALL RAW DATA:');
+                console.log('  Start Point:', startPoint);
+                console.log('  End Point:', endPoint);
+                console.log('  Parsed Start:', start);
+                console.log('  Parsed End:', end);
+                console.log('  Length:', props.Length);
+                console.log('  Height:', props.Height, generalProps.Thickness);
+              }
             } else if (positionX !== undefined && positionY !== undefined) {
               // Single position - assume it's a point entity
               start = { x: positionX, y: positionY, z: 0 };
@@ -695,7 +706,18 @@ export class AutodeskForgeService {
             }
 
             const area = props.Area || generalProps.Area || 0;
+            const perimeter = props.Perimeter || generalProps.Perimeter || 0;
+            const volume = props.Volume || generalProps.Volume || 0;
             totalArea += area;
+
+            // Debug: Log first room's raw data to check units
+            if (rooms.length === 0) {
+              console.log('🔍 FIRST ROOM RAW DATA:');
+              console.log('  Area:', area, 'sq units');
+              console.log('  Perimeter:', perimeter, 'units');
+              console.log('  Volume:', volume, 'cubic units');
+              console.log('  All Area props:', props.Area, generalProps.Area);
+            }
 
             // Debug: Log why this was classified as a room and its area
             const roomName = itemName || 'Unnamed Room';
@@ -706,8 +728,8 @@ export class AutodeskForgeService {
               id: item.objectid,
               name: item.name || props.Name || generalProps.Name || 'Unnamed Room',
               area,
-              perimeter: props.Perimeter || generalProps.Perimeter || 0,
-              volume: props.Volume || generalProps.Volume || 0,
+              perimeter,
+              volume,
               level: props.Level || generalProps.Level || 'Ground Floor',
               number: props.Number || props['Room Number'] || generalProps.Number || '',
               type: props['Room Type'] || generalProps['Room Type'] || 'general',
