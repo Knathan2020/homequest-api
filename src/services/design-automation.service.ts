@@ -370,8 +370,29 @@ QUIT Y
         if (error.response?.status === 404) {
           console.log('📝 Base activity not found, creating new one...');
         } else {
-          console.log(`⚠️ Error checking base activity (${error.response?.status}), assuming it exists`);
-          activityExists = true;
+          console.log(`⚠️ Error checking base activity (${error.response?.status}):`, error.response?.data);
+          // Try listing all activities to find it
+          try {
+            const listResponse = await axios.get(
+              `${this.baseUrl}/da/us-east/v3/activities`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const activities = listResponse.data.data || [];
+            const matchingActivity = activities.find((act: any) =>
+              act.id === `${this.nickname}.${activityBaseName}` ||
+              act.id === activityBaseName
+            );
+            if (matchingActivity) {
+              activityVersion = matchingActivity.version || 1;
+              console.log(`✅ Found activity in list at version ${activityVersion}`);
+              activityExists = true;
+            } else {
+              console.log('📝 Activity not in list, will create new one');
+            }
+          } catch (listError) {
+            console.log('⚠️ Could not list activities, assuming activity exists');
+            activityExists = true;
+          }
         }
       }
 
