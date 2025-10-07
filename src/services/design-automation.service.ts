@@ -274,18 +274,45 @@ QUIT Y
       );
 
       // Upload bundle to signed URL
-      const uploadUrl = response.data.uploadParameters.url;
-      const formData = response.data.uploadParameters.formData;
+      console.log('📋 App bundle response:', JSON.stringify(response.data).substring(0, 300));
 
-      console.log('📤 Uploading app bundle...');
+      const uploadParams = response.data.uploadParameters;
+      if (!uploadParams || !uploadParams.url) {
+        console.error('❌ No upload parameters in response:', response.data);
+        throw new Error('No upload URL provided by Autodesk');
+      }
+
+      const uploadUrl = uploadParams.url;
+      const formData = uploadParams.formData || {};
+
+      console.log('📤 Uploading app bundle to:', uploadUrl.substring(0, 50) + '...');
 
       const form = new (require('form-data'))();
       Object.keys(formData).forEach(key => form.append(key, formData[key]));
       form.append('file', zipBuffer, 'bundle.zip');
 
       await axios.post(uploadUrl, form, {
-        headers: form.getHeaders()
+        headers: form.getHeaders(),
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
       });
+
+      console.log('✅ App bundle uploaded successfully');
+
+      // Mark the alias as ready
+      await axios.post(
+        `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleBaseName}/aliases`,
+        {
+          id: 'prod',
+          version: 1
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
 
       console.log('✅ App bundle created successfully');
 
