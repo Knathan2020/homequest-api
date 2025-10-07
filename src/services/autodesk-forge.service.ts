@@ -847,11 +847,24 @@ export class AutodeskForgeService {
         const uniqueRooms: any[] = [];
         const seenRooms = new Set<string>();
 
-        console.log(`🔍 Deduplicating ${rooms.length} rooms by geometry...`);
+        // Check if geometry properties are available
+        const hasGeometry = rooms.some(r => r.area > 0 || r.perimeter > 0 || r.volume > 0);
+
+        console.log(`🔍 Deduplicating ${rooms.length} rooms... (geometry available: ${hasGeometry})`);
 
         for (const room of rooms) {
-          // Create unique key from area, perimeter, and volume (same geometry = same room)
-          const key = `${Math.round(room.area * 100)}_${Math.round(room.perimeter * 100)}_${Math.round(room.volume * 100)}`;
+          let key: string;
+
+          if (hasGeometry) {
+            // Use geometry for deduplication when available
+            key = `${Math.round(room.area * 100)}_${Math.round(room.perimeter * 100)}_${Math.round(room.volume * 100)}`;
+          } else {
+            // Use object ID when geometry not available (e.g., Solid entities)
+            // Extract ID from name like "Solid [13260]"
+            const idMatch = room.name?.match(/\[([^\]]+)\]/) || [];
+            const objectId = idMatch[1] || room.id || room.name;
+            key = `${room.layer}_${objectId}`;
+          }
 
           if (!seenRooms.has(key)) {
             seenRooms.add(key);
