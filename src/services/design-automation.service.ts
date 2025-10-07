@@ -135,7 +135,7 @@ export class DesignAutomationService {
   /**
    * Create signed URL for reading
    */
-  private async createSignedUrl(objectId: string, access: 'read' | 'write' = 'read'): Promise<string> {
+  private async createSignedUrl(objectId: string, access: 'read' | 'write' | 'readwrite' = 'read'): Promise<string> {
     try {
       const token = await this.getAccessToken();
       const [, bucketKey, objectKey] = objectId.match(/urn:adsk\.objects:os\.object:([^\/]+)\/(.+)/) || [];
@@ -623,7 +623,7 @@ FILEDIA
 
       // Step 3: Create output object
       const outputObjectId = await this.uploadToOss(Buffer.from(''), `output_${fileName}`);
-      const outputUrl = await this.createSignedUrl(outputObjectId, 'write');
+      const outputUrl = await this.createSignedUrl(outputObjectId, 'readwrite');
 
       // Step 4: Create workitem
       const token = await this.getAccessToken();
