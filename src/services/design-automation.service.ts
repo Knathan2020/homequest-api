@@ -204,9 +204,13 @@ QUIT Y
   private async createAppBundle(): Promise<void> {
     try {
       const token = await this.getAccessToken();
-      const appBundleName = `${this.nickname}.convert2dto3dbundle`; // Must include nickname prefix
+      const bundleId = 'convert2dto3dbundle'; // Simple ID without nickname
+      const appBundleName = `${this.nickname}.${bundleId}`; // Qualified name for reference
 
       console.log('📦 Creating app bundle...');
+      console.log(`   Bundle ID (for creation): ${bundleId}`);
+      console.log(`   Qualified name (for reference): ${appBundleName}`);
+      console.log(`   Nickname: ${this.nickname}`);
 
       // Check if app bundle exists
       try {
@@ -260,7 +264,7 @@ QUIT Y
       const response = await axios.post(
         `${this.baseUrl}/da/us-east/v3/appbundles`,
         {
-          id: appBundleName,
+          id: bundleId, // Use simple ID, Autodesk will qualify it with nickname
           engine: 'Autodesk.AutoCAD+24',
           description: 'Converts 2D floor plans to 3D by extruding polylines'
         },
@@ -300,10 +304,14 @@ QUIT Y
   private async createActivity(): Promise<void> {
     try {
       const token = await this.getAccessToken();
-      const activityName = `${this.nickname}.convert2dto3dactivity`; // Must be lowercase
-      const appBundleName = `${this.nickname}.convert2dto3dbundle`; // Must be lowercase
+      const activityId = 'convert2dto3dactivity'; // Simple ID
+      const activityName = `${this.nickname}.${activityId}`; // Qualified name
+      const bundleId = 'convert2dto3dbundle'; // Simple bundle ID
+      const appBundleName = `${this.nickname}.${bundleId}`; // Qualified bundle name
 
       console.log('⚙️ Creating activity...');
+      console.log(`   Activity ID (for creation): ${activityId}`);
+      console.log(`   Qualified name (for reference): ${activityName}`);
 
       // Check if activity exists
       try {
@@ -323,7 +331,7 @@ QUIT Y
       await axios.post(
         `${this.baseUrl}/da/us-east/v3/activities`,
         {
-          id: activityName,
+          id: activityId, // Use simple ID, Autodesk will qualify it
           commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[' + appBundleName + '].path)\\convert2dto3d.scr" /o "$(args[outputFile].path)"'],
           engine: 'Autodesk.AutoCAD+24',
           appbundles: [`${appBundleName}+prod`],
