@@ -509,7 +509,10 @@ QUIT Y
           console.log(`📋 Found ${aliases.length} aliases:`, aliases.map((a: any) => `${a.id} (v${a.version})`).join(', '));
           const prodAlias = aliases.find((a: any) => a.id === 'prod');
           if (prodAlias) {
-            console.log(`✅ Alias 'prod' verified:`, JSON.stringify(prodAlias).substring(0, 200));
+            console.log(`✅ Alias 'prod' full object:`, JSON.stringify(prodAlias));
+            console.log(`📋 Alias keys:`, Object.keys(prodAlias));
+            // Also log the full list response to see the activity ID
+            console.log(`📋 Full alias list response:`, JSON.stringify(aliasListResponse.data).substring(0, 500));
             verified = true;
             break;
           } else {
