@@ -527,7 +527,7 @@ export class AutodeskForgeService {
       // Handle undefined/null properties
       if (!properties) {
         console.warn('⚠️ Properties is null/undefined');
-        return { walls, doors, windows, stairs, rooms, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
+        return { walls, doors, windows, stairs, rooms, textLabels, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0, totalTextLabels: 0 } };
       }
 
       // Check if collection exists directly or nested
@@ -537,13 +537,13 @@ export class AutodeskForgeService {
       if (!collection) {
         console.warn('⚠️ No collection found in properties. Keys:', Object.keys(properties));
         console.warn('📋 Full properties object:', JSON.stringify(properties).substring(0, 500));
-        return { walls, doors, windows, stairs, rooms, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
+        return { walls, doors, windows, stairs, rooms, textLabels, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0, totalTextLabels: 0 } };
       }
 
       // If result is "Accepted" (202 status), properties are still being generated
       if (collection === 'Accepted' || typeof collection === 'string') {
         console.warn('⚠️ Properties still being generated (202 Accepted). Retry in a few seconds.');
-        return { walls, doors, windows, stairs, rooms, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
+        return { walls, doors, windows, stairs, rooms, textLabels, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0, totalTextLabels: 0 } };
       }
 
       if (collection) {
@@ -698,6 +698,23 @@ export class AutodeskForgeService {
               type: props['Room Type'] || generalProps['Room Type'] || 'general',
               layer: layer
             });
+          } else if (category.includes('text') || name.includes('text') || category.includes('mtext') || name.includes('mtext')) {
+            // Extract text labels (room names, annotations, etc.)
+            const text = props.Text || props.Contents || props.TextString || item.name || '';
+            if (text && text.trim()) {
+              textLabels.push({
+                id: item.objectid,
+                text: text.trim(),
+                layer: props.Layer || 'default',
+                height: props.Height || props.TextHeight || 0,
+                rotation: props.Rotation || 0,
+                position: {
+                  x: props.Position?.x || 0,
+                  y: props.Position?.y || 0,
+                  z: props.Position?.z || 0
+                }
+              });
+            }
           }
 
           // Extract text entities (room labels, dimensions, notes)
@@ -770,7 +787,8 @@ export class AutodeskForgeService {
         totalWalls: walls.length,
         totalDoors: doors.length,
         totalWindows: windows.length,
-        totalStairs: stairs.length
+        totalStairs: stairs.length,
+        totalTextLabels: textLabels.length
       }
     };
   }

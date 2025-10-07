@@ -105,6 +105,7 @@ router.post('/upload', upload.array('files', 10), async (req: Request, res: Resp
               windows: autodeskResult.floorplanData?.windows || [],
               stairs: autodeskResult.floorplanData?.stairs || [],
               rooms: autodeskResult.floorplanData?.rooms || [],
+              textLabels: autodeskResult.floorplanData?.textLabels || [],
               measurements: autodeskResult.floorplanData?.measurements || {},
               metadata: autodeskResult.metadata,
               supports3D: true
@@ -184,6 +185,7 @@ router.post('/upload', upload.array('files', 10), async (req: Request, res: Resp
                 windows: autodeskResult.floorplanData?.windows || [],
                 stairs: autodeskResult.floorplanData?.stairs || [],
                 rooms: autodeskResult.floorplanData?.rooms || [],
+                textLabels: autodeskResult.floorplanData?.textLabels || [],
                 metadata: autodeskResult.metadata || {},
                 supports3D: true
               },
