@@ -360,8 +360,13 @@ QUIT Y
           return;
         }
       } catch (error: any) {
-        if (error.response?.status !== 404) {
-          console.log(`⚠️ Error checking activity (${error.response?.status}), will check base activity`);
+        if (error.response?.status === 400) {
+          // 400 means we can't query it properly - assume it needs recreation
+          console.log(`⚠️ Cannot query activity (400 error), assuming it needs recreation`);
+          needsRecreation = true;
+        } else if (error.response?.status !== 404) {
+          console.log(`⚠️ Error checking activity (${error.response?.status}), will attempt recreation`);
+          needsRecreation = true;
         }
       }
 
