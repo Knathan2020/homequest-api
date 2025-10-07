@@ -335,9 +335,9 @@ QUIT Y
       const appBundleBaseName = 'convert2dto3dbundle'; // Base name only
       const activityFullId = `${this.nickname}.${activityBaseName}+prod`;
 
-      console.log('⚙️ Creating activity...');
+      console.log('⚙️ Setting up activity...');
 
-      // Check if activity exists
+      // Check if activity+alias combo exists
       try {
         await axios.get(
           `${this.baseUrl}/da/us-east/v3/activities/${activityFullId}`,
@@ -345,64 +345,105 @@ QUIT Y
             headers: { Authorization: `Bearer ${token}` }
           }
         );
-        console.log('✅ Activity already exists');
+        console.log('✅ Activity with alias already exists');
         return;
       } catch (error: any) {
-        // Only continue to create if 404 (not found)
         if (error.response?.status !== 404) {
-          console.log(`⚠️ Got ${error.response?.status} checking activity, assuming it exists`);
-          return; // Activity likely exists, skip creation
+          console.log(`⚠️ Error checking activity+alias (${error.response?.status}), will check base activity`);
         }
-        console.log('📝 Activity not found (404), creating new one...');
       }
 
-      // Create activity (use base name when creating)
-      await axios.post(
-        `${this.baseUrl}/da/us-east/v3/activities`,
-        {
-          id: activityBaseName,
-          commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[' + appBundleBaseName + '].path)\\convert2dto3d.scr" /o "$(args[outputFile].path)"'],
-          engine: 'Autodesk.AutoCAD+25_0',
-          appbundles: [`${this.nickname}.${appBundleBaseName}+prod`],
-          parameters: {
-            inputFile: {
-              verb: 'get',
-              description: 'Input 2D DWG file',
-              required: true,
-              localName: 'input.dwg'
-            },
-            outputFile: {
-              verb: 'put',
-              description: 'Output 3D DWG file',
-              required: true,
-              localName: 'output.dwg'
+      // Check if base activity exists (without alias)
+      let activityExists = false;
+      try {
+        await axios.get(
+          `${this.baseUrl}/da/us-east/v3/activities/${this.nickname}.${activityBaseName}`,
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+        console.log('✅ Base activity exists, will create/update alias');
+        activityExists = true;
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          console.log('📝 Base activity not found, creating new one...');
+        } else {
+          console.log(`⚠️ Error checking base activity (${error.response?.status}), assuming it exists`);
+          activityExists = true;
+        }
+      }
+
+      // Create activity if it doesn't exist
+      if (!activityExists) {
+        await axios.post(
+          `${this.baseUrl}/da/us-east/v3/activities`,
+          {
+            id: activityBaseName,
+            commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[' + appBundleBaseName + '].path)\\convert2dto3d.scr" /o "$(args[outputFile].path)"'],
+            engine: 'Autodesk.AutoCAD+25_0',
+            appbundles: [`${this.nickname}.${appBundleBaseName}+prod`],
+            parameters: {
+              inputFile: {
+                verb: 'get',
+                description: 'Input 2D DWG file',
+                required: true,
+                localName: 'input.dwg'
+              },
+              outputFile: {
+                verb: 'put',
+                description: 'Output 3D DWG file',
+                required: true,
+                localName: 'output.dwg'
+              }
+            }
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
             }
           }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+        );
+        console.log('✅ Activity created');
+      }
 
-      console.log('✅ Activity created, creating alias...');
-
-      // Create alias for activity
-      await axios.post(
-        `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
-        {
-          id: 'prod',
-          version: 1
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
+      // Create/update alias (use PATCH to update if exists)
+      console.log('📝 Creating/updating alias...');
+      try {
+        await axios.patch(
+          `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases/prod`,
+          {
+            version: 1
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
           }
+        );
+        console.log('✅ Alias updated');
+      } catch (error: any) {
+        // If PATCH fails, try POST to create
+        if (error.response?.status === 404) {
+          await axios.post(
+            `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
+            {
+              id: 'prod',
+              version: 1
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+          console.log('✅ Alias created');
+        } else {
+          throw error;
         }
-      );
+      }
 
       console.log('✅ Activity created successfully');
 
