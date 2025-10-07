@@ -167,16 +167,17 @@ export class DesignAutomationService {
    */
   private createAutoCADScript(): string {
     // AutoCAD Script (.scr) for Design Automation
-    // Set FILEDIA to 0 to disable dialog boxes (non-interactive mode)
-    // SaveAs requires: format, then filename (each on separate line)
+    // Based on official Autodesk sample: design.automation-asp.net-cabinet-sample
+    // _.SaveAs with blank line accepts default format, then filename
     return `FILEDIA
 0
-SaveAs
-2018
+_.SaveAs
+
 output.dwg
+
 FILEDIA
 1
-`.trim();
+`;
   }
 
   /**
