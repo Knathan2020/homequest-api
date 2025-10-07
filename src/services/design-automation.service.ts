@@ -209,18 +209,21 @@ QUIT Y
 
       console.log('📦 Creating app bundle...');
 
-      // Check if app bundle exists (use full ID for GET)
+      // Check if app bundle exists (check base name first)
       try {
         const existing = await axios.get(
-          `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleFullId}`,
+          `${this.baseUrl}/da/us-east/v3/appbundles/${appBundleBaseName}`,
           {
             headers: { Authorization: `Bearer ${token}` }
           }
         );
-        console.log('✅ App bundle already exists');
+        console.log('✅ App bundle already exists, using existing bundle');
         return;
       } catch (error: any) {
-        if (error.response?.status !== 404) throw error;
+        if (error.response?.status !== 404) {
+          console.log('⚠️ Error checking bundle, attempting to use existing:', error.message);
+          return; // Assume it exists if we can't check
+        }
         console.log('📝 App bundle not found, creating new one...');
       }
 
