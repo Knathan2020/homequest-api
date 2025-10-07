@@ -406,6 +406,10 @@ QUIT Y
 
       console.log('✅ Activity created successfully');
 
+      // Wait for alias to propagate
+      console.log('⏳ Waiting 3 seconds for activity alias to propagate...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
     } catch (error: any) {
       console.error('❌ Failed to create activity:', error.response?.data || error.message);
       throw new Error('Failed to create activity');
@@ -433,9 +437,9 @@ QUIT Y
 
       // Step 4: Create workitem
       const token = await this.getAccessToken();
-      const activityName = `${this.nickname}.convert2dto3dactivity+prod`; // Must be lowercase
+      const activityName = `${this.nickname}.convert2dto3dactivity+prod`;
 
-      console.log('⚙️ Creating workitem...');
+      console.log(`⚙️ Creating workitem with activity: ${activityName}`);
 
       const workitemResponse = await axios.post(
         `${this.baseUrl}/da/us-east/v3/workitems`,
