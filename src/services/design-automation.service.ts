@@ -408,10 +408,12 @@ QUIT Y
       }
 
       // Create/update alias - try POST first, delete and recreate if exists
-      console.log('📝 Creating alias...');
+      // Use fully qualified activity name (with nickname)
+      const qualifiedActivityName = `${this.nickname}.${activityBaseName}`;
+      console.log(`📝 Creating alias for: ${qualifiedActivityName}`);
       try {
         await axios.post(
-          `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
+          `${this.baseUrl}/da/us-east/v3/activities/${qualifiedActivityName}/aliases`,
           {
             id: 'prod',
             version: 1
@@ -430,7 +432,7 @@ QUIT Y
           console.log('📝 Alias exists, deleting and recreating...');
           try {
             await axios.delete(
-              `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases/prod`,
+              `${this.baseUrl}/da/us-east/v3/activities/${qualifiedActivityName}/aliases/prod`,
               {
                 headers: { Authorization: `Bearer ${token}` }
               }
@@ -442,7 +444,7 @@ QUIT Y
 
           // Recreate alias
           await axios.post(
-            `${this.baseUrl}/da/us-east/v3/activities/${activityBaseName}/aliases`,
+            `${this.baseUrl}/da/us-east/v3/activities/${qualifiedActivityName}/aliases`,
             {
               id: 'prod',
               version: 1
