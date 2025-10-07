@@ -587,8 +587,19 @@ export class AutodeskForgeService {
           const isTextLayer = /TEXT|IDEN|RNUM|LABEL/i.test(layer);
           const isRoomLayer = !isTextLayer && /ROOM|SPACE/i.test(layer); // Extract from all room layers, deduplicate later
 
-          // Classify elements (check Layer first for AutoCAD, then Category for Revit)
-          if (isWallLayer || category.includes('wall') || name.includes('wall') || entityType === 'AcDbLine' || entityType === 'AcDbPolyline') {
+          // Universal property-based classification (fallback when layer names don't match)
+          const hasRoomProperties = (props.Area > 0 || generalProps.Area > 0) &&
+                                   (props.Perimeter > 0 || generalProps.Perimeter > 0);
+          const hasWallProperties = (props.Length > 0 || generalProps.Length > 0) &&
+                                   (props.Height > 0 || generalProps.Height > 0 || generalProps.Thickness > 0);
+          const hasDoorProperties = (props.Width > 0 || generalProps.Width > 0) &&
+                                   (props.Height > 0 || generalProps.Height > 0);
+          const hasStairProperties = (props['Number of Risers'] || props['Actual Number of Risers'] ||
+                                     generalProps['Number of Risers']);
+
+          // Classify elements (check Layer first, then properties as fallback, then Category for Revit)
+          if (isWallLayer || hasWallProperties || category.includes('wall') || name.includes('wall') ||
+              entityType === 'AcDbLine' || entityType === 'AcDbPolyline') {
             // Extract geometry coordinates
             const startPoint = generalProps['Start Point'] || props['Start Point'] || generalProps.StartPoint || props.StartPoint;
             const endPoint = generalProps['End Point'] || props['End Point'] || generalProps.EndPoint || props.EndPoint;
@@ -643,7 +654,7 @@ export class AutodeskForgeService {
               start,
               end
             });
-          } else if (isDoorLayer || category.includes('door') || name.includes('door')) {
+          } else if (isDoorLayer || hasDoorProperties || category.includes('door') || name.includes('door')) {
             // Extract door position
             const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
             const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
@@ -675,7 +686,7 @@ export class AutodeskForgeService {
               position: (positionX !== undefined && positionY !== undefined) ?
                 { x: positionX, y: positionY, z: positionZ } : null
             });
-          } else if (isStairLayer || category.includes('stair') || name.includes('stair') || category.includes('ramp')) {
+          } else if (isStairLayer || hasStairProperties || category.includes('stair') || name.includes('stair') || category.includes('ramp')) {
             // Extract stair position
             const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
             const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
@@ -694,7 +705,7 @@ export class AutodeskForgeService {
               position: (positionX !== undefined && positionY !== undefined) ?
                 { x: positionX, y: positionY, z: positionZ } : null
             });
-          } else if (isRoomLayer || category.includes('room') || category.includes('space')) {
+          } else if (isRoomLayer || hasRoomProperties || category.includes('room') || category.includes('space')) {
             // Skip text entities - they're labels, not rooms (even if on ROOMS-INFORMATION layer)
             const itemName = item.name || props.Name || generalProps.Name || '';
             const isTextEntity = entityType === 'AcDbText' || entityType === 'AcDbMText' ||
@@ -705,9 +716,16 @@ export class AutodeskForgeService {
               continue; // Text labels should be extracted as textLabels, not rooms
             }
 
+            // Extract room properties
             const area = props.Area || generalProps.Area || 0;
             const perimeter = props.Perimeter || generalProps.Perimeter || 0;
             const volume = props.Volume || generalProps.Volume || 0;
+
+            // Skip if no room properties (avoids false positives from hasRoomProperties fallback)
+            if (area === 0 && perimeter === 0) {
+              continue; // Not a room, just on a room layer with no properties
+            }
+
             totalArea += area;
 
             // Debug: Log first room's raw data to check units
@@ -721,7 +739,9 @@ export class AutodeskForgeService {
 
             // Debug: Log why this was classified as a room and its area
             const roomName = itemName || 'Unnamed Room';
-            const matchReason = isRoomLayer ? 'LAYER' : (category.includes('room') ? 'CATEGORY:room' : 'CATEGORY:space');
+            const matchReason = isRoomLayer ? 'LAYER' :
+                               hasRoomProperties ? 'PROPERTIES (universal)' :
+                               (category.includes('room') ? 'CATEGORY:room' : 'CATEGORY:space');
             console.log(`🏠 Room #${rooms.length + 1}: "${roomName}" on layer "${layer}" (matched by: ${matchReason}, area: ${area} sq ft)`);
 
             rooms.push({
