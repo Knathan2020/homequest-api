@@ -992,7 +992,7 @@ export class AutodeskForgeService {
 
   // GPT Vision removed - was identifying 0 rooms consistently
   // Kept function signature for backwards compatibility but returns empty array
-  async analyzeFloorPlanWithGPT(urn: string, textLabels: any[]): Promise<any[]> {
+  async analyzeFloorPlanWithGPT(_urn: string, _textLabels: any[]): Promise<any[]> {
     return [];
   }
 
