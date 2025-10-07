@@ -767,12 +767,11 @@ FILEDIA
       // Step 6: Complete the upload and download result
       console.log('📥 Completing upload and downloading 3D DWG...');
 
-      // Complete the S3 upload
+      // Complete the S3 upload (don't specify size - let Autodesk detect it)
       const completeResponse = await axios.post(
         `${this.baseUrl}/oss/v2/buckets/${outputInfo.bucketKey}/objects/${encodeURIComponent(outputInfo.objectKey)}/signeds3upload`,
         {
-          uploadKey: outputInfo.uploadKey,
-          size: 0 // Size will be determined by what Design Automation uploaded
+          uploadKey: outputInfo.uploadKey
         },
         {
           headers: {
