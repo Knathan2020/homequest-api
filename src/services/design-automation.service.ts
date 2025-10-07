@@ -11,11 +11,13 @@ export class DesignAutomationService {
   private clientSecret: string;
   private baseUrl = 'https://developer.api.autodesk.com';
   private tokenCache: { access_token: string; expires_at: number } | null = null;
-  private nickname = 'homequest'; // Your unique app nickname
+  private nickname = 'homequest'; // Nickname for display
+  private ownerId: string; // Actual owner ID (client ID)
 
   constructor() {
     this.clientId = process.env.AUTODESK_CLIENT_ID || '';
     this.clientSecret = process.env.AUTODESK_CLIENT_SECRET || '';
+    this.ownerId = this.clientId; // Owner ID is the client ID
 
     if (!this.clientId || !this.clientSecret) {
       console.warn('⚠️ Autodesk credentials not configured');
@@ -205,7 +207,7 @@ QUIT Y
     try {
       const token = await this.getAccessToken();
       const appBundleBaseName = 'convert2dto3dbundle'; // Base name (no owner prefix)
-      const appBundleFullId = `${this.nickname}.${appBundleBaseName}+prod`; // Fully qualified ID
+      const appBundleFullId = `${this.ownerId}.${appBundleBaseName}+prod`; // Fully qualified ID
 
       console.log('📦 Creating app bundle...');
 
@@ -333,7 +335,7 @@ QUIT Y
       const token = await this.getAccessToken();
       const activityBaseName = 'convert2dto3dactivity'; // Base name only
       const appBundleBaseName = 'convert2dto3dbundle'; // Base name only
-      const activityFullId = `${this.nickname}.${activityBaseName}+prod`;
+      const activityFullId = `${this.ownerId}.${activityBaseName}+prod`;
 
       console.log('⚙️ Setting up activity...');
 
@@ -358,7 +360,7 @@ QUIT Y
       let activityVersion = 1;
       try {
         const activityResponse = await axios.get(
-          `${this.baseUrl}/da/us-east/v3/activities/${this.nickname}.${activityBaseName}`,
+          `${this.baseUrl}/da/us-east/v3/activities/${this.ownerId}.${activityBaseName}`,
           {
             headers: { Authorization: `Bearer ${token}` }
           }
@@ -379,7 +381,7 @@ QUIT Y
             );
             const activities = listResponse.data.data || [];
             const matchingActivity = activities.find((act: any) =>
-              act.id === `${this.nickname}.${activityBaseName}` ||
+              act.id === `${this.ownerId}.${activityBaseName}` ||
               act.id === activityBaseName
             );
             if (matchingActivity) {
@@ -405,7 +407,7 @@ QUIT Y
               id: activityBaseName,
               commandLine: ['$(engine.path)\\accoreconsole.exe /i "$(args[inputFile].path)" /s "$(appbundles[' + appBundleBaseName + '].path)\\convert2dto3d.scr" /o "$(args[outputFile].path)"'],
               engine: 'Autodesk.AutoCAD+25_0',
-              appbundles: [`${this.nickname}.${appBundleBaseName}+prod`],
+              appbundles: [`${this.ownerId}.${appBundleBaseName}+prod`],
               parameters: {
                 inputFile: {
                   verb: 'get',
@@ -559,7 +561,7 @@ QUIT Y
       const token = await this.getAccessToken();
       // Try without nickname prefix first, then with prefix if it fails
       const activityNameWithoutPrefix = `convert2dto3dactivity+prod`;
-      const activityNameWithPrefix = `${this.nickname}.convert2dto3dactivity+prod`;
+      const activityNameWithPrefix = `${this.ownerId}.convert2dto3dactivity+prod`;
 
       console.log(`⚙️ Trying workitem with activity: ${activityNameWithoutPrefix}`);
 
