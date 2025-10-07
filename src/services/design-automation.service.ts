@@ -196,56 +196,57 @@ export class DesignAutomationService {
   }
 
   /**
+   * Create AutoLISP code to apply thickness to entities by layer
+   */
+  private createAutoLISP(): string {
+    return `(defun C:APPLY3D ()
+  (command "._ZOOM" "_E")
+
+  ; Process A-WALL layer - 96" height
+  (setq ss (ssget "_X" (list (cons 8 "A-WALL"))))
+  (if ss
+    (progn
+      (command "._CHPROP" ss "" "T" 96 "")
+      (princ (strcat "\\nApplied 96\" thickness to " (itoa (sslength ss)) " entities on A-WALL"))
+    )
+  )
+
+  ; Process A-DOOR layer - 84" height
+  (setq ss (ssget "_X" (list (cons 8 "A-DOOR"))))
+  (if ss
+    (progn
+      (command "._CHPROP" ss "" "T" 84 "")
+      (princ (strcat "\\nApplied 84\" thickness to " (itoa (sslength ss)) " entities on A-DOOR"))
+    )
+  )
+
+  ; Process A-GLAZ layer (windows) - 84" height
+  (setq ss (ssget "_X" (list (cons 8 "A-GLAZ"))))
+  (if ss
+    (progn
+      (command "._CHPROP" ss "" "T" 84 "")
+      (princ (strcat "\\nApplied 84\" thickness to " (itoa (sslength ss)) " entities on A-GLAZ"))
+    )
+  )
+
+  (princ "\\n3D conversion complete")
+  (princ)
+)
+`;
+  }
+
+  /**
    * Create AutoCAD script to convert 2D to 3D
    */
   private createAutoCADScript(): string {
     // AutoCAD Script (.scr) for Design Automation
-    // Converts 2D floor plan polylines to 3D by setting thickness
-    // Strategy: Freeze all layers except target, select all visible, set thickness
+    // Loads AutoLISP and applies 3D thickness to layers
     // Wall height: 96" (8ft), Door/Window height: 84" (7ft)
     // Saves in TOP view so users can toggle between 2D/3D in viewer
     return `FILEDIA
 0
-LAYER
-F
-*
-T
-A-WALL
-
-CHPROP
-ALL
-
-T
-96
-
-LAYER
-F
-*
-T
-A-DOOR
-
-CHPROP
-ALL
-
-T
-84
-
-LAYER
-F
-*
-T
-A-GLAZ
-
-CHPROP
-ALL
-
-T
-84
-
-LAYER
-T
-*
-
+(load "convert2dto3d.lsp")
+APPLY3D
 -VIEW
 _TOP
 _.ZOOM
@@ -346,9 +347,10 @@ FILEDIA
   </Components>
 </ApplicationPackage>`;
 
-      // Create zip file with script
+      // Create zip file with script and AutoLISP
       const zip = new AdmZip();
       zip.addFile('PackageContents.xml', Buffer.from(packageXml));
+      zip.addFile('convert2dto3d.lsp', Buffer.from(this.createAutoLISP()));
       zip.addFile('convert2dto3d.scr', Buffer.from(this.createAutoCADScript()));
 
       const zipBuffer = zip.toBuffer();
