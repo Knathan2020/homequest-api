@@ -772,6 +772,14 @@ export class AutodeskForgeService {
                 { x: positionX, y: positionY, z: positionZ } : null
             });
           } else if (isRoomLayer || hasRoomProperties || category.includes('room') || category.includes('space')) {
+            // Debug: Log entities on authoritative room layer
+            if (isRoomLayer && rooms.length < 3) {
+              console.log(`🔍 DEBUG - Entity on ${layer}:`);
+              console.log('  Entity Type:', entityType);
+              console.log('  Item name:', item.name);
+              console.log('  General props keys:', Object.keys(generalProps).slice(0, 10));
+            }
+
             // Skip text entities - they're labels, not rooms (even if on ROOMS-INFORMATION layer)
             const itemName = item.name || props.Name || generalProps.Name || '';
             const isTextEntity = entityType === 'AcDbText' || entityType === 'AcDbMText' ||
@@ -779,6 +787,9 @@ export class AutodeskForgeService {
                                 itemName.includes('Text [') || itemName.includes('MText [');
 
             if (isTextEntity) {
+              if (isRoomLayer && rooms.length < 3) {
+                console.log('  ❌ Skipped: Text entity');
+              }
               continue; // Text labels should be extracted as textLabels, not rooms
             }
 
