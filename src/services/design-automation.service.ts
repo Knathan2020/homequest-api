@@ -262,7 +262,7 @@ QUIT Y
         `${this.baseUrl}/da/us-east/v3/appbundles`,
         {
           id: appBundleBaseName,
-          engine: 'Autodesk.AutoCAD+2024',  // Updated to latest engine version
+          engine: 'Autodesk.AutoCAD+25',  // AutoCAD 2025 (format is +version not +year)
           description: 'Converts 2D floor plans to 3D by extruding polylines'
         },
         {
