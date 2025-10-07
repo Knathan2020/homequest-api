@@ -838,99 +838,10 @@ export class AutodeskForgeService {
     };
   }
 
-  /**
-   * Use GPT Vision to analyze floor plan and identify rooms
-   */
+  // GPT Vision removed - was identifying 0 rooms consistently
+  // Kept function signature for backwards compatibility but returns empty array
   async analyzeFloorPlanWithGPT(urn: string, textLabels: any[]): Promise<any[]> {
-    try {
-      const token = await this.getAccessToken();
-
-      console.log('🤖 Analyzing floor plan with GPT Vision...');
-
-      // Get thumbnail from Autodesk Forge
-      const thumbnailUrl = `${this.baseUrl}/modelderivative/v2/designdata/${urn}/thumbnail?width=1024&height=1024`;
-
-      const thumbnailResponse = await axios.get(thumbnailUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
-        responseType: 'arraybuffer'
-      });
-
-      const base64Image = Buffer.from(thumbnailResponse.data).toString('base64');
-
-      // Prepare text labels summary for GPT
-      const textSummary = textLabels.map(t => `"${t.text}" at position (${Math.round(t.position.x)}, ${Math.round(t.position.y)})`).join('\n');
-
-      // Call OpenAI GPT-4 Vision
-      const openaiApiKey = process.env.OPENAI_API_KEY;
-      if (!openaiApiKey) {
-        console.warn('⚠️ OPENAI_API_KEY not set, skipping GPT Vision analysis');
-        return [];
-      }
-
-      const gptResponse = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: 'gpt-4o',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: `Analyze this architectural floor plan and identify all rooms. For each room, provide:
-1. Room name/label (from text on the plan)
-2. Room type (bedroom, bathroom, kitchen, living room, dining room, office, closet, hallway, garage, etc.)
-3. Approximate location (northwest, northeast, southwest, southeast, center, etc.)
-4. Estimated dimensions if visible
-
-Text labels found in the plan:
-${textSummary}
-
-Return ONLY a JSON array with this structure:
-[
-  {
-    "name": "Master Bedroom",
-    "type": "bedroom",
-    "location": "northwest",
-    "area_estimate": "200-250 sqft",
-    "confidence": 0.95
-  }
-]`
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:image/png;base64,${base64Image}`
-                  }
-                }
-              ]
-            }
-          ],
-          max_tokens: 2000
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${openaiApiKey}`
-          }
-        }
-      );
-
-      const gptContent = gptResponse.data.choices[0]?.message?.content || '[]';
-
-      // Extract JSON from response (GPT sometimes wraps it in markdown)
-      const jsonMatch = gptContent.match(/\[[\s\S]*\]/);
-      const rooms = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-
-      console.log(`✅ GPT Vision identified ${rooms.length} rooms`);
-      return rooms;
-
-    } catch (error: any) {
-      console.error('❌ GPT Vision analysis failed:', error.response?.data || error.message);
-      return [];
-    }
+    return [];
   }
 
   /**
@@ -985,24 +896,7 @@ Return ONLY a JSON array with this structure:
           console.log('📋 Properties keys:', properties ? Object.keys(properties) : 'null/undefined');
           floorplanData = this.extractFloorplanData(properties);
 
-          // Step 6: Use GPT Vision to identify rooms from text labels
-          if (floorplanData && floorplanData.textLabels && floorplanData.textLabels.length > 0) {
-            const gptRooms = await this.analyzeFloorPlanWithGPT(urn, floorplanData.textLabels);
-
-            // Merge GPT-detected rooms with existing room data
-            if (gptRooms.length > 0) {
-              floorplanData.rooms = gptRooms.map(room => ({
-                id: `gpt-room-${room.name.toLowerCase().replace(/\s+/g, '-')}`,
-                name: room.name,
-                type: room.type,
-                location: room.location,
-                area_estimate: room.area_estimate,
-                confidence: room.confidence,
-                source: 'gpt-vision'
-              }));
-              console.log(`🤖 GPT Vision enhanced room detection: ${floorplanData.rooms.length} rooms identified`);
-            }
-          }
+          // GPT Vision removed - was identifying 0 rooms consistently, relying on Autodesk Forge extraction only
         }
       } catch (error: any) {
         console.warn(`⚠️ Metadata extraction failed (expected for PDFs): ${error.message}`);
