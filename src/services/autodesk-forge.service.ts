@@ -465,10 +465,12 @@ export class AutodeskForgeService {
 
           // AutoCAD classification - check Layer names (flexible pattern matching)
           // Supports: AIA standards (A-WALL), generic (WALLS), prefixed (0-WALL, ARCH_WALL), etc.
-          const isWallLayer = /WALL|PAROI|MURO|WAND/i.test(layer); // English, French, Spanish, German
+          const isWallLayer = /WALL|PAROI|MURO|WAND/i.test(layer);
           const isDoorLayer = /DOOR|PORTE|PUERTA|TÜR/i.test(layer);
           const isWindowLayer = /WINDOW|WIND|FENÊTRE|VENTANA|FENSTER/i.test(layer);
           const isStairLayer = /STAIR|STRS|ESCALIER|ESCALERA|TREPPE|FLOR/i.test(layer);
+          const isRoomLayer = /ROOM|AREA|SPACE/i.test(layer);
+          const isTextLayer = /TEXT|IDEN|RNUM|LABEL/i.test(layer);
 
           // Classify elements (check Layer first for AutoCAD, then Category for Revit)
           if (isWallLayer || category.includes('wall') || name.includes('wall') || entityType === 'AcDbLine' || entityType === 'AcDbPolyline') {
@@ -566,23 +568,28 @@ export class AutodeskForgeService {
               position: (positionX !== undefined && positionY !== undefined) ?
                 { x: positionX, y: positionY, z: positionZ } : null
             });
-          } else if (category.includes('room') || category.includes('space')) {
-            const area = props.Area || 0;
+          } else if (isRoomLayer || category.includes('room') || category.includes('space')) {
+            const area = props.Area || generalProps.Area || 0;
             totalArea += area;
 
             rooms.push({
               id: item.objectid,
-              name: item.name || props.Name || 'Unnamed Room',
+              name: item.name || props.Name || generalProps.Name || 'Unnamed Room',
               area,
-              perimeter: props.Perimeter || 0,
-              volume: props.Volume || 0,
-              level: props.Level || 'Ground Floor',
-              number: props.Number || props['Room Number'] || '',
-              type: props['Room Type'] || 'general'
+              perimeter: props.Perimeter || generalProps.Perimeter || 0,
+              volume: props.Volume || generalProps.Volume || 0,
+              level: props.Level || generalProps.Level || 'Ground Floor',
+              number: props.Number || props['Room Number'] || generalProps.Number || '',
+              type: props['Room Type'] || generalProps['Room Type'] || 'general',
+              layer: layer
             });
           }
 
           // Extract text entities (room labels, dimensions, notes)
+          // Check text layers or text entity types
+          const isTextEntity = isTextLayer || entityType === 'AcDbText' || entityType === 'AcDbMText' ||
+                              entityType === 'Text' || entityType === 'MText';
+
           // Check for any property that might contain text
           const textString = generalProps['Text String'] || generalProps.Contents || generalProps.Text ||
                             props['Text String'] || props.Contents || props.Text || item.name;
@@ -592,7 +599,7 @@ export class AutodeskForgeService {
                                    /[A-Za-z]{2,}/.test(textString) && // At least 2 letters
                                    textString.length > 2 && textString.length < 100;
 
-          if (looksLikeRoomText) {
+          if (isTextEntity && looksLikeRoomText) {
             const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
             const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
 
