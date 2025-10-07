@@ -166,37 +166,13 @@ export class DesignAutomationService {
    * Create AutoCAD script to convert 2D to 3D
    */
   private createAutoCADScript(): string {
-    // AutoCAD Script (.scr) that:
-    // 1. Opens the input DWG
-    // 2. Selects all closed polylines
-    // 3. Extrudes them to create 3D walls
-    // 4. Saves as output DWG
-    return `
-; AutoCAD Script to convert 2D floor plan to 3D
-; This script extrudes all closed polylines to create 3D walls
-
-; Set units and environment
-UNITS 2 4
-
-; Select all closed polylines (walls)
-; Filter for closed LWPOLYLINEs and POLYLINEs
-(setq ss (ssget "_X" '((0 . "LWPOLYLINE,POLYLINE") (-4 . "&") (70 . 1))))
-
-; If polylines found, extrude them
-(if ss
-  (progn
-    (setq i 0)
-    (repeat (sslength ss)
-      (setq ent (ssname ss i))
-      (command "._EXTRUDE" ent "" "96" "") ; Extrude to 96 inches (8 feet)
-      (setq i (1+ i))
-    )
-  )
-)
-
-; Save and close
-QSAVE
-QUIT Y
+    // AutoCAD Script (.scr) for Design Automation
+    // Pure command format, no LISP
+    return `FILEDIA 0
+CMDECHO 0
+_.-VSCURRENT _2D
+_ZOOM _E
+_QSAVE
 `.trim();
   }
 
