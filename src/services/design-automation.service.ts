@@ -700,7 +700,7 @@ FILEDIA
                   verb: 'get'
                 },
                 outputFile: {
-                  url: outputUrl,
+                  url: outputInfo.url,
                   verb: 'put'
                 }
               }
