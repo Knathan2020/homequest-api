@@ -519,7 +519,7 @@ export class AutodeskForgeService {
     const doors: any[] = [];
     const windows: any[] = [];
     const stairs: any[] = [];
-    const rooms: any[] = [];
+    let rooms: any[] = []; // let instead of const - we'll deduplicate later
     const textLabels: any[] = [];
     let totalArea = 0;
 
@@ -585,7 +585,7 @@ export class AutodeskForgeService {
           const isWindowLayer = /WINDOW|WIND|FENÊTRE|VENTANA|FENSTER/i.test(layer);
           const isStairLayer = /STAIR|STRS|ESCALIER|ESCALERA|TREPPE|FLOR/i.test(layer);
           const isTextLayer = /TEXT|IDEN|RNUM|LABEL/i.test(layer);
-          const isRoomLayer = !isTextLayer && /ROOM|SPACE/i.test(layer); // Don't match AREA-TEXT as room layer
+          const isRoomLayer = !isTextLayer && /ROOM|SPACE/i.test(layer); // Extract from all room layers, deduplicate later
 
           // Classify elements (check Layer first for AutoCAD, then Category for Revit)
           if (isWallLayer || category.includes('wall') || name.includes('wall') || entityType === 'AcDbLine' || entityType === 'AcDbPolyline') {
@@ -697,10 +697,10 @@ export class AutodeskForgeService {
             const area = props.Area || generalProps.Area || 0;
             totalArea += area;
 
-            // Debug: Log why this was classified as a room
+            // Debug: Log why this was classified as a room and its area
             const roomName = itemName || 'Unnamed Room';
             const matchReason = isRoomLayer ? 'LAYER' : (category.includes('room') ? 'CATEGORY:room' : 'CATEGORY:space');
-            console.log(`🏠 Room #${rooms.length + 1}: "${roomName}" on layer "${layer}" (matched by: ${matchReason}, category: "${category}")`);
+            console.log(`🏠 Room #${rooms.length + 1}: "${roomName}" on layer "${layer}" (matched by: ${matchReason}, area: ${area} sq ft)`);
 
             rooms.push({
               id: item.objectid,
@@ -792,6 +792,25 @@ export class AutodeskForgeService {
 
         // Log layers found for debugging
         console.log(`📋 Layers found in DWG: [${Array.from(layersFound).join(', ')}]`);
+
+        // Deduplicate rooms - same room can appear on multiple layers (COLLEGE/DIVISION/DEPARTMENT/CATEGORY)
+        const uniqueRooms: any[] = [];
+        const seenRooms = new Set<string>();
+
+        console.log(`🔍 Deduplicating ${rooms.length} rooms by geometry...`);
+
+        for (const room of rooms) {
+          // Create unique key from area, perimeter, and volume (same geometry = same room)
+          const key = `${Math.round(room.area * 100)}_${Math.round(room.perimeter * 100)}_${Math.round(room.volume * 100)}`;
+
+          if (!seenRooms.has(key)) {
+            seenRooms.add(key);
+            uniqueRooms.push(room);
+          }
+        }
+
+        console.log(`✅ Deduplicated to ${uniqueRooms.length} unique rooms (removed ${rooms.length - uniqueRooms.length} duplicates)`);
+        rooms = uniqueRooms;
       }
 
       console.log(`📊 Extracted: ${walls.length} walls, ${doors.length} doors, ${windows.length} windows, ${stairs.length} stairs, ${rooms.length} rooms, ${textLabels.length} text labels`);
