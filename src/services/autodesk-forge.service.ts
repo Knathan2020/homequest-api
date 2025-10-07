@@ -557,6 +557,64 @@ export class AutodeskForgeService {
         // Track unique layers
         const layersFound = new Set<string>();
 
+        // FIRST PASS: Detect all room layers to pick the most authoritative one
+        const allRoomLayers = new Set<string>();
+        for (const item of collection) {
+          const props = item.properties || {};
+          const generalProps = props.General || {};
+          const layer = (generalProps.Layer || props.Layer || '').toUpperCase();
+
+          if (layer && /ROOM|SPACE/i.test(layer) && !/TEXT|IDEN|RNUM|LABEL/i.test(layer)) {
+            allRoomLayers.add(layer);
+          }
+        }
+
+        // Determine authoritative room layer(s) to extract from
+        let authoritativeRoomLayers: string[] = [];
+
+        if (allRoomLayers.size > 0) {
+          const roomLayerArray = Array.from(allRoomLayers);
+
+          // Check if there are multiple layers with the same prefix (e.g., ROOMS-COLLEGE-COLOR, ROOMS-DIVISION-COLOR)
+          const prefixGroups: { [key: string]: string[] } = {};
+          for (const layer of roomLayerArray) {
+            // Extract prefix before first dash/underscore or full layer if no separator
+            const prefix = layer.split(/[-_]/)[0];
+            if (!prefixGroups[prefix]) prefixGroups[prefix] = [];
+            prefixGroups[prefix].push(layer);
+          }
+
+          // If we have duplicate prefixes (e.g., multiple ROOMS-* layers), pick the most authoritative one
+          const hasDuplicatePrefixes = Object.values(prefixGroups).some(group => group.length > 1);
+
+          if (hasDuplicatePrefixes) {
+            console.log('🔍 Multiple room layers detected, selecting most authoritative...');
+            console.log('   All room layers:', roomLayerArray);
+
+            // Priority: INFORMATION > CATEGORY > DATA > first alphabetically
+            const priorityKeywords = ['INFORMATION', 'INFO', 'CATEGORY', 'DATA'];
+
+            for (const keyword of priorityKeywords) {
+              const match = roomLayerArray.find(layer => layer.includes(keyword));
+              if (match) {
+                authoritativeRoomLayers = [match];
+                console.log(`✅ Selected authoritative room layer: ${match}`);
+                break;
+              }
+            }
+
+            // If no priority match, pick first alphabetically
+            if (authoritativeRoomLayers.length === 0) {
+              authoritativeRoomLayers = [roomLayerArray.sort()[0]];
+              console.log(`✅ Selected first room layer alphabetically: ${authoritativeRoomLayers[0]}`);
+            }
+          } else {
+            // No duplicates, use all room layers
+            authoritativeRoomLayers = roomLayerArray;
+            console.log(`✅ Using all ${authoritativeRoomLayers.length} room layer(s):`, authoritativeRoomLayers);
+          }
+        }
+
         for (const item of collection) {
           const props = item.properties || {};
           const name = item.name?.toLowerCase() || '';
@@ -585,7 +643,8 @@ export class AutodeskForgeService {
           const isWindowLayer = /WINDOW|WIND|FENÊTRE|VENTANA|FENSTER/i.test(layer);
           const isStairLayer = /STAIR|STRS|ESCALIER|ESCALERA|TREPPE|FLOR/i.test(layer);
           const isTextLayer = /TEXT|IDEN|RNUM|LABEL/i.test(layer);
-          const isRoomLayer = !isTextLayer && /ROOM|SPACE/i.test(layer); // Extract from all room layers, deduplicate later
+          // Only extract from authoritative room layer(s) determined in first pass
+          const isRoomLayer = !isTextLayer && authoritativeRoomLayers.includes(layer);
 
           // Universal property-based classification (fallback when layer names don't match)
           const hasRoomProperties = (props.Area > 0 || generalProps.Area > 0) &&
@@ -843,14 +902,16 @@ export class AutodeskForgeService {
         // Log layers found for debugging
         console.log(`📋 Layers found in DWG: [${Array.from(layersFound).join(', ')}]`);
 
-        // Deduplicate rooms - same room can appear on multiple layers (COLLEGE/DIVISION/DEPARTMENT/CATEGORY)
+        // Deduplicate rooms - safety net for duplicates within authoritative layer
         const uniqueRooms: any[] = [];
         const seenRooms = new Set<string>();
 
         // Check if geometry properties are available
         const hasGeometry = rooms.some(r => r.area > 0 || r.perimeter > 0 || r.volume > 0);
 
-        console.log(`🔍 Deduplicating ${rooms.length} rooms... (geometry available: ${hasGeometry})`);
+        if (rooms.length > 0) {
+          console.log(`🔍 Deduplicating ${rooms.length} rooms... (geometry available: ${hasGeometry})`);
+        }
 
         for (const room of rooms) {
           let key: string;
