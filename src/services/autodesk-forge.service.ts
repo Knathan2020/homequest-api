@@ -506,7 +506,7 @@ export class AutodeskForgeService {
   /**
    * Extract floorplan data from model properties
    */
-  async extractFloorplanData(properties: any, urn?: string, guid?: string): Promise<{
+  async extractFloorplanData(properties: any): Promise<{
     walls: any[];
     doors: any[];
     windows: any[];
@@ -997,9 +997,9 @@ export class AutodeskForgeService {
             nearestCluster.labels.push(label);
 
             // Recalculate centroid
-            const sumX = nearestCluster.labels.reduce((sum, l) => sum + l.position.x, 0);
-            const sumY = nearestCluster.labels.reduce((sum, l) => sum + l.position.y, 0);
-            const sumZ = nearestCluster.labels.reduce((sum, l) => sum + l.position.z, 0);
+            const sumX = nearestCluster.labels.reduce((sum: number, l: any) => sum + l.position.x, 0);
+            const sumY = nearestCluster.labels.reduce((sum: number, l: any) => sum + l.position.y, 0);
+            const sumZ = nearestCluster.labels.reduce((sum: number, l: any) => sum + l.position.z, 0);
             nearestCluster.centroid = {
               x: sumX / nearestCluster.labels.length,
               y: sumY / nearestCluster.labels.length,
@@ -1126,7 +1126,7 @@ export class AutodeskForgeService {
           const properties = await this.getModelProperties(urn, metadata[0].guid);
           console.log('📋 Properties response type:', typeof properties);
           console.log('📋 Properties keys:', properties ? Object.keys(properties) : 'null/undefined');
-          floorplanData = await this.extractFloorplanData(properties, urn, metadata[0].guid);
+          floorplanData = await this.extractFloorplanData(properties);
 
           // GPT Vision removed - was identifying 0 rooms consistently, relying on Autodesk Forge extraction only
         }
