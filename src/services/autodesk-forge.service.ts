@@ -965,95 +965,83 @@ export class AutodeskForgeService {
         rooms = uniqueRooms;
       }
 
-      // Infer room positions from text label clusters
-      const roomsWithoutPosition = rooms.filter(r => !r.position);
-      const labelsWithPosition = textLabels.filter(l => l.position);
+      // Match text labels to rooms by room number (positions are all 0,0 for text entities)
+      if (textLabels.length > 0) {
+        console.log(`📍 Matching ${textLabels.length} text labels to ${rooms.length} rooms by room number...`);
 
-      if (roomsWithoutPosition.length > 0 && labelsWithPosition.length > 0) {
-        console.log(`📍 Inferring positions for ${roomsWithoutPosition.length} rooms from ${labelsWithPosition.length} text labels...`);
+        // Group labels by room number
+        const labelsByRoomNumber: { [key: string]: any[] } = {};
 
-        // Debug: Check text label positions
-        const sampleLabels = labelsWithPosition.slice(0, 5);
-        console.log(`   Sample label positions:`, sampleLabels.map(l => `(${l.position.x.toFixed(2)}, ${l.position.y.toFixed(2)}) "${l.text}"`).join(', '));
-
-        // Group text labels into spatial clusters (rooms typically have multiple labels)
-        const clusters: Array<{ labels: any[], centroid: { x: number, y: number, z: number }, area: number }> = [];
-        const clusterDistance = 500; // Labels within 500 units are in same room
-
-        for (const label of labelsWithPosition) {
-          // Find nearest cluster
-          let nearestCluster = null;
-          let minDistance = Infinity;
-
-          for (const cluster of clusters) {
-            const dx = label.position.x - cluster.centroid.x;
-            const dy = label.position.y - cluster.centroid.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-
-            if (distance < minDistance && distance < clusterDistance) {
-              minDistance = distance;
-              nearestCluster = cluster;
+        for (const label of textLabels) {
+          // Extract room number from labels like "Bldg.1, Room 126A" or "Room 109A"
+          const roomMatch = label.text?.match(/Room\s+([A-Z0-9]+)/i);
+          if (roomMatch) {
+            const roomNumber = roomMatch[1].toUpperCase();
+            if (!labelsByRoomNumber[roomNumber]) {
+              labelsByRoomNumber[roomNumber] = [];
             }
+            labelsByRoomNumber[roomNumber].push(label);
           }
+        }
 
-          if (nearestCluster) {
-            // Add to existing cluster
-            nearestCluster.labels.push(label);
+        console.log(`📊 Found ${Object.keys(labelsByRoomNumber).length} unique room numbers in labels`);
 
-            // Recalculate centroid
-            const sumX = nearestCluster.labels.reduce((sum: number, l: any) => sum + l.position.x, 0);
-            const sumY = nearestCluster.labels.reduce((sum: number, l: any) => sum + l.position.y, 0);
-            const sumZ = nearestCluster.labels.reduce((sum: number, l: any) => sum + l.position.z, 0);
-            nearestCluster.centroid = {
-              x: sumX / nearestCluster.labels.length,
-              y: sumY / nearestCluster.labels.length,
-              z: sumZ / nearestCluster.labels.length
-            };
+        // Assign label data to rooms
+        let matchedCount = 0;
+        for (let i = 0; i < rooms.length; i++) {
+          const room = rooms[i];
+          const roomNumbers = Object.keys(labelsByRoomNumber);
 
-            // Update area from SF labels
-            for (const l of nearestCluster.labels) {
-              const areaMatch = l.text?.match(/(\d+\.?\d*)\s*(SF|sq\s*ft|sqft)/i);
-              if (areaMatch) {
-                nearestCluster.area = Math.max(nearestCluster.area, parseFloat(areaMatch[1]));
+          if (i < roomNumbers.length) {
+            const roomNumber = roomNumbers[i];
+            const labels = labelsByRoomNumber[roomNumber];
+
+            // Extract room info from labels
+            let roomName = `Room ${roomNumber}`;
+            let roomType = 'room';
+            let area = 0;
+
+            for (const label of labels) {
+              const text = label.text || '';
+
+              // Extract area from "ASF: 144" or "ASF:144"
+              const asfMatch = text.match(/ASF:\s*(\d+)/i);
+              if (asfMatch) {
+                area = Math.max(area, parseInt(asfMatch[1]));
+              }
+
+              // Extract room type from "FICM: Staff Office" or similar
+              const ficmMatch = text.match(/FICM:\s*(.+)/i);
+              if (ficmMatch) {
+                const type = ficmMatch[1].trim().toLowerCase();
+                if (type.includes('office')) roomType = 'office';
+                else if (type.includes('classroom')) roomType = 'classroom';
+                else if (type.includes('lab')) roomType = 'lab';
+                else if (type.includes('restroom')) roomType = 'restroom';
+                else if (type.includes('mechanical')) roomType = 'mechanical';
+                else if (type.includes('storage') || type.includes('closet')) roomType = 'storage';
+                else if (type.includes('elevator')) roomType = 'elevator';
+                else if (type.includes('hallway') || type.includes('corridor')) roomType = 'hallway';
+                else roomType = type;
+
+                roomName = `Room ${roomNumber} (${ficmMatch[1].trim()})`;
               }
             }
-          } else {
-            // Create new cluster
-            const areaMatch = label.text?.match(/(\d+\.?\d*)\s*(SF|sq\s*ft|sqft)/i);
-            clusters.push({
-              labels: [label],
-              centroid: { ...label.position },
-              area: areaMatch ? parseFloat(areaMatch[1]) : 0
-            });
+
+            // Update room with extracted data
+            room.name = roomName;
+            room.type = roomType;
+            room.number = roomNumber;
+            if (area > 0) {
+              room.area = area;
+            }
+
+            matchedCount++;
+            console.log(`✅ Matched room ${i + 1}: ${roomName}, type: ${roomType}, area: ${area} sq ft (from ${labels.length} labels)`);
           }
         }
 
-        console.log(`📊 Created ${clusters.length} label clusters from text positions`);
-
-        // Debug: Show cluster info
-        if (clusters.length <= 10) {
-          clusters.forEach((c, i) => {
-            console.log(`   Cluster ${i + 1}: ${c.labels.length} labels at (${c.centroid.x.toFixed(2)}, ${c.centroid.y.toFixed(2)}), area: ${c.area} sq ft`);
-          });
-        }
-
-        // Assign clusters to rooms by matching count (71 rooms, should have ~71 clusters)
-        // Sort clusters by area (largest first) to prioritize actual rooms over small spaces
-        clusters.sort((a, b) => b.area - a.area);
-
-        for (let i = 0; i < Math.min(roomsWithoutPosition.length, clusters.length); i++) {
-          const room = roomsWithoutPosition[i];
-          const cluster = clusters[i];
-
-          room.position = cluster.centroid;
-          if (room.area === 0 && cluster.area > 0) {
-            room.area = cluster.area;
-          }
-
-          console.log(`✅ Room ${room.name}: position (${cluster.centroid.x.toFixed(2)}, ${cluster.centroid.y.toFixed(2)}), area: ${room.area.toFixed(2)} sq ft (from ${cluster.labels.length} labels)`);
-        }
-
-        console.log(`📊 Assigned positions to ${Math.min(roomsWithoutPosition.length, clusters.length)} rooms from label clusters`);
+        console.log(`📊 Matched ${matchedCount} rooms with label data`);
       }
 
       console.log(`📊 Extracted: ${walls.length} walls, ${doors.length} doors, ${windows.length} windows, ${stairs.length} stairs, ${rooms.length} rooms, ${textLabels.length} text labels`);
