@@ -1048,6 +1048,16 @@ export class AutodeskForgeService {
       const roomsWithoutPosition = rooms.filter(r => !r.position);
       const wallsWithPosition = walls.filter(w => w.start && w.end);
 
+      console.log(`🔍 Position check: ${roomsWithoutPosition.length} rooms without position, ${wallsWithPosition.length} walls with position`);
+
+      // Debug: Check wall positions
+      if (wallsWithPosition.length > 0) {
+        const sampleWalls = wallsWithPosition.slice(0, 3);
+        console.log(`   Sample wall positions:`, sampleWalls.map(w =>
+          `start:(${w.start.x.toFixed(2)}, ${w.start.y.toFixed(2)}) end:(${w.end.x.toFixed(2)}, ${w.end.y.toFixed(2)})`
+        ).join(', '));
+      }
+
       if (roomsWithoutPosition.length > 0 && wallsWithPosition.length > 0) {
         console.log(`📐 Inferring ${roomsWithoutPosition.length} room positions from ${wallsWithPosition.length} walls...`);
 
