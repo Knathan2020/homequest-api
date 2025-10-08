@@ -1044,6 +1044,83 @@ export class AutodeskForgeService {
         console.log(`📊 Matched ${matchedCount} rooms with label data`);
       }
 
+      // Infer room positions from wall geometry
+      const roomsWithoutPosition = rooms.filter(r => !r.position);
+      const wallsWithPosition = walls.filter(w => w.start && w.end);
+
+      if (roomsWithoutPosition.length > 0 && wallsWithPosition.length > 0) {
+        console.log(`📐 Inferring ${roomsWithoutPosition.length} room positions from ${wallsWithPosition.length} walls...`);
+
+        // Calculate building bounds from walls
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const wall of wallsWithPosition) {
+          minX = Math.min(minX, wall.start.x, wall.end.x);
+          minY = Math.min(minY, wall.start.y, wall.end.y);
+          maxX = Math.max(maxX, wall.start.x, wall.end.x);
+          maxY = Math.max(maxY, wall.start.y, wall.end.y);
+        }
+
+        const buildingWidth = maxX - minX;
+        const buildingHeight = maxY - minY;
+
+        console.log(`   Building bounds: (${minX.toFixed(2)}, ${minY.toFixed(2)}) to (${maxX.toFixed(2)}, ${maxY.toFixed(2)})`);
+        console.log(`   Building size: ${buildingWidth.toFixed(2)} x ${buildingHeight.toFixed(2)}`);
+
+        // Group walls into spatial regions (simple grid-based approach)
+        const gridSize = Math.max(buildingWidth, buildingHeight) / Math.ceil(Math.sqrt(roomsWithoutPosition.length));
+        const regions: { [key: string]: { walls: any[], centroid: { x: number, y: number, z: number } } } = {};
+
+        for (const wall of wallsWithPosition) {
+          const wallCenterX = (wall.start.x + wall.end.x) / 2;
+          const wallCenterY = (wall.start.y + wall.end.y) / 2;
+
+          const gridX = Math.floor((wallCenterX - minX) / gridSize);
+          const gridY = Math.floor((wallCenterY - minY) / gridSize);
+          const regionKey = `${gridX},${gridY}`;
+
+          if (!regions[regionKey]) {
+            regions[regionKey] = { walls: [], centroid: { x: 0, y: 0, z: 0 } };
+          }
+
+          regions[regionKey].walls.push(wall);
+        }
+
+        // Calculate centroid for each region
+        const regionList = Object.entries(regions).map(([key, region]) => {
+          let sumX = 0, sumY = 0, sumZ = 0, count = 0;
+
+          for (const wall of region.walls) {
+            sumX += wall.start.x + wall.end.x;
+            sumY += wall.start.y + wall.end.y;
+            sumZ += wall.start.z + wall.end.z;
+            count += 2;
+          }
+
+          return {
+            key,
+            walls: region.walls,
+            centroid: { x: sumX / count, y: sumY / count, z: sumZ / count }
+          };
+        });
+
+        console.log(`   Created ${regionList.length} spatial regions from walls`);
+
+        // Sort regions by wall count (rooms with more walls are likely larger/more important)
+        regionList.sort((a, b) => b.walls.length - a.walls.length);
+
+        // Assign regions to rooms
+        for (let i = 0; i < Math.min(roomsWithoutPosition.length, regionList.length); i++) {
+          const room = roomsWithoutPosition[i];
+          const region = regionList[i];
+
+          room.position = region.centroid;
+
+          console.log(`✅ Room ${room.name}: position (${region.centroid.x.toFixed(2)}, ${region.centroid.y.toFixed(2)}) from ${region.walls.length} walls`);
+        }
+
+        console.log(`📊 Assigned positions to ${Math.min(roomsWithoutPosition.length, regionList.length)} rooms from wall geometry`);
+      }
+
       console.log(`📊 Extracted: ${walls.length} walls, ${doors.length} doors, ${windows.length} windows, ${stairs.length} stairs, ${rooms.length} rooms, ${textLabels.length} text labels`);
 
     } catch (error) {
