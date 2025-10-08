@@ -684,12 +684,13 @@ export class AutodeskForgeService {
                 { x: positionX, y: positionY, z: positionZ } : null
             });
           } else if (isRoomLayer || category.includes('room') || category.includes('space')) {
+            const roomName = item.name || props.Name || generalProps.Name || 'Unnamed Room';
             const area = props.Area || generalProps.Area || 0;
             totalArea += area;
 
             rooms.push({
               id: item.objectid,
-              name: item.name || props.Name || generalProps.Name || 'Unnamed Room',
+              name: roomName,
               area,
               perimeter: props.Perimeter || generalProps.Perimeter || 0,
               volume: props.Volume || generalProps.Volume || 0,
