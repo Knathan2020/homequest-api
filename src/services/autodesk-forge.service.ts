@@ -996,6 +996,11 @@ export class AutodeskForgeService {
               console.log(`   Response status: ${objectResponse.status}`);
               console.log(`   Response keys: ${Object.keys(objectResponse.data || {}).join(', ')}`);
 
+              // Log full response structure for first room to debug
+              if (successCount === 0 && failCount === 0) {
+                console.log(`   Full response structure:`, JSON.stringify(objectResponse.data, null, 2).substring(0, 1000));
+              }
+
               const bbox = objectResponse.data?.data?.objects?.[0]?.objects?.[0]?.bbox;
               if (bbox) {
                 // Calculate center from bounding box [minX, minY, minZ, maxX, maxY, maxZ]
