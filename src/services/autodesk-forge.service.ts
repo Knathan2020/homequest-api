@@ -672,45 +672,74 @@ export class AutodeskForgeService {
               (!isRoomLayer && !isDoorLayer && !isStairLayer && hasWallProperties) ||
               category.includes('wall') || name.includes('wall') ||
               entityType === 'AcDbLine' || entityType === 'AcDbPolyline') {
-            // Extract geometry coordinates
-            const startPoint = generalProps['Start Point'] || props['Start Point'] || generalProps.StartPoint || props.StartPoint;
-            const endPoint = generalProps['End Point'] || props['End Point'] || generalProps.EndPoint || props.EndPoint;
-            const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
-            const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
+
+            // Debug first wall to see all available properties
+            if (walls.length === 0) {
+              console.log('🔍 FIRST WALL - ALL PROPERTIES:');
+              console.log('  generalProps:', JSON.stringify(generalProps, null, 2));
+              console.log('  props:', JSON.stringify(props, null, 2));
+              console.log('  entityType:', entityType);
+            }
+
+            // Extract geometry coordinates with comprehensive fallbacks
+            const startPoint = generalProps['Start Point'] || props['Start Point'] ||
+                             generalProps.StartPoint || props.StartPoint ||
+                             generalProps.start || props.start;
+            const endPoint = generalProps['End Point'] || props['End Point'] ||
+                           generalProps.EndPoint || props.EndPoint ||
+                           generalProps.end || props.end;
+            const positionX = generalProps['Position X'] || props['Position X'] ||
+                            generalProps.PositionX || props.PositionX ||
+                            generalProps.position?.x || props.position?.x ||
+                            generalProps.x || props.x;
+            const positionY = generalProps['Position Y'] || props['Position Y'] ||
+                            generalProps.PositionY || props.PositionY ||
+                            generalProps.position?.y || props.position?.y ||
+                            generalProps.y || props.y;
+
+            // Additional coordinate sources for polylines/lines
+            const vertices = generalProps.vertices || props.vertices ||
+                           generalProps.Vertices || props.Vertices;
+            const points = generalProps.points || props.points ||
+                         generalProps.Points || props.Points;
 
             // Parse coordinates - they might be strings like "123.456, 789.012, 0.000"
             let start = null;
             let end = null;
 
-            if (startPoint && endPoint) {
-              // Parse coordinate strings
-              const parseCoords = (coordStr: any) => {
-                if (typeof coordStr === 'string') {
-                  const parts = coordStr.split(',').map(s => parseFloat(s.trim()));
-                  return { x: parts[0] || 0, y: parts[1] || 0, z: parts[2] || 0 };
-                } else if (coordStr && typeof coordStr === 'object' && 'x' in coordStr) {
-                  return { x: coordStr.x || 0, y: coordStr.y || 0, z: coordStr.z || 0 };
-                }
-                return null;
-              };
+            const parseCoords = (coordStr: any) => {
+              if (typeof coordStr === 'string') {
+                const parts = coordStr.split(',').map(s => parseFloat(s.trim()));
+                return { x: parts[0] || 0, y: parts[1] || 0, z: parts[2] || 0 };
+              } else if (coordStr && typeof coordStr === 'object' && 'x' in coordStr) {
+                return { x: coordStr.x || 0, y: coordStr.y || 0, z: coordStr.z || 0 };
+              }
+              return null;
+            };
 
+            if (startPoint && endPoint) {
               start = parseCoords(startPoint);
               end = parseCoords(endPoint);
-
-              // Debug: Log first wall coordinates to determine units
-              if (walls.length === 0) {
-                console.log('🔍 FIRST WALL RAW DATA:');
-                console.log('  Start Point:', startPoint);
-                console.log('  End Point:', endPoint);
-                console.log('  Parsed Start:', start);
-                console.log('  Parsed End:', end);
-                console.log('  Length:', props.Length);
-                console.log('  Height:', props.Height, generalProps.Thickness);
-              }
+            } else if (vertices && Array.isArray(vertices) && vertices.length >= 2) {
+              // Use first and last vertices for polylines
+              start = parseCoords(vertices[0]);
+              end = parseCoords(vertices[vertices.length - 1]);
+            } else if (points && Array.isArray(points) && points.length >= 2) {
+              start = parseCoords(points[0]);
+              end = parseCoords(points[points.length - 1]);
             } else if (positionX !== undefined && positionY !== undefined) {
               // Single position - assume it's a point entity
               start = { x: positionX, y: positionY, z: 0 };
               end = { x: positionX + (props.Length || 100), y: positionY, z: 0 }; // Estimate end point
+            }
+
+            // Debug: Log first wall coordinates to determine units
+            if (walls.length === 0 && (start || end)) {
+              console.log('🔍 FIRST WALL PARSED COORDINATES:');
+              console.log('  Start:', start);
+              console.log('  End:', end);
+              console.log('  Length:', props.Length || generalProps.Length);
+              console.log('  Height:', props.Height || generalProps.Height || generalProps.Thickness);
             }
 
             walls.push({
