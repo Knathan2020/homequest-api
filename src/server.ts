@@ -17,6 +17,8 @@ import documentsRoutes from './routes/documents.routes';
 import productionBlueprintRoutes from './routes/production-blueprint.routes';
 import wallEditorRoutes from './routes/wall-editor.routes';
 import cadApiRoutes from './routes/cad-api.routes'; // NEW: Autodesk 3D CAD API
+import roomSelectionsRoutes from './api/room-selections';
+import versionsRoutes from './api/versions';
 
 // AI & Voice Systems
 import aiRoutes from './routes/ai.routes';
@@ -722,6 +724,8 @@ app.use('/api/documents', documentsRoutes);
 app.use('/api/blueprint', productionBlueprintRoutes);
 app.use('/api/wall-editor', wallEditorRoutes);
 app.use('/api/cad', cadApiRoutes); // NEW: Autodesk 3D CAD & Floorplan API
+app.use('/api/selections', roomSelectionsRoutes); // Room selections and material uploads
+app.use('/api/versions', versionsRoutes); // Version history for floor plans and selections
 
 // AI & Voice Systems
 app.use('/api/ai', aiRoutes);

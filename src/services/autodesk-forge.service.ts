@@ -506,7 +506,7 @@ export class AutodeskForgeService {
   /**
    * Extract floorplan data from model properties
    */
-  async extractFloorplanData(properties: any): Promise<{
+  extractFloorplanData(properties: any): {
     walls: any[];
     doors: any[];
     windows: any[];
@@ -514,12 +514,12 @@ export class AutodeskForgeService {
     rooms: any[];
     textLabels: any[];
     measurements: any;
-  }> {
+  } {
     const walls: any[] = [];
     const doors: any[] = [];
     const windows: any[] = [];
     const stairs: any[] = [];
-    let rooms: any[] = []; // let instead of const - we'll deduplicate later
+    const rooms: any[] = [];
     const textLabels: any[] = [];
     let totalArea = 0;
 
@@ -527,7 +527,7 @@ export class AutodeskForgeService {
       // Handle undefined/null properties
       if (!properties) {
         console.warn('⚠️ Properties is null/undefined');
-        return { walls, doors, windows, stairs, rooms, textLabels, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0, totalTextLabels: 0 } };
+        return { walls, doors, windows, stairs, rooms, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
       }
 
       // Check if collection exists directly or nested
@@ -537,13 +537,13 @@ export class AutodeskForgeService {
       if (!collection) {
         console.warn('⚠️ No collection found in properties. Keys:', Object.keys(properties));
         console.warn('📋 Full properties object:', JSON.stringify(properties).substring(0, 500));
-        return { walls, doors, windows, stairs, rooms, textLabels, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0, totalTextLabels: 0 } };
+        return { walls, doors, windows, stairs, rooms, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
       }
 
       // If result is "Accepted" (202 status), properties are still being generated
       if (collection === 'Accepted' || typeof collection === 'string') {
         console.warn('⚠️ Properties still being generated (202 Accepted). Retry in a few seconds.');
-        return { walls, doors, windows, stairs, rooms, textLabels, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0, totalTextLabels: 0 } };
+        return { walls, doors, windows, stairs, rooms, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
       }
 
       if (collection) {
@@ -556,74 +556,6 @@ export class AutodeskForgeService {
 
         // Track unique layers
         const layersFound = new Set<string>();
-
-        // FIRST PASS: Detect all room layers and count geometry vs text entities
-        const allRoomLayers = new Set<string>();
-        const layerGeometryCounts: { [layer: string]: number } = {};
-
-        for (const item of collection) {
-          const props = item.properties || {};
-          const generalProps = props.General || {};
-          const layer = (generalProps.Layer || props.Layer || '').toUpperCase();
-          const entityType = generalProps.Name || props['Entity Type'] || '';
-
-          if (layer && /ROOM|SPACE/i.test(layer) && !/TEXT|IDEN|RNUM|LABEL/i.test(layer)) {
-            allRoomLayers.add(layer);
-
-            // Count non-text entities (actual geometry)
-            const itemName = item.name || '';
-            const isTextEntity = entityType === 'AcDbText' || entityType === 'AcDbMText' ||
-                                entityType === 'Text' || entityType === 'MText' ||
-                                itemName.includes('Text [') || itemName.includes('MText [');
-
-            if (!isTextEntity) {
-              layerGeometryCounts[layer] = (layerGeometryCounts[layer] || 0) + 1;
-            }
-          }
-        }
-
-        // Determine authoritative room layer(s) to extract from
-        let authoritativeRoomLayers: string[] = [];
-
-        if (allRoomLayers.size > 0) {
-          const roomLayerArray = Array.from(allRoomLayers);
-
-          // Check if there are multiple layers with the same prefix (e.g., ROOMS-COLLEGE-COLOR, ROOMS-DIVISION-COLOR)
-          const prefixGroups: { [key: string]: string[] } = {};
-          for (const layer of roomLayerArray) {
-            // Extract prefix before first dash/underscore or full layer if no separator
-            const prefix = layer.split(/[-_]/)[0];
-            if (!prefixGroups[prefix]) prefixGroups[prefix] = [];
-            prefixGroups[prefix].push(layer);
-          }
-
-          // If we have duplicate prefixes (e.g., multiple ROOMS-* layers), pick the one with most geometry
-          const hasDuplicatePrefixes = Object.values(prefixGroups).some(group => group.length > 1);
-
-          if (hasDuplicatePrefixes) {
-            console.log('🔍 Multiple room layers detected, selecting layer with most geometry...');
-            console.log('   All room layers:', roomLayerArray);
-            console.log('   Geometry counts:', layerGeometryCounts);
-
-            // Sort by geometry count (descending)
-            const sortedByGeometry = roomLayerArray
-              .filter(layer => (layerGeometryCounts[layer] || 0) > 0) // Only layers with geometry
-              .sort((a, b) => (layerGeometryCounts[b] || 0) - (layerGeometryCounts[a] || 0));
-
-            if (sortedByGeometry.length > 0) {
-              authoritativeRoomLayers = [sortedByGeometry[0]];
-              console.log(`✅ Selected layer with most geometry: ${authoritativeRoomLayers[0]} (${layerGeometryCounts[authoritativeRoomLayers[0]]} entities)`);
-            } else {
-              // Fallback: pick first alphabetically if no geometry found
-              authoritativeRoomLayers = [roomLayerArray.sort()[0]];
-              console.log(`⚠️ No geometry found, using first layer: ${authoritativeRoomLayers[0]}`);
-            }
-          } else {
-            // No duplicates, use all room layers
-            authoritativeRoomLayers = roomLayerArray;
-            console.log(`✅ Using all ${authoritativeRoomLayers.length} room layer(s):`, authoritativeRoomLayers);
-          }
-        }
 
         for (const item of collection) {
           const props = item.properties || {};
@@ -652,94 +584,39 @@ export class AutodeskForgeService {
           const isDoorLayer = /DOOR|PORTE|PUERTA|TÜR/i.test(layer);
           const isWindowLayer = /WINDOW|WIND|FENÊTRE|VENTANA|FENSTER/i.test(layer);
           const isStairLayer = /STAIR|STRS|ESCALIER|ESCALERA|TREPPE|FLOR/i.test(layer);
+          const isRoomLayer = /ROOM|AREA|SPACE/i.test(layer);
           const isTextLayer = /TEXT|IDEN|RNUM|LABEL/i.test(layer);
-          // Only extract from authoritative room layer(s) determined in first pass
-          const isRoomLayer = !isTextLayer && authoritativeRoomLayers.includes(layer);
 
-          // Universal property-based classification (fallback when layer names don't match)
-          const hasRoomProperties = (props.Area > 0 || generalProps.Area > 0) &&
-                                   (props.Perimeter > 0 || generalProps.Perimeter > 0);
-          const hasWallProperties = (props.Length > 0 || generalProps.Length > 0) &&
-                                   (props.Height > 0 || generalProps.Height > 0 || generalProps.Thickness > 0);
-          const hasDoorProperties = (props.Width > 0 || generalProps.Width > 0) &&
-                                   (props.Height > 0 || generalProps.Height > 0);
-          const hasStairProperties = (props['Number of Risers'] || props['Actual Number of Risers'] ||
-                                     generalProps['Number of Risers']);
-
-          // Classify elements (Layer takes PRIORITY, then properties as fallback for unlabeled layers)
-          // Important: Check if on a DIFFERENT layer first to avoid misclassification
-          if ((isWallLayer && !isRoomLayer && !isDoorLayer && !isStairLayer) ||
-              (!isRoomLayer && !isDoorLayer && !isStairLayer && hasWallProperties) ||
-              category.includes('wall') || name.includes('wall') ||
-              entityType === 'AcDbLine' || entityType === 'AcDbPolyline') {
-
-            // Debug first wall to see all available properties
-            if (walls.length === 0) {
-              console.log('🔍 FIRST WALL - ALL PROPERTIES:');
-              console.log('  generalProps:', JSON.stringify(generalProps, null, 2));
-              console.log('  props:', JSON.stringify(props, null, 2));
-              console.log('  entityType:', entityType);
-            }
-
-            // Extract geometry coordinates with comprehensive fallbacks
-            const startPoint = generalProps['Start Point'] || props['Start Point'] ||
-                             generalProps.StartPoint || props.StartPoint ||
-                             generalProps.start || props.start;
-            const endPoint = generalProps['End Point'] || props['End Point'] ||
-                           generalProps.EndPoint || props.EndPoint ||
-                           generalProps.end || props.end;
-            const positionX = generalProps['Position X'] || props['Position X'] ||
-                            generalProps.PositionX || props.PositionX ||
-                            generalProps.position?.x || props.position?.x ||
-                            generalProps.x || props.x;
-            const positionY = generalProps['Position Y'] || props['Position Y'] ||
-                            generalProps.PositionY || props.PositionY ||
-                            generalProps.position?.y || props.position?.y ||
-                            generalProps.y || props.y;
-
-            // Additional coordinate sources for polylines/lines
-            const vertices = generalProps.vertices || props.vertices ||
-                           generalProps.Vertices || props.Vertices;
-            const points = generalProps.points || props.points ||
-                         generalProps.Points || props.Points;
+          // Classify elements (check Layer first for AutoCAD, then Category for Revit)
+          if (isWallLayer || category.includes('wall') || name.includes('wall') || entityType === 'AcDbLine' || entityType === 'AcDbPolyline') {
+            // Extract geometry coordinates
+            const startPoint = generalProps['Start Point'] || props['Start Point'] || generalProps.StartPoint || props.StartPoint;
+            const endPoint = generalProps['End Point'] || props['End Point'] || generalProps.EndPoint || props.EndPoint;
+            const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
+            const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
 
             // Parse coordinates - they might be strings like "123.456, 789.012, 0.000"
             let start = null;
             let end = null;
 
-            const parseCoords = (coordStr: any) => {
-              if (typeof coordStr === 'string') {
-                const parts = coordStr.split(',').map(s => parseFloat(s.trim()));
-                return { x: parts[0] || 0, y: parts[1] || 0, z: parts[2] || 0 };
-              } else if (coordStr && typeof coordStr === 'object' && 'x' in coordStr) {
-                return { x: coordStr.x || 0, y: coordStr.y || 0, z: coordStr.z || 0 };
-              }
-              return null;
-            };
-
             if (startPoint && endPoint) {
+              // Parse coordinate strings
+              const parseCoords = (coordStr: any) => {
+                if (typeof coordStr === 'string') {
+                  const parts = coordStr.split(',').map(s => parseFloat(s.trim()));
+                  return { x: parts[0] || 0, y: parts[1] || 0, z: parts[2] || 0 };
+                } else if (coordStr && typeof coordStr === 'object' && 'x' in coordStr) {
+                  return { x: coordStr.x || 0, y: coordStr.y || 0, z: coordStr.z || 0 };
+                }
+                return null;
+              };
+
               start = parseCoords(startPoint);
               end = parseCoords(endPoint);
-            } else if (vertices && Array.isArray(vertices) && vertices.length >= 2) {
-              // Use first and last vertices for polylines
-              start = parseCoords(vertices[0]);
-              end = parseCoords(vertices[vertices.length - 1]);
-            } else if (points && Array.isArray(points) && points.length >= 2) {
-              start = parseCoords(points[0]);
-              end = parseCoords(points[points.length - 1]);
             } else if (positionX !== undefined && positionY !== undefined) {
               // Single position - assume it's a point entity
               start = { x: positionX, y: positionY, z: 0 };
               end = { x: positionX + (props.Length || 100), y: positionY, z: 0 }; // Estimate end point
-            }
-
-            // Debug: Log first wall coordinates to determine units
-            if (walls.length === 0 && (start || end)) {
-              console.log('🔍 FIRST WALL PARSED COORDINATES:');
-              console.log('  Start:', start);
-              console.log('  End:', end);
-              console.log('  Length:', props.Length || generalProps.Length);
-              console.log('  Height:', props.Height || generalProps.Height || generalProps.Thickness);
             }
 
             walls.push({
@@ -755,9 +632,7 @@ export class AutodeskForgeService {
               start,
               end
             });
-          } else if ((isDoorLayer && !isRoomLayer) ||
-                     (!isRoomLayer && hasDoorProperties) ||
-                     category.includes('door') || name.includes('door')) {
+          } else if (isDoorLayer || category.includes('door') || name.includes('door')) {
             // Extract door position
             const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
             const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
@@ -789,9 +664,7 @@ export class AutodeskForgeService {
               position: (positionX !== undefined && positionY !== undefined) ?
                 { x: positionX, y: positionY, z: positionZ } : null
             });
-          } else if ((isStairLayer && !isRoomLayer) ||
-                     (!isRoomLayer && hasStairProperties) ||
-                     category.includes('stair') || name.includes('stair') || category.includes('ramp')) {
+          } else if (isStairLayer || category.includes('stair') || name.includes('stair') || category.includes('ramp')) {
             // Extract stair position
             const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
             const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
@@ -810,95 +683,21 @@ export class AutodeskForgeService {
               position: (positionX !== undefined && positionY !== undefined) ?
                 { x: positionX, y: positionY, z: positionZ } : null
             });
-          } else if (isRoomLayer || hasRoomProperties || category.includes('room') || category.includes('space')) {
-            // Debug: Log entities on authoritative room layer
-            if (isRoomLayer && rooms.length < 3) {
-              console.log(`🔍 DEBUG - Entity on ${layer}:`);
-              console.log('  Entity Type:', entityType);
-              console.log('  Item name:', item.name);
-              console.log('  General props keys:', Object.keys(generalProps).slice(0, 10));
-            }
-
-            // Skip text entities - they're labels, not rooms (even if on ROOMS-INFORMATION layer)
-            const itemName = item.name || props.Name || generalProps.Name || '';
-            const isTextEntity = entityType === 'AcDbText' || entityType === 'AcDbMText' ||
-                                entityType === 'Text' || entityType === 'MText' ||
-                                itemName.includes('Text [') || itemName.includes('MText [');
-
-            if (isTextEntity) {
-              if (isRoomLayer && rooms.length < 3) {
-                console.log('  ❌ Skipped: Text entity');
-              }
-              continue; // Text labels should be extracted as textLabels, not rooms
-            }
-
-            // Extract room properties
+          } else if (isRoomLayer || category.includes('room') || category.includes('space')) {
             const area = props.Area || generalProps.Area || 0;
-            const perimeter = props.Perimeter || generalProps.Perimeter || 0;
-            const volume = props.Volume || generalProps.Volume || 0;
-
-            // Only skip if matched by properties (not layer) AND has no properties
-            // If on a ROOM layer, trust it's a room even without area/perimeter
-            if (!isRoomLayer && hasRoomProperties && area === 0 && perimeter === 0) {
-              continue; // Property-based match with no actual properties - false positive
-            }
-
             totalArea += area;
-
-            // Debug: Log first room's raw data to check units
-            if (rooms.length === 0) {
-              console.log('🔍 FIRST ROOM RAW DATA:');
-              console.log('  Area:', area, 'sq units');
-              console.log('  Perimeter:', perimeter, 'units');
-              console.log('  Volume:', volume, 'cubic units');
-              console.log('  All Area props:', props.Area, generalProps.Area);
-            }
-
-            // Extract position coordinates for 3D rendering
-            const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
-            const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
-            const positionZ = generalProps['Position Z'] || props['Position Z'] || generalProps.PositionZ || props.PositionZ || 0;
-
-            // Debug: Log why this was classified as a room and its area
-            const roomName = itemName || 'Unnamed Room';
-            const matchReason = isRoomLayer ? 'LAYER' :
-                               hasRoomProperties ? 'PROPERTIES (universal)' :
-                               (category.includes('room') ? 'CATEGORY:room' : 'CATEGORY:space');
-            console.log(`🏠 Room #${rooms.length + 1}: "${roomName}" on layer "${layer}" (matched by: ${matchReason}, area: ${area} sq ft)`);
 
             rooms.push({
               id: item.objectid,
               name: item.name || props.Name || generalProps.Name || 'Unnamed Room',
               area,
-              perimeter,
-              volume,
+              perimeter: props.Perimeter || generalProps.Perimeter || 0,
+              volume: props.Volume || generalProps.Volume || 0,
               level: props.Level || generalProps.Level || 'Ground Floor',
               number: props.Number || props['Room Number'] || generalProps.Number || '',
               type: props['Room Type'] || generalProps['Room Type'] || 'general',
-              layer: layer,
-              position: (positionX !== undefined && positionY !== undefined) ?
-                { x: positionX, y: positionY, z: positionZ } : null
+              layer: layer
             });
-          } else if (category.includes('text') || name.includes('text') || category.includes('mtext') || name.includes('mtext')) {
-            // Extract text labels (room names, annotations, etc.)
-            // Text can be at props.Text.Contents (object) or props.Text (string)
-            const text = props.Text?.Contents || generalProps.Text?.Contents ||
-                        (typeof props.Text === 'string' ? props.Text : '') ||
-                        props.Contents || props.TextString || item.name || '';
-            if (text && typeof text === 'string' && text.trim()) {
-              textLabels.push({
-                id: item.objectid,
-                text: text.trim(),
-                layer: props.Layer || 'default',
-                height: props.Height || props.TextHeight || 0,
-                rotation: props.Rotation || 0,
-                position: {
-                  x: props.Position?.x || 0,
-                  y: props.Position?.y || 0,
-                  z: props.Position?.z || 0
-                }
-              });
-            }
           }
 
           // Extract text entities (room labels, dimensions, notes)
@@ -919,16 +718,11 @@ export class AutodeskForgeService {
           }
 
           // Check for any property that might contain text
-          // Handle Text as object with Contents property or as direct string
-          const textString = generalProps['Text String'] ||
-                            generalProps.Text?.Contents ||
-                            (typeof generalProps.Text === 'string' ? generalProps.Text : '') ||
-                            generalProps.Contents ||
-                            props['Text String'] ||
-                            props.Text?.Contents ||
-                            (typeof props.Text === 'string' ? props.Text : '') ||
-                            props.Contents ||
-                            item.name;
+          // Text entities store content in props.Text.Contents (not in General props)
+          const textProps = props.Text || props.Annotation || {};
+          const textString = textProps.Contents || textProps['Text String'] ||
+                            generalProps['Text String'] || generalProps.Contents || generalProps.Text ||
+                            props['Text String'] || props.Contents || props.Text || item.name;
 
           // Check if this looks like a room label (contains letters and maybe numbers/SF)
           const looksLikeRoomText = textString && typeof textString === 'string' &&
@@ -936,8 +730,25 @@ export class AutodeskForgeService {
                                    textString.length > 2 && textString.length < 100;
 
           if (isTextEntity && looksLikeRoomText) {
-            const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
-            const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
+            // Text position can be in General props, Geometry section, or Text section
+            const geometryProps = props.Geometry || {};
+
+            let positionX = generalProps['Position X'] || generalProps.PositionX ||
+                           props['Position X'] || props.PositionX ||
+                           geometryProps['Position X'] || geometryProps.PositionX ||
+                           textProps['Position X'] || textProps.PositionX;
+
+            let positionY = generalProps['Position Y'] || generalProps.PositionY ||
+                           props['Position Y'] || props.PositionY ||
+                           geometryProps['Position Y'] || geometryProps.PositionY ||
+                           textProps['Position Y'] || textProps.PositionY;
+
+            // If no direct position, try getting from bounding box center
+            if ((positionX === undefined || positionY === undefined) && item.boundingBox) {
+              const bbox = item.boundingBox;
+              positionX = (bbox.minX + bbox.maxX) / 2;
+              positionY = (bbox.minY + bbox.maxY) / 2;
+            }
 
             if (positionX !== undefined && positionY !== undefined) {
               textLabels.push({
@@ -952,212 +763,17 @@ export class AutodeskForgeService {
               if (textLabels.length <= 5) {
                 console.log(`📝 Found room text #${textLabels.length}: "${textString}" at (${positionX.toFixed(1)}, ${positionY.toFixed(1)}) [${entityType}]`);
               }
+            } else {
+              // Log text without position for debugging
+              if (textLabels.length < 3) {
+                console.log(`⚠️ Found text "${textString}" but NO position data`);
+              }
             }
           }
         }
 
         // Log layers found for debugging
         console.log(`📋 Layers found in DWG: [${Array.from(layersFound).join(', ')}]`);
-
-        // Deduplicate rooms - safety net for duplicates within authoritative layer
-        const uniqueRooms: any[] = [];
-        const seenRooms = new Set<string>();
-
-        // Check if geometry properties are available
-        const hasGeometry = rooms.some(r => r.area > 0 || r.perimeter > 0 || r.volume > 0);
-
-        if (rooms.length > 0) {
-          console.log(`🔍 Deduplicating ${rooms.length} rooms... (geometry available: ${hasGeometry})`);
-        }
-
-        for (const room of rooms) {
-          let key: string;
-
-          if (hasGeometry) {
-            // Use geometry for deduplication when available
-            key = `${Math.round(room.area * 100)}_${Math.round(room.perimeter * 100)}_${Math.round(room.volume * 100)}`;
-          } else {
-            // Use object ID when geometry not available (e.g., Solid entities)
-            // Extract ID from name like "Solid [13260]"
-            const idMatch = room.name?.match(/\[([^\]]+)\]/) || [];
-            const objectId = idMatch[1] || room.id || room.name;
-            key = `${room.layer}_${objectId}`;
-          }
-
-          if (!seenRooms.has(key)) {
-            seenRooms.add(key);
-            uniqueRooms.push(room);
-          }
-        }
-
-        console.log(`✅ Deduplicated to ${uniqueRooms.length} unique rooms (removed ${rooms.length - uniqueRooms.length} duplicates)`);
-        rooms = uniqueRooms;
-      }
-
-      // Match text labels to rooms by room number (positions are all 0,0 for text entities)
-      if (textLabels.length > 0) {
-        console.log(`📍 Matching ${textLabels.length} text labels to ${rooms.length} rooms by room number...`);
-
-        // Group labels by room number
-        const labelsByRoomNumber: { [key: string]: any[] } = {};
-
-        for (const label of textLabels) {
-          // Extract room number from labels like "Bldg.1, Room 126A" or "Room 109A"
-          const roomMatch = label.text?.match(/Room\s+([A-Z0-9]+)/i);
-          if (roomMatch) {
-            const roomNumber = roomMatch[1].toUpperCase();
-            if (!labelsByRoomNumber[roomNumber]) {
-              labelsByRoomNumber[roomNumber] = [];
-            }
-            labelsByRoomNumber[roomNumber].push(label);
-          }
-        }
-
-        console.log(`📊 Found ${Object.keys(labelsByRoomNumber).length} unique room numbers in labels`);
-
-        // Assign label data to rooms
-        let matchedCount = 0;
-        for (let i = 0; i < rooms.length; i++) {
-          const room = rooms[i];
-          const roomNumbers = Object.keys(labelsByRoomNumber);
-
-          if (i < roomNumbers.length) {
-            const roomNumber = roomNumbers[i];
-            const labels = labelsByRoomNumber[roomNumber];
-
-            // Extract room info from labels
-            let roomName = `Room ${roomNumber}`;
-            let roomType = 'room';
-            let area = 0;
-
-            for (const label of labels) {
-              const text = label.text || '';
-
-              // Extract area from "ASF: 144" or "ASF:144"
-              const asfMatch = text.match(/ASF:\s*(\d+)/i);
-              if (asfMatch) {
-                area = Math.max(area, parseInt(asfMatch[1]));
-              }
-
-              // Extract room type from "FICM: Staff Office" or similar
-              const ficmMatch = text.match(/FICM:\s*(.+)/i);
-              if (ficmMatch) {
-                const type = ficmMatch[1].trim().toLowerCase();
-                if (type.includes('office')) roomType = 'office';
-                else if (type.includes('classroom')) roomType = 'classroom';
-                else if (type.includes('lab')) roomType = 'lab';
-                else if (type.includes('restroom')) roomType = 'restroom';
-                else if (type.includes('mechanical')) roomType = 'mechanical';
-                else if (type.includes('storage') || type.includes('closet')) roomType = 'storage';
-                else if (type.includes('elevator')) roomType = 'elevator';
-                else if (type.includes('hallway') || type.includes('corridor')) roomType = 'hallway';
-                else roomType = type;
-
-                roomName = `Room ${roomNumber} (${ficmMatch[1].trim()})`;
-              }
-            }
-
-            // Update room with extracted data
-            room.name = roomName;
-            room.type = roomType;
-            room.number = roomNumber;
-            if (area > 0) {
-              room.area = area;
-            }
-
-            matchedCount++;
-            console.log(`✅ Matched room ${i + 1}: ${roomName}, type: ${roomType}, area: ${area} sq ft (from ${labels.length} labels)`);
-          }
-        }
-
-        console.log(`📊 Matched ${matchedCount} rooms with label data`);
-      }
-
-      // Infer room positions from wall geometry
-      const roomsWithoutPosition = rooms.filter(r => !r.position);
-      const wallsWithPosition = walls.filter(w => w.start && w.end);
-
-      console.log(`🔍 Position check: ${roomsWithoutPosition.length} rooms without position, ${wallsWithPosition.length} walls with position`);
-
-      // Debug: Check wall positions
-      if (wallsWithPosition.length > 0) {
-        const sampleWalls = wallsWithPosition.slice(0, 3);
-        console.log(`   Sample wall positions:`, sampleWalls.map(w =>
-          `start:(${w.start.x.toFixed(2)}, ${w.start.y.toFixed(2)}) end:(${w.end.x.toFixed(2)}, ${w.end.y.toFixed(2)})`
-        ).join(', '));
-      }
-
-      if (roomsWithoutPosition.length > 0 && wallsWithPosition.length > 0) {
-        console.log(`📐 Inferring ${roomsWithoutPosition.length} room positions from ${wallsWithPosition.length} walls...`);
-
-        // Calculate building bounds from walls
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const wall of wallsWithPosition) {
-          minX = Math.min(minX, wall.start.x, wall.end.x);
-          minY = Math.min(minY, wall.start.y, wall.end.y);
-          maxX = Math.max(maxX, wall.start.x, wall.end.x);
-          maxY = Math.max(maxY, wall.start.y, wall.end.y);
-        }
-
-        const buildingWidth = maxX - minX;
-        const buildingHeight = maxY - minY;
-
-        console.log(`   Building bounds: (${minX.toFixed(2)}, ${minY.toFixed(2)}) to (${maxX.toFixed(2)}, ${maxY.toFixed(2)})`);
-        console.log(`   Building size: ${buildingWidth.toFixed(2)} x ${buildingHeight.toFixed(2)}`);
-
-        // Group walls into spatial regions (simple grid-based approach)
-        const gridSize = Math.max(buildingWidth, buildingHeight) / Math.ceil(Math.sqrt(roomsWithoutPosition.length));
-        const regions: { [key: string]: { walls: any[], centroid: { x: number, y: number, z: number } } } = {};
-
-        for (const wall of wallsWithPosition) {
-          const wallCenterX = (wall.start.x + wall.end.x) / 2;
-          const wallCenterY = (wall.start.y + wall.end.y) / 2;
-
-          const gridX = Math.floor((wallCenterX - minX) / gridSize);
-          const gridY = Math.floor((wallCenterY - minY) / gridSize);
-          const regionKey = `${gridX},${gridY}`;
-
-          if (!regions[regionKey]) {
-            regions[regionKey] = { walls: [], centroid: { x: 0, y: 0, z: 0 } };
-          }
-
-          regions[regionKey].walls.push(wall);
-        }
-
-        // Calculate centroid for each region
-        const regionList = Object.entries(regions).map(([key, region]) => {
-          let sumX = 0, sumY = 0, sumZ = 0, count = 0;
-
-          for (const wall of region.walls) {
-            sumX += wall.start.x + wall.end.x;
-            sumY += wall.start.y + wall.end.y;
-            sumZ += wall.start.z + wall.end.z;
-            count += 2;
-          }
-
-          return {
-            key,
-            walls: region.walls,
-            centroid: { x: sumX / count, y: sumY / count, z: sumZ / count }
-          };
-        });
-
-        console.log(`   Created ${regionList.length} spatial regions from walls`);
-
-        // Sort regions by wall count (rooms with more walls are likely larger/more important)
-        regionList.sort((a, b) => b.walls.length - a.walls.length);
-
-        // Assign regions to rooms
-        for (let i = 0; i < Math.min(roomsWithoutPosition.length, regionList.length); i++) {
-          const room = roomsWithoutPosition[i];
-          const region = regionList[i];
-
-          room.position = region.centroid;
-
-          console.log(`✅ Room ${room.name}: position (${region.centroid.x.toFixed(2)}, ${region.centroid.y.toFixed(2)}) from ${region.walls.length} walls`);
-        }
-
-        console.log(`📊 Assigned positions to ${Math.min(roomsWithoutPosition.length, regionList.length)} rooms from wall geometry`);
       }
 
       console.log(`📊 Extracted: ${walls.length} walls, ${doors.length} doors, ${windows.length} windows, ${stairs.length} stairs, ${rooms.length} rooms, ${textLabels.length} text labels`);
@@ -1179,16 +795,104 @@ export class AutodeskForgeService {
         totalWalls: walls.length,
         totalDoors: doors.length,
         totalWindows: windows.length,
-        totalStairs: stairs.length,
-        totalTextLabels: textLabels.length
+        totalStairs: stairs.length
       }
     };
   }
 
-  // GPT Vision removed - was identifying 0 rooms consistently
-  // Kept function signature for backwards compatibility but returns empty array
-  async analyzeFloorPlanWithGPT(_urn: string, _textLabels: any[]): Promise<any[]> {
-    return [];
+  /**
+   * Use GPT Vision to analyze floor plan and identify rooms
+   */
+  async analyzeFloorPlanWithGPT(urn: string, textLabels: any[]): Promise<any[]> {
+    try {
+      const token = await this.getAccessToken();
+
+      console.log('🤖 Analyzing floor plan with GPT Vision...');
+
+      // Get thumbnail from Autodesk Forge
+      const thumbnailUrl = `${this.baseUrl}/modelderivative/v2/designdata/${urn}/thumbnail?width=1024&height=1024`;
+
+      const thumbnailResponse = await axios.get(thumbnailUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        responseType: 'arraybuffer'
+      });
+
+      const base64Image = Buffer.from(thumbnailResponse.data).toString('base64');
+
+      // Prepare text labels summary for GPT
+      const textSummary = textLabels.map(t => `"${t.text}" at position (${Math.round(t.position.x)}, ${Math.round(t.position.y)})`).join('\n');
+
+      // Call OpenAI GPT-4 Vision
+      const openaiApiKey = process.env.OPENAI_API_KEY;
+      if (!openaiApiKey) {
+        console.warn('⚠️ OPENAI_API_KEY not set, skipping GPT Vision analysis');
+        return [];
+      }
+
+      const gptResponse = await axios.post(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `Analyze this architectural floor plan and identify all rooms. For each room, provide:
+1. Room name/label (from text on the plan)
+2. Room type (bedroom, bathroom, kitchen, living room, dining room, office, closet, hallway, garage, etc.)
+3. Approximate location (northwest, northeast, southwest, southeast, center, etc.)
+4. Estimated dimensions if visible
+
+Text labels found in the plan:
+${textSummary}
+
+Return ONLY a JSON array with this structure:
+[
+  {
+    "name": "Master Bedroom",
+    "type": "bedroom",
+    "location": "northwest",
+    "area_estimate": "200-250 sqft",
+    "confidence": 0.95
+  }
+]`
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:image/png;base64,${base64Image}`
+                  }
+                }
+              ]
+            }
+          ],
+          max_tokens: 2000
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${openaiApiKey}`
+          }
+        }
+      );
+
+      const gptContent = gptResponse.data.choices[0]?.message?.content || '[]';
+
+      // Extract JSON from response (GPT sometimes wraps it in markdown)
+      const jsonMatch = gptContent.match(/\[[\s\S]*\]/);
+      const rooms = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+
+      console.log(`✅ GPT Vision identified ${rooms.length} rooms`);
+      return rooms;
+
+    } catch (error: any) {
+      console.error('❌ GPT Vision analysis failed:', error.response?.data || error.message);
+      return [];
+    }
   }
 
   /**
@@ -1241,9 +945,26 @@ export class AutodeskForgeService {
           const properties = await this.getModelProperties(urn, metadata[0].guid);
           console.log('📋 Properties response type:', typeof properties);
           console.log('📋 Properties keys:', properties ? Object.keys(properties) : 'null/undefined');
-          floorplanData = await this.extractFloorplanData(properties);
+          floorplanData = this.extractFloorplanData(properties);
 
-          // GPT Vision removed - was identifying 0 rooms consistently, relying on Autodesk Forge extraction only
+          // Step 6: Use GPT Vision to identify rooms from text labels
+          if (floorplanData && floorplanData.textLabels && floorplanData.textLabels.length > 0) {
+            const gptRooms = await this.analyzeFloorPlanWithGPT(urn, floorplanData.textLabels);
+
+            // Merge GPT-detected rooms with existing room data
+            if (gptRooms.length > 0) {
+              floorplanData.rooms = gptRooms.map(room => ({
+                id: `gpt-room-${room.name.toLowerCase().replace(/\s+/g, '-')}`,
+                name: room.name,
+                type: room.type,
+                location: room.location,
+                area_estimate: room.area_estimate,
+                confidence: room.confidence,
+                source: 'gpt-vision'
+              }));
+              console.log(`🤖 GPT Vision enhanced room detection: ${floorplanData.rooms.length} rooms identified`);
+            }
+          }
         }
       } catch (error: any) {
         console.warn(`⚠️ Metadata extraction failed (expected for PDFs): ${error.message}`);

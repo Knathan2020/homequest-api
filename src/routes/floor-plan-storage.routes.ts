@@ -27,20 +27,21 @@ if (!fs.existsSync(STORAGE_DIR)) {
  */
 router.post('/save', async (req: Request, res: Response) => {
   try {
-    const { 
-      projectId, 
-      imageUrl, 
-      thumbnail, 
-      detectionResults, 
-      customElements, 
+    const {
+      name,
+      projectId,
+      imageUrl,
+      thumbnail,
+      detectionResults,
+      customElements,
       metadata,
-      accountId 
+      accountId
     } = req.body;
 
-    if (!projectId) {
+    if (!name && !projectId) {
       return res.status(400).json({
         success: false,
-        error: 'Project ID (name) is required'
+        error: 'Name or Project ID is required'
       });
     }
 
@@ -54,6 +55,7 @@ router.post('/save', async (req: Request, res: Response) => {
     // Create floor plan object with team/account scope
     const floorPlan = {
       id: planId,
+      name: name || projectId, // Use name field if provided, fallback to projectId
       projectId,
       accountId: teamId, // Add account/team ID
       imageUrl,
@@ -76,7 +78,7 @@ router.post('/save', async (req: Request, res: Response) => {
     // Also keep in memory for fast access
     globalFloorPlans.set(planId, floorPlan);
 
-    console.log(`💾 Saved floor plan: ${projectId} (${planId}) - for account: ${teamId}`);
+    console.log(`💾 Saved floor plan: ${name || projectId} (${planId}) - for account: ${teamId}`);
 
     res.json({
       success: true,
@@ -84,7 +86,7 @@ router.post('/save', async (req: Request, res: Response) => {
       message: 'Floor plan saved successfully and available to all users',
       data: {
         id: planId,
-        name: projectId,
+        name: name || projectId,
         savedAt: timestamp
       }
     });
@@ -128,16 +130,30 @@ router.get('/all', async (req: Request, res: Response) => {
           // Only include plans for this account/team AND this specific project
           const hasAccountAccess = !plan.accountId || plan.accountId === accountId;
           const belongsToProject = plan.projectId === projectId;
-          
+
           if (hasAccountAccess && belongsToProject) {
+            // Calculate room count from detectionResults or customElements
+            let roomCount = plan.detectionResults?.rooms?.length || 0;
+
+            // If it's a selections-only save, count rooms from customElements
+            if (plan.customElements?.roomMappings) {
+              const mappings = plan.customElements.roomMappings;
+              if (Array.isArray(mappings)) {
+                roomCount = mappings.length;
+              } else if (typeof mappings === 'object') {
+                roomCount = Object.keys(mappings).length;
+              }
+            }
+
             // Return summary for list display
             floorPlans.push({
               id: plan.id,
-              name: plan.projectId,
+              name: plan.name || plan.projectId, // Use name field if available
               thumbnail: plan.thumbnail, // Send full thumbnail
               wallCount: plan.detectionResults?.walls?.length || 0,
               doorCount: plan.detectionResults?.doors?.length || 0,
               windowCount: plan.detectionResults?.windows?.length || 0,
+              roomCount: roomCount, // Include room count
               savedAt: plan.createdAt,
               accountId: plan.accountId || 'default-team',
               projectId: plan.projectId
