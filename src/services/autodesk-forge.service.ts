@@ -506,7 +506,7 @@ export class AutodeskForgeService {
   /**
    * Extract floorplan data from model properties
    */
-  extractFloorplanData(properties: any): {
+  async extractFloorplanData(properties: any, urn?: string, guid?: string): Promise<{
     walls: any[];
     doors: any[];
     windows: any[];
@@ -514,7 +514,7 @@ export class AutodeskForgeService {
     rooms: any[];
     textLabels: any[];
     measurements: any;
-  } {
+  }> {
     const walls: any[] = [];
     const doors: any[] = [];
     const windows: any[] = [];
@@ -965,6 +965,53 @@ export class AutodeskForgeService {
         rooms = uniqueRooms;
       }
 
+      // Fetch bounding boxes for rooms without position data
+      const roomsWithoutPosition = rooms.filter(r => !r.position);
+      if (roomsWithoutPosition.length > 0 && urn && guid) {
+        console.log(`📦 Fetching bounding boxes for ${roomsWithoutPosition.length} rooms without position data...`);
+
+        try {
+          const token = await this.getAccessToken();
+
+          // For each room, get its bounding box
+            for (const room of roomsWithoutPosition) {
+              try {
+                // Get the full object tree to find bounding box
+                const objectResponse = await axios.get(
+                  `${this.baseUrl}/modelderivative/v2/designdata/${encodeURIComponent(urn)}/metadata/${guid}`,
+                  {
+                    headers: { Authorization: `Bearer ${token}` },
+                    params: { objectid: room.id, forceget: true }
+                  }
+                );
+
+                const bbox = objectResponse.data?.data?.objects?.[0]?.objects?.[0]?.bbox;
+                if (bbox) {
+                  // Calculate center from bounding box [minX, minY, minZ, maxX, maxY, maxZ]
+                  const centerX = (bbox[0] + bbox[3]) / 2;
+                  const centerY = (bbox[1] + bbox[4]) / 2;
+                  const centerZ = (bbox[2] + bbox[5]) / 2;
+
+                  room.position = { x: centerX, y: centerY, z: centerZ };
+
+                  // Also calculate dimensions if area is 0
+                  if (room.area === 0) {
+                    const width = Math.abs(bbox[3] - bbox[0]);
+                    const height = Math.abs(bbox[4] - bbox[1]);
+                    room.area = width * height;
+                  }
+
+                  console.log(`✅ Room ${room.name}: position (${centerX.toFixed(2)}, ${centerY.toFixed(2)}), area: ${room.area.toFixed(2)} sq ft`);
+                }
+              } catch (err) {
+                console.warn(`⚠️ Failed to get bounding box for room ${room.name}:`, err);
+              }
+            }
+        } catch (error: any) {
+          console.warn('⚠️ Failed to fetch bounding boxes:', error.message);
+        }
+      }
+
       console.log(`📊 Extracted: ${walls.length} walls, ${doors.length} doors, ${windows.length} windows, ${stairs.length} stairs, ${rooms.length} rooms, ${textLabels.length} text labels`);
 
     } catch (error) {
@@ -1046,7 +1093,7 @@ export class AutodeskForgeService {
           const properties = await this.getModelProperties(urn, metadata[0].guid);
           console.log('📋 Properties response type:', typeof properties);
           console.log('📋 Properties keys:', properties ? Object.keys(properties) : 'null/undefined');
-          floorplanData = this.extractFloorplanData(properties);
+          floorplanData = await this.extractFloorplanData(properties, urn, metadata[0].guid);
 
           // GPT Vision removed - was identifying 0 rooms consistently, relying on Autodesk Forge extraction only
         }
