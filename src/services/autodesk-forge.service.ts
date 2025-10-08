@@ -969,44 +969,62 @@ export class AutodeskForgeService {
       const roomsWithoutPosition = rooms.filter(r => !r.position);
       if (roomsWithoutPosition.length > 0 && urn && guid) {
         console.log(`📦 Fetching bounding boxes for ${roomsWithoutPosition.length} rooms without position data...`);
+        console.log(`   URN: ${urn}`);
+        console.log(`   GUID: ${guid}`);
+        console.log(`   Sample room IDs: ${roomsWithoutPosition.slice(0, 3).map(r => r.id).join(', ')}`);
 
         try {
           const token = await this.getAccessToken();
+          let successCount = 0;
+          let failCount = 0;
 
           // For each room, get its bounding box
-            for (const room of roomsWithoutPosition) {
-              try {
-                // Get the full object tree to find bounding box
-                const objectResponse = await axios.get(
-                  `${this.baseUrl}/modelderivative/v2/designdata/${encodeURIComponent(urn)}/metadata/${guid}`,
-                  {
-                    headers: { Authorization: `Bearer ${token}` },
-                    params: { objectid: room.id, forceget: true }
-                  }
-                );
+          for (const room of roomsWithoutPosition) {
+            try {
+              const apiUrl = `${this.baseUrl}/modelderivative/v2/designdata/${encodeURIComponent(urn)}/metadata/${guid}`;
+              console.log(`🔍 Fetching bbox for room ${room.name} (ID: ${room.id})...`);
 
-                const bbox = objectResponse.data?.data?.objects?.[0]?.objects?.[0]?.bbox;
-                if (bbox) {
-                  // Calculate center from bounding box [minX, minY, minZ, maxX, maxY, maxZ]
-                  const centerX = (bbox[0] + bbox[3]) / 2;
-                  const centerY = (bbox[1] + bbox[4]) / 2;
-                  const centerZ = (bbox[2] + bbox[5]) / 2;
-
-                  room.position = { x: centerX, y: centerY, z: centerZ };
-
-                  // Also calculate dimensions if area is 0
-                  if (room.area === 0) {
-                    const width = Math.abs(bbox[3] - bbox[0]);
-                    const height = Math.abs(bbox[4] - bbox[1]);
-                    room.area = width * height;
-                  }
-
-                  console.log(`✅ Room ${room.name}: position (${centerX.toFixed(2)}, ${centerY.toFixed(2)}), area: ${room.area.toFixed(2)} sq ft`);
+              // Get the full object tree to find bounding box
+              const objectResponse = await axios.get(
+                apiUrl,
+                {
+                  headers: { Authorization: `Bearer ${token}` },
+                  params: { objectid: room.id, forceget: true }
                 }
-              } catch (err) {
-                console.warn(`⚠️ Failed to get bounding box for room ${room.name}:`, err);
+              );
+
+              console.log(`   Response status: ${objectResponse.status}`);
+              console.log(`   Response keys: ${Object.keys(objectResponse.data || {}).join(', ')}`);
+
+              const bbox = objectResponse.data?.data?.objects?.[0]?.objects?.[0]?.bbox;
+              if (bbox) {
+                // Calculate center from bounding box [minX, minY, minZ, maxX, maxY, maxZ]
+                const centerX = (bbox[0] + bbox[3]) / 2;
+                const centerY = (bbox[1] + bbox[4]) / 2;
+                const centerZ = (bbox[2] + bbox[5]) / 2;
+
+                room.position = { x: centerX, y: centerY, z: centerZ };
+
+                // Also calculate dimensions if area is 0
+                if (room.area === 0) {
+                  const width = Math.abs(bbox[3] - bbox[0]);
+                  const height = Math.abs(bbox[4] - bbox[1]);
+                  room.area = width * height;
+                }
+
+                successCount++;
+                console.log(`✅ Room ${room.name}: position (${centerX.toFixed(2)}, ${centerY.toFixed(2)}), area: ${room.area.toFixed(2)} sq ft`);
+              } else {
+                failCount++;
+                console.warn(`⚠️ No bbox found for room ${room.name} in response structure`);
               }
+            } catch (err: any) {
+              failCount++;
+              console.warn(`⚠️ Failed to get bounding box for room ${room.name}:`, err.response?.status, err.response?.data || err.message);
             }
+          }
+
+          console.log(`📊 Bounding box fetch complete: ${successCount} success, ${failCount} failed`);
         } catch (error: any) {
           console.warn('⚠️ Failed to fetch bounding boxes:', error.message);
         }
