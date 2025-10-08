@@ -685,6 +685,12 @@ export class AutodeskForgeService {
             });
           } else if (isRoomLayer || category.includes('room') || category.includes('space')) {
             const roomName = item.name || props.Name || generalProps.Name || 'Unnamed Room';
+
+            // Skip "Solid [xxxxx]" CAD entities
+            if (/^Solid\s*\[/i.test(roomName)) {
+              continue;
+            }
+
             const area = props.Area || generalProps.Area || 0;
             totalArea += area;
 
@@ -692,6 +698,7 @@ export class AutodeskForgeService {
               id: item.objectid,
               name: roomName,
               area,
+              squareFootage: area,
               perimeter: props.Perimeter || generalProps.Perimeter || 0,
               volume: props.Volume || generalProps.Volume || 0,
               level: props.Level || generalProps.Level || 'Ground Floor',
