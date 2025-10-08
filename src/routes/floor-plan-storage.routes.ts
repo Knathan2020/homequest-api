@@ -1,25 +1,20 @@
 /**
  * Floor Plan Storage Routes
- * Endpoints for saving and retrieving floor plans for all users
+ * Endpoints for saving and retrieving floor plans with Supabase versioning
  */
 
 import { Router, Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import * as fs from 'fs';
-import * as path from 'path';
+import { createClient } from '@supabase/supabase-js';
 
 const router = Router();
 
-// In-memory storage for demo (in production, use database)
-const globalFloorPlans = new Map();
+// Initialize Supabase
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-// Storage directory for floor plan data
-const STORAGE_DIR = path.join(process.cwd(), 'data', 'saved-floor-plans');
-
-// Ensure storage directory exists
-if (!fs.existsSync(STORAGE_DIR)) {
-  fs.mkdirSync(STORAGE_DIR, { recursive: true });
-  console.log('📁 Created floor plan storage directory:', STORAGE_DIR);
+if (!supabase) {
+  console.warn('⚠️ Supabase not configured - floor plan storage will not work');
 }
 
 /**
@@ -27,6 +22,13 @@ if (!fs.existsSync(STORAGE_DIR)) {
  */
 router.post('/save', async (req: Request, res: Response) => {
   try {
+    if (!supabase) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database not configured'
+      });
+    }
+
     const {
       name,
       projectId,
@@ -47,45 +49,49 @@ router.post('/save', async (req: Request, res: Response) => {
 
     // Use accountId from request or default to 'default-team'
     const teamId = accountId || req.headers['x-account-id'] || 'default-team';
-
-    // Generate unique ID for this floor plan
-    const planId = uuidv4();
     const timestamp = new Date().toISOString();
 
-    // Create floor plan object with team/account scope
-    const floorPlan = {
-      id: planId,
-      name: name || projectId, // Use name field if provided, fallback to projectId
-      projectId,
-      accountId: teamId, // Add account/team ID
-      imageUrl,
-      thumbnail,
-      detectionResults,
-      customElements,
+    // Prepare data for database insert
+    const floorPlanData = {
+      project_id: projectId,
+      user_id: teamId,
+      image_url: imageUrl || '',
+      walls: detectionResults?.walls || [],
+      doors: detectionResults?.doors || [],
+      windows: detectionResults?.windows || [],
+      rooms: detectionResults?.rooms || [],
+      dimensions: metadata?.dimensions || { width: 0, height: 0 },
       metadata: {
         ...metadata,
-        savedAt: timestamp,
-        accountId: teamId // Include in metadata too
-      },
-      createdAt: timestamp,
-      updatedAt: timestamp
+        name: name || 'Untitled Floor Plan',
+        projectId: projectId,
+        thumbnail: thumbnail,
+        customElements: customElements,
+        accountId: teamId,
+        savedAt: timestamp
+      }
     };
 
-    // Save to file system (for persistence across restarts)
-    const filePath = path.join(STORAGE_DIR, `${planId}.json`);
-    fs.writeFileSync(filePath, JSON.stringify(floorPlan, null, 2));
+    // Insert into database (will auto-generate UUID)
+    const { data, error } = await supabase
+      .from('floor_plans')
+      .insert(floorPlanData)
+      .select()
+      .single();
 
-    // Also keep in memory for fast access
-    globalFloorPlans.set(planId, floorPlan);
+    if (error) {
+      console.error('Supabase error:', error);
+      throw error;
+    }
 
-    console.log(`💾 Saved floor plan: ${name || projectId} (${planId}) - for account: ${teamId}`);
+    console.log(`💾 Saved floor plan: ${name || projectId} (${data.id}) - for account: ${teamId}`);
 
     res.json({
       success: true,
-      id: planId,
+      id: data.id,
       message: 'Floor plan saved successfully and available to all users',
       data: {
-        id: planId,
+        id: data.id,
         name: name || projectId,
         savedAt: timestamp
       }
@@ -104,10 +110,17 @@ router.post('/save', async (req: Request, res: Response) => {
  */
 router.get('/all', async (req: Request, res: Response) => {
   try {
+    if (!supabase) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database not configured'
+      });
+    }
+
     // Get account ID and project ID from query params or headers
     const accountId = req.query.accountId || req.headers['x-account-id'] || 'default-team';
     const projectId = req.query.projectId as string;
-    
+
     // Project ID is required for data isolation
     if (!projectId) {
       return res.status(400).json({
@@ -115,60 +128,57 @@ router.get('/all', async (req: Request, res: Response) => {
         error: 'Project ID is required for data isolation'
       });
     }
-    
-    // Load all floor plans from storage
-    const files = fs.readdirSync(STORAGE_DIR);
-    const floorPlans = [];
 
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        try {
-          const filePath = path.join(STORAGE_DIR, file);
-          const data = fs.readFileSync(filePath, 'utf-8');
-          const plan = JSON.parse(data);
-          
-          // Only include plans for this account/team AND this specific project
-          const hasAccountAccess = !plan.accountId || plan.accountId === accountId;
-          const belongsToProject = plan.projectId === projectId;
+    // Query floor plans from database
+    let query = supabase
+      .from('floor_plans')
+      .select('*')
+      .eq('user_id', accountId)
+      .order('created_at', { ascending: false });
 
-          if (hasAccountAccess && belongsToProject) {
-            // Calculate room count from detectionResults or customElements
-            let roomCount = plan.detectionResults?.rooms?.length || 0;
+    const { data: plans, error } = await query;
 
-            // If it's a selections-only save, count rooms from customElements
-            if (plan.customElements?.roomMappings) {
-              const mappings = plan.customElements.roomMappings;
-              if (Array.isArray(mappings)) {
-                roomCount = mappings.length;
-              } else if (typeof mappings === 'object') {
-                roomCount = Object.keys(mappings).length;
-              }
-            }
-
-            // Return summary for list display
-            floorPlans.push({
-              id: plan.id,
-              name: plan.name || plan.projectId, // Use name field if available
-              thumbnail: plan.thumbnail, // Send full thumbnail
-              wallCount: plan.detectionResults?.walls?.length || 0,
-              doorCount: plan.detectionResults?.doors?.length || 0,
-              windowCount: plan.detectionResults?.windows?.length || 0,
-              roomCount: roomCount, // Include room count
-              savedAt: plan.createdAt,
-              accountId: plan.accountId || 'default-team',
-              projectId: plan.projectId
-            });
-          }
-        } catch (e) {
-          console.error(`Error reading floor plan ${file}:`, e);
-        }
-      }
+    if (error) {
+      console.error('Supabase error:', error);
+      throw error;
     }
 
-    // Sort by most recent first
-    floorPlans.sort((a, b) => 
-      new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()
-    );
+    // Filter by project and format response
+    const floorPlans = (plans || [])
+      .filter(plan => {
+        // Match by projectId in metadata or by project_id field
+        const metadataProjectId = plan.metadata?.projectId;
+        const planProjectId = plan.project_id;
+        return metadataProjectId === projectId || planProjectId === projectId;
+      })
+      .map(plan => {
+        // Calculate room count from rooms or customElements
+        let roomCount = plan.rooms?.length || 0;
+
+        // If it's a selections-only save, count rooms from customElements
+        if (plan.metadata?.customElements?.roomMappings) {
+          const mappings = plan.metadata.customElements.roomMappings;
+          if (Array.isArray(mappings)) {
+            roomCount = mappings.length;
+          } else if (typeof mappings === 'object') {
+            roomCount = Object.keys(mappings).length;
+          }
+        }
+
+        // Return summary for list display
+        return {
+          id: plan.id,
+          name: plan.metadata?.name || plan.project_id,
+          thumbnail: plan.metadata?.thumbnail,
+          wallCount: plan.walls?.length || 0,
+          doorCount: plan.doors?.length || 0,
+          windowCount: plan.windows?.length || 0,
+          roomCount: roomCount,
+          savedAt: plan.created_at,
+          accountId: plan.user_id,
+          projectId: plan.metadata?.projectId || plan.project_id
+        };
+      });
 
     res.json({
       success: true,
@@ -189,38 +199,66 @@ router.get('/all', async (req: Request, res: Response) => {
  */
 router.get('/load/:id', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const accountId = req.query.accountId || req.headers['x-account-id'] || 'default-team';
-
-    // Try memory first
-    let floorPlan = globalFloorPlans.get(id);
-
-    // If not in memory, load from file
-    if (!floorPlan) {
-      const filePath = path.join(STORAGE_DIR, `${id}.json`);
-      if (fs.existsSync(filePath)) {
-        const data = fs.readFileSync(filePath, 'utf-8');
-        floorPlan = JSON.parse(data);
-        // Cache in memory
-        globalFloorPlans.set(id, floorPlan);
-      }
-    }
-
-    if (!floorPlan) {
-      return res.status(404).json({
+    if (!supabase) {
+      return res.status(500).json({
         success: false,
-        error: 'Floor plan not found'
+        error: 'Database not configured'
       });
     }
 
+    const { id } = req.params;
+    const accountId = req.query.accountId || req.headers['x-account-id'] || 'default-team';
+
+    // Load from database
+    const { data: plan, error } = await supabase
+      .from('floor_plans')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({
+          success: false,
+          error: 'Floor plan not found'
+        });
+      }
+      throw error;
+    }
+
     // Check if user has access to this floor plan
-    // Legacy plans without accountId are accessible to everyone
-    if (floorPlan.accountId && floorPlan.accountId !== accountId) {
+    if (plan.user_id && plan.user_id !== accountId) {
       return res.status(403).json({
         success: false,
         error: 'Access denied - floor plan belongs to different account'
       });
     }
+
+    // Convert database format back to frontend format
+    const floorPlan = {
+      id: plan.id,
+      name: plan.metadata?.name || plan.project_id,
+      projectId: plan.metadata?.projectId || plan.project_id,
+      accountId: plan.user_id,
+      imageUrl: plan.image_url,
+      thumbnail: plan.metadata?.thumbnail,
+      detectionResults: {
+        walls: plan.walls || [],
+        doors: plan.doors || [],
+        windows: plan.windows || [],
+        rooms: plan.rooms || [],
+        stairs: [],
+        elevators: [],
+        annotations: []
+      },
+      customElements: plan.metadata?.customElements || {},
+      metadata: {
+        ...plan.metadata,
+        dimensions: plan.dimensions
+      },
+      createdAt: plan.created_at,
+      updatedAt: plan.updated_at
+    };
 
     res.json({
       success: true,
@@ -237,63 +275,81 @@ router.get('/load/:id', async (req: Request, res: Response) => {
 
 /**
  * Update an existing floor plan
+ * This will automatically trigger version creation via database trigger
  */
 router.put('/update/:id', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const { 
-      projectId, 
-      imageUrl, 
-      thumbnail, 
-      detectionResults, 
-      customElements, 
-      metadata 
-    } = req.body;
-
-    // Load existing floor plan
-    const filePath = path.join(STORAGE_DIR, `${id}.json`);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({
+    if (!supabase) {
+      return res.status(500).json({
         success: false,
-        error: 'Floor plan not found'
+        error: 'Database not configured'
       });
     }
 
-    // Read existing plan
-    const existingData = fs.readFileSync(filePath, 'utf-8');
-    const existingPlan = JSON.parse(existingData);
+    const { id } = req.params;
+    const {
+      projectId,
+      imageUrl,
+      thumbnail,
+      detectionResults,
+      customElements,
+      metadata
+    } = req.body;
 
-    // Update floor plan object
-    const updatedPlan = {
-      ...existingPlan,
-      projectId: projectId || existingPlan.projectId,
-      imageUrl: imageUrl || existingPlan.imageUrl,
-      thumbnail: thumbnail || existingPlan.thumbnail,
-      detectionResults: detectionResults || existingPlan.detectionResults,
-      customElements: customElements || existingPlan.customElements,
-      metadata: {
-        ...existingPlan.metadata,
-        ...metadata,
-        updatedAt: new Date().toISOString()
-      },
+    // Prepare update data
+    const updateData: any = {};
+
+    if (projectId) updateData.project_id = projectId;
+    if (imageUrl) updateData.image_url = imageUrl;
+    if (detectionResults) {
+      if (detectionResults.walls) updateData.walls = detectionResults.walls;
+      if (detectionResults.doors) updateData.doors = detectionResults.doors;
+      if (detectionResults.windows) updateData.windows = detectionResults.windows;
+      if (detectionResults.rooms) updateData.rooms = detectionResults.rooms;
+    }
+
+    // Update metadata
+    const { data: existingPlan } = await supabase
+      .from('floor_plans')
+      .select('metadata')
+      .eq('id', id)
+      .single();
+
+    updateData.metadata = {
+      ...(existingPlan?.metadata || {}),
+      ...metadata,
+      thumbnail: thumbnail || existingPlan?.metadata?.thumbnail,
+      customElements: customElements || existingPlan?.metadata?.customElements,
       updatedAt: new Date().toISOString()
     };
 
-    // Save updated plan to file system
-    fs.writeFileSync(filePath, JSON.stringify(updatedPlan, null, 2));
+    // Update in database (will trigger versioning automatically)
+    const { data: updatedPlan, error } = await supabase
+      .from('floor_plans')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
 
-    // Update in memory
-    globalFloorPlans.set(id, updatedPlan);
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({
+          success: false,
+          error: 'Floor plan not found'
+        });
+      }
+      throw error;
+    }
 
-    console.log(`📝 Updated floor plan: ${updatedPlan.projectId} (${id})`);
+    console.log(`📝 Updated floor plan: ${updatedPlan.project_id} (${id})`);
 
     res.json({
       success: true,
-      message: 'Floor plan updated successfully',
+      message: 'Floor plan updated successfully (version saved automatically)',
       data: {
         id: id,
-        name: updatedPlan.projectId,
-        updatedAt: updatedPlan.updatedAt
+        name: updatedPlan.project_id,
+        updatedAt: updatedPlan.updated_at
       }
     });
   } catch (error: any) {
@@ -307,25 +363,34 @@ router.put('/update/:id', async (req: Request, res: Response) => {
 
 /**
  * Delete a floor plan
+ * This will automatically trigger version creation before deletion via database trigger
  */
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    if (!supabase) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database not configured'
+      });
+    }
+
     const { id } = req.params;
 
-    // Remove from memory
-    globalFloorPlans.delete(id);
+    // Delete from database (will trigger versioning automatically)
+    const { error } = await supabase
+      .from('floor_plans')
+      .delete()
+      .eq('id', id);
 
-    // Remove from file system
-    const filePath = path.join(STORAGE_DIR, `${id}.json`);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    if (error) {
+      throw error;
     }
 
     console.log(`🗑️ Deleted floor plan: ${id}`);
 
     res.json({
       success: true,
-      message: 'Floor plan deleted successfully'
+      message: 'Floor plan deleted successfully (final version saved automatically)'
     });
   } catch (error: any) {
     console.error('Error deleting floor plan:', error);
@@ -335,34 +400,5 @@ router.delete('/:id', async (req: Request, res: Response) => {
     });
   }
 });
-
-// Load all floor plans into memory on startup
-const loadFloorPlansOnStartup = () => {
-  try {
-    const files = fs.readdirSync(STORAGE_DIR);
-    let count = 0;
-    
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        try {
-          const filePath = path.join(STORAGE_DIR, file);
-          const data = fs.readFileSync(filePath, 'utf-8');
-          const plan = JSON.parse(data);
-          globalFloorPlans.set(plan.id, plan);
-          count++;
-        } catch (e) {
-          console.error(`Error loading floor plan ${file}:`, e);
-        }
-      }
-    }
-    
-    console.log(`📥 Loaded ${count} saved floor plans into memory`);
-  } catch (error) {
-    console.error('Error loading floor plans on startup:', error);
-  }
-};
-
-// Load existing floor plans on startup
-loadFloorPlansOnStartup();
 
 export default router;
