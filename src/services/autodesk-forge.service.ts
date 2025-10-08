@@ -972,6 +972,10 @@ export class AutodeskForgeService {
       if (roomsWithoutPosition.length > 0 && labelsWithPosition.length > 0) {
         console.log(`📍 Inferring positions for ${roomsWithoutPosition.length} rooms from ${labelsWithPosition.length} text labels...`);
 
+        // Debug: Check text label positions
+        const sampleLabels = labelsWithPosition.slice(0, 5);
+        console.log(`   Sample label positions:`, sampleLabels.map(l => `(${l.position.x.toFixed(2)}, ${l.position.y.toFixed(2)}) "${l.text}"`).join(', '));
+
         // Group text labels into spatial clusters (rooms typically have multiple labels)
         const clusters: Array<{ labels: any[], centroid: { x: number, y: number, z: number }, area: number }> = [];
         const clusterDistance = 500; // Labels within 500 units are in same room
@@ -1025,6 +1029,13 @@ export class AutodeskForgeService {
         }
 
         console.log(`📊 Created ${clusters.length} label clusters from text positions`);
+
+        // Debug: Show cluster info
+        if (clusters.length <= 10) {
+          clusters.forEach((c, i) => {
+            console.log(`   Cluster ${i + 1}: ${c.labels.length} labels at (${c.centroid.x.toFixed(2)}, ${c.centroid.y.toFixed(2)}), area: ${c.area} sq ft`);
+          });
+        }
 
         // Assign clusters to rooms by matching count (71 rooms, should have ~71 clusters)
         // Sort clusters by area (largest first) to prioritize actual rooms over small spaces
