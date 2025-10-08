@@ -965,74 +965,84 @@ export class AutodeskForgeService {
         rooms = uniqueRooms;
       }
 
-      // Fetch bounding boxes for rooms without position data
+      // Infer room positions from text label clusters
       const roomsWithoutPosition = rooms.filter(r => !r.position);
-      if (roomsWithoutPosition.length > 0 && urn && guid) {
-        console.log(`📦 Fetching bounding boxes for ${roomsWithoutPosition.length} rooms without position data...`);
-        console.log(`   URN: ${urn}`);
-        console.log(`   GUID: ${guid}`);
-        console.log(`   Sample room IDs: ${roomsWithoutPosition.slice(0, 3).map(r => r.id).join(', ')}`);
+      const labelsWithPosition = textLabels.filter(l => l.position);
 
-        try {
-          const token = await this.getAccessToken();
-          let successCount = 0;
-          let failCount = 0;
+      if (roomsWithoutPosition.length > 0 && labelsWithPosition.length > 0) {
+        console.log(`📍 Inferring positions for ${roomsWithoutPosition.length} rooms from ${labelsWithPosition.length} text labels...`);
 
-          // For each room, get its bounding box
-          for (const room of roomsWithoutPosition) {
-            try {
-              const apiUrl = `${this.baseUrl}/modelderivative/v2/designdata/${encodeURIComponent(urn)}/metadata/${guid}`;
-              console.log(`🔍 Fetching bbox for room ${room.name} (ID: ${room.id})...`);
+        // Group text labels into spatial clusters (rooms typically have multiple labels)
+        const clusters: Array<{ labels: any[], centroid: { x: number, y: number, z: number }, area: number }> = [];
+        const clusterDistance = 500; // Labels within 500 units are in same room
 
-              // Get the full object tree to find bounding box
-              const objectResponse = await axios.get(
-                apiUrl,
-                {
-                  headers: { Authorization: `Bearer ${token}` },
-                  params: { objectid: room.id, forceget: true }
-                }
-              );
+        for (const label of labelsWithPosition) {
+          // Find nearest cluster
+          let nearestCluster = null;
+          let minDistance = Infinity;
 
-              console.log(`   Response status: ${objectResponse.status}`);
-              console.log(`   Response keys: ${Object.keys(objectResponse.data || {}).join(', ')}`);
+          for (const cluster of clusters) {
+            const dx = label.position.x - cluster.centroid.x;
+            const dy = label.position.y - cluster.centroid.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
 
-              // Log full response structure for first room to debug
-              if (successCount === 0 && failCount === 0) {
-                console.log(`   Full response structure:`, JSON.stringify(objectResponse.data, null, 2).substring(0, 1000));
-              }
-
-              const bbox = objectResponse.data?.data?.objects?.[0]?.objects?.[0]?.bbox;
-              if (bbox) {
-                // Calculate center from bounding box [minX, minY, minZ, maxX, maxY, maxZ]
-                const centerX = (bbox[0] + bbox[3]) / 2;
-                const centerY = (bbox[1] + bbox[4]) / 2;
-                const centerZ = (bbox[2] + bbox[5]) / 2;
-
-                room.position = { x: centerX, y: centerY, z: centerZ };
-
-                // Also calculate dimensions if area is 0
-                if (room.area === 0) {
-                  const width = Math.abs(bbox[3] - bbox[0]);
-                  const height = Math.abs(bbox[4] - bbox[1]);
-                  room.area = width * height;
-                }
-
-                successCount++;
-                console.log(`✅ Room ${room.name}: position (${centerX.toFixed(2)}, ${centerY.toFixed(2)}), area: ${room.area.toFixed(2)} sq ft`);
-              } else {
-                failCount++;
-                console.warn(`⚠️ No bbox found for room ${room.name} in response structure`);
-              }
-            } catch (err: any) {
-              failCount++;
-              console.warn(`⚠️ Failed to get bounding box for room ${room.name}:`, err.response?.status, err.response?.data || err.message);
+            if (distance < minDistance && distance < clusterDistance) {
+              minDistance = distance;
+              nearestCluster = cluster;
             }
           }
 
-          console.log(`📊 Bounding box fetch complete: ${successCount} success, ${failCount} failed`);
-        } catch (error: any) {
-          console.warn('⚠️ Failed to fetch bounding boxes:', error.message);
+          if (nearestCluster) {
+            // Add to existing cluster
+            nearestCluster.labels.push(label);
+
+            // Recalculate centroid
+            const sumX = nearestCluster.labels.reduce((sum, l) => sum + l.position.x, 0);
+            const sumY = nearestCluster.labels.reduce((sum, l) => sum + l.position.y, 0);
+            const sumZ = nearestCluster.labels.reduce((sum, l) => sum + l.position.z, 0);
+            nearestCluster.centroid = {
+              x: sumX / nearestCluster.labels.length,
+              y: sumY / nearestCluster.labels.length,
+              z: sumZ / nearestCluster.labels.length
+            };
+
+            // Update area from SF labels
+            for (const l of nearestCluster.labels) {
+              const areaMatch = l.text?.match(/(\d+\.?\d*)\s*(SF|sq\s*ft|sqft)/i);
+              if (areaMatch) {
+                nearestCluster.area = Math.max(nearestCluster.area, parseFloat(areaMatch[1]));
+              }
+            }
+          } else {
+            // Create new cluster
+            const areaMatch = label.text?.match(/(\d+\.?\d*)\s*(SF|sq\s*ft|sqft)/i);
+            clusters.push({
+              labels: [label],
+              centroid: { ...label.position },
+              area: areaMatch ? parseFloat(areaMatch[1]) : 0
+            });
+          }
         }
+
+        console.log(`📊 Created ${clusters.length} label clusters from text positions`);
+
+        // Assign clusters to rooms by matching count (71 rooms, should have ~71 clusters)
+        // Sort clusters by area (largest first) to prioritize actual rooms over small spaces
+        clusters.sort((a, b) => b.area - a.area);
+
+        for (let i = 0; i < Math.min(roomsWithoutPosition.length, clusters.length); i++) {
+          const room = roomsWithoutPosition[i];
+          const cluster = clusters[i];
+
+          room.position = cluster.centroid;
+          if (room.area === 0 && cluster.area > 0) {
+            room.area = cluster.area;
+          }
+
+          console.log(`✅ Room ${room.name}: position (${cluster.centroid.x.toFixed(2)}, ${cluster.centroid.y.toFixed(2)}), area: ${room.area.toFixed(2)} sq ft (from ${cluster.labels.length} labels)`);
+        }
+
+        console.log(`📊 Assigned positions to ${Math.min(roomsWithoutPosition.length, clusters.length)} rooms from label clusters`);
       }
 
       console.log(`📊 Extracted: ${walls.length} walls, ${doors.length} doors, ${windows.length} windows, ${stairs.length} stairs, ${rooms.length} rooms, ${textLabels.length} text labels`);
