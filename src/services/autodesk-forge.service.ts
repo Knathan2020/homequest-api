@@ -856,23 +856,24 @@ export class AutodeskForgeService {
               positionY = (bbox.minY + bbox.maxY) / 2;
             }
 
-            if (positionX !== undefined && positionY !== undefined) {
-              textLabels.push({
-                id: item.objectid,
-                text: textString,
-                position: { x: positionX, y: positionY },
-                layer: layer,
-                entityType: entityType
-              });
+            // Use position if available, otherwise use (0, 0) - room matching doesn't need accurate positions
+            const finalX = positionX !== undefined ? positionX : 0;
+            const finalY = positionY !== undefined ? positionY : 0;
 
-              // Debug: Log first few room texts found
-              if (textLabels.length <= 5) {
-                console.log(`📝 Found room text #${textLabels.length}: "${textString}" at (${positionX.toFixed(1)}, ${positionY.toFixed(1)}) [${entityType}]`);
-              }
-            } else {
-              // Log text without position for debugging
-              if (textLabels.length < 3) {
-                console.log(`⚠️ Found text "${textString}" but NO position data`);
+            textLabels.push({
+              id: item.objectid,
+              text: textString,
+              position: { x: finalX, y: finalY },
+              layer: layer,
+              entityType: entityType
+            });
+
+            // Debug: Log first few room texts found
+            if (textLabels.length <= 5) {
+              if (positionX !== undefined && positionY !== undefined) {
+                console.log(`📝 Found room text #${textLabels.length}: "${textString}" at (${finalX.toFixed(1)}, ${finalY.toFixed(1)}) [${entityType}]`);
+              } else {
+                console.log(`📝 Found room text #${textLabels.length}: "${textString}" (no position, using 0,0) [${entityType}]`);
               }
             }
           }
