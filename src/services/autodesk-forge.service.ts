@@ -887,20 +887,30 @@ export class AutodeskForgeService {
 
       console.log(`📊 Extracted: ${walls.length} walls, ${doors.length} doors, ${windows.length} windows, ${stairs.length} stairs, ${rooms.length} rooms, ${textLabels.length} text labels`);
 
-      // Match text labels to rooms by room number (positions are all 0,0 for text entities)
-      if (textLabels.length > 0) {
-        console.log(`📍 Matching ${textLabels.length} text labels to ${rooms.length} rooms by room number...`);
+      // Match text labels to rooms by layer association (universal approach)
+      if (textLabels.length > 0 && rooms.length > 0) {
+        console.log(`📍 Matching ${textLabels.length} text labels to ${rooms.length} rooms by layer association...`);
 
-        // Debug: Log all unique text patterns to understand what we have
+        // Debug: Log sample text patterns and layers
         const uniqueTexts = new Set(textLabels.map(l => l.text));
-        console.log(`🔍 Sample text labels (first 20):`, Array.from(uniqueTexts).slice(0, 20));
+        const uniqueTextLayers = new Set(textLabels.map(l => l.layer));
+        const uniqueRoomLayers = new Set(rooms.map(r => r.layer));
 
-        // Group labels by room number
+        console.log(`🔍 Sample text labels (first 20):`, Array.from(uniqueTexts).slice(0, 20));
+        console.log(`📋 Text layers found:`, Array.from(uniqueTextLayers));
+        console.log(`📋 Room layers found:`, Array.from(uniqueRoomLayers));
+
+        // Group text labels by room number for efficient lookup
         const labelsByRoomNumber: { [key: string]: any[] } = {};
 
         for (const label of textLabels) {
-          // Extract room number from labels like "Bldg.1, Room 126A" or "Room 109A"
-          const roomMatch = label.text?.match(/Room\s+([A-Z0-9]+)/i);
+          const text = label.text || '';
+
+          // Extract room number - flexible pattern matching
+          // Supports: "Room 106", "Rm 106", "Space 106", "Bldg.1, Room 106", just "106" (standalone)
+          const roomMatch = text.match(/(?:Room|Rm|Space)\s+([A-Z0-9]+)/i) ||
+                           text.match(/\b([A-Z]?\d{2,4}[A-Z]?)\b/); // Fallback: 2-4 digit number with optional letter
+
           if (roomMatch) {
             const roomNumber = roomMatch[1].toUpperCase();
             if (!labelsByRoomNumber[roomNumber]) {
@@ -910,65 +920,85 @@ export class AutodeskForgeService {
           }
         }
 
-        console.log(`📊 Found ${Object.keys(labelsByRoomNumber).length} unique room numbers in labels`);
+        const roomNumbers = Object.keys(labelsByRoomNumber).sort();
+        console.log(`📊 Found ${roomNumbers.length} unique room numbers in labels`);
+        console.log(`📋 Room numbers:`, roomNumbers.join(', '));
 
-        // Assign label data to rooms
         let matchedCount = 0;
+
+        // Match rooms to labels by room number
         for (let i = 0; i < rooms.length; i++) {
           const room = rooms[i];
-          const roomNumbers = Object.keys(labelsByRoomNumber);
+
+          // Try to find matching labels by iterating through room numbers
+          // Use index-based matching since we can't rely on spatial positions
+          let roomNumber = '';
+          let roomName = '';
+          let roomType = 'room';
+          let area = 0;
+          let matchedLabels: any[] = [];
 
           if (i < roomNumbers.length) {
-            const roomNumber = roomNumbers[i];
-            const labels = labelsByRoomNumber[roomNumber];
+            roomNumber = roomNumbers[i];
+            matchedLabels = labelsByRoomNumber[roomNumber] || [];
+          }
 
-            // Extract room info from labels
-            let roomName = `Room ${roomNumber}`;
-            let roomType = 'room';
-            let area = 0;
+          // Extract info from matched labels
+          for (const label of matchedLabels) {
+            const text = label.text || '';
 
-            for (const label of labels) {
-              const text = label.text || '';
-
-              // Extract area from "ASF: 144" or "ASF:144"
-              const asfMatch = text.match(/ASF:\s*(\d+)/i);
-              if (asfMatch) {
-                area = Math.max(area, parseInt(asfMatch[1]));
-              }
-
-              // Extract room type from "FICM: Staff Office" or similar
-              const ficmMatch = text.match(/FICM:\s*(.+)/i);
-              if (ficmMatch) {
-                const type = ficmMatch[1].trim().toLowerCase();
-                if (type.includes('office')) roomType = 'office';
-                else if (type.includes('classroom')) roomType = 'classroom';
-                else if (type.includes('lab')) roomType = 'lab';
-                else if (type.includes('restroom')) roomType = 'restroom';
-                else if (type.includes('mechanical')) roomType = 'mechanical';
-                else if (type.includes('storage') || type.includes('closet')) roomType = 'storage';
-                else if (type.includes('elevator')) roomType = 'elevator';
-                else if (type.includes('hallway') || type.includes('corridor')) roomType = 'hallway';
-                else roomType = type;
-
-                roomName = `Room ${roomNumber} (${ficmMatch[1].trim()})`;
-              }
+            // Extract area from various formats: "ASF: 144", "Area: 144", "144 SF", "144 sq ft"
+            const asfMatch = text.match(/(?:ASF|Area|SF):\s*(\d+)/i) ||
+                            text.match(/(\d+)\s*(?:SF|sq\.?\s*ft)/i);
+            if (asfMatch) {
+              area = Math.max(area, parseInt(asfMatch[1]));
             }
 
-            // Update room with extracted data
-            room.name = roomName;
-            room.type = roomType;
+            // Extract room type/department from various formats
+            // "FICM: Office", "Type: Office", "Department: Engineering"
+            const typeMatch = text.match(/(?:FICM|Type|Department|Dept):\s*(.+)/i);
+            if (typeMatch) {
+              const type = typeMatch[1].trim().toLowerCase();
+
+              // Extract just the first line if multi-line
+              const typeFirstLine = type.split(/[\r\n]/)[0].trim();
+
+              if (typeFirstLine.includes('office')) roomType = 'office';
+              else if (typeFirstLine.includes('classroom')) roomType = 'classroom';
+              else if (typeFirstLine.includes('lab')) roomType = 'lab';
+              else if (typeFirstLine.includes('restroom')) roomType = 'restroom';
+              else if (typeFirstLine.includes('mechanical')) roomType = 'mechanical';
+              else if (typeFirstLine.includes('storage') || typeFirstLine.includes('closet')) roomType = 'storage';
+              else if (typeFirstLine.includes('elevator')) roomType = 'elevator';
+              else if (typeFirstLine.includes('hallway') || typeFirstLine.includes('corridor')) roomType = 'hallway';
+              else roomType = typeFirstLine;
+
+              roomName = `Room ${roomNumber} (${typeMatch[1].trim().split(/[\r\n]/)[0]})`;
+            }
+          }
+
+          // Update room with extracted data
+          if (roomNumber) {
             room.number = roomNumber;
+            room.name = roomName || `Room ${roomNumber}`;
+            room.type = roomType;
+
             if (area > 0) {
               room.area = area;
               room.squareFootage = area;
             }
 
             matchedCount++;
-            console.log(`✅ Matched room ${i + 1}: ${roomName}, type: ${roomType}, area: ${area} sq ft (from ${labels.length} labels)`);
+            console.log(`✅ Room ${i + 1}: ${room.name}, type: ${roomType}, area: ${area || room.area || 0} sq ft (from ${matchedLabels.length} labels)`);
+          } else {
+            // No matching label found
+            room.number = `${i + 1}`;
+            room.name = `Room ${i + 1}`;
+            console.log(`⚠️ Room ${i + 1}: No matching label found (layer: ${room.layer})`);
           }
         }
 
-        console.log(`📊 Matched ${matchedCount} rooms with label data`);
+        console.log(`📊 Matched ${matchedCount} out of ${rooms.length} rooms with label data`);
       }
 
     } catch (error) {
