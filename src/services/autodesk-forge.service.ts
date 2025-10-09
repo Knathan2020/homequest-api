@@ -907,6 +907,7 @@ export class AutodeskForgeService {
           const text = label.text || '';
 
           // Extract room number - match "Room XXX" or "Bldg.1, Room 106" format
+          // \s+ handles spaces, tabs, newlines, multiple spaces
           // Accurate for American CAD files, avoids false positives from dimensions/areas
           const roomMatch = text.match(/Room\s+([A-Z0-9]+)/i);
 
@@ -916,6 +917,11 @@ export class AutodeskForgeService {
               labelsByRoomNumber[roomNumber] = [];
             }
             labelsByRoomNumber[roomNumber].push(label);
+          } else {
+            // Debug unmatched labels to see why some rooms aren't found
+            if (text.length < 200 && text.includes('Bldg')) {
+              console.log(`🔍 Unmatched label: "${text.substring(0, 100)}"`);
+            }
           }
         }
 
