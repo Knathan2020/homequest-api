@@ -633,7 +633,7 @@ export class AutodeskForgeService {
           // AutoCAD nests properties under "General" - check both locations
           const generalProps = props.General || {};
           const layer = (generalProps.Layer || props.Layer || '').toUpperCase();
-          const entityType = generalProps.Name || props['Entity Type'] || '';
+          const entityType = generalProps.Name || generalProps['Name '] || props['Entity Type'] || '';
 
           // Debug: Log first wall entity's full properties to see what's available
           if (walls.length === 0 && (layer.includes('WALL') || layer.includes('A-WALL'))) {
@@ -807,9 +807,11 @@ export class AutodeskForgeService {
           }
 
           // Extract text entities (room labels, dimensions, notes)
-          // Check text layers or text entity types
-          const isTextEntity = isTextLayer || entityType === 'AcDbText' || entityType === 'AcDbMText' ||
-                              entityType === 'Text' || entityType === 'MText';
+          // Check text layers or text entity types - EXCLUDE Block References (icons)
+          const isBlockReference = entityType === 'Block Reference' || entityType === 'AcDbBlockReference' ||
+                                  (generalProps['Name '] && generalProps['Name '].includes('Block Reference'));
+          const isTextEntity = !isBlockReference && (isTextLayer || entityType === 'AcDbText' || entityType === 'AcDbMText' ||
+                              entityType === 'Text' || entityType === 'MText');
 
           // Debug: Log first item on a text layer to see structure
           if (textLabels.length === 0 && isTextLayer) {
