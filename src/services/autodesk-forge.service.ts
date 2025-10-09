@@ -906,10 +906,9 @@ export class AutodeskForgeService {
         for (const label of textLabels) {
           const text = label.text || '';
 
-          // Extract room number - flexible pattern matching
-          // Supports: "Room 106", "Rm 106", "Space 106", "Bldg.1, Room 106", just "106" (standalone)
-          const roomMatch = text.match(/(?:Room|Rm|Space)\s+([A-Z0-9]+)/i) ||
-                           text.match(/\b([A-Z]?\d{2,4}[A-Z]?)\b/); // Fallback: 2-4 digit number with optional letter
+          // Extract room number - match "Room XXX" or "Bldg.1, Room 106" format
+          // Accurate for American CAD files, avoids false positives from dimensions/areas
+          const roomMatch = text.match(/Room\s+([A-Z0-9]+)/i);
 
           if (roomMatch) {
             const roomNumber = roomMatch[1].toUpperCase();
