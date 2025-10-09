@@ -684,10 +684,13 @@ export class AutodeskForgeService {
                 { x: positionX, y: positionY, z: positionZ } : null
             });
           } else if (isRoomLayer || category.includes('room') || category.includes('space')) {
-            const roomName = item.name || props.Name || generalProps.Name || 'Unnamed Room';
+            // Skip text entities - they're labels, not rooms
+            const itemName = item.name || props.Name || generalProps.Name || '';
+            const isTextEntity = entityType === 'AcDbText' || entityType === 'AcDbMText' ||
+                                entityType === 'Text' || entityType === 'MText' ||
+                                itemName.includes('Text [') || itemName.includes('MText [');
 
-            // Skip "Solid [xxxxx]" CAD entities
-            if (/^Solid\s*\[/i.test(roomName)) {
+            if (isTextEntity) {
               continue;
             }
 
@@ -696,7 +699,7 @@ export class AutodeskForgeService {
 
             rooms.push({
               id: item.objectid,
-              name: roomName,
+              name: itemName || 'Unnamed Room',
               area,
               squareFootage: area,
               perimeter: props.Perimeter || generalProps.Perimeter || 0,
