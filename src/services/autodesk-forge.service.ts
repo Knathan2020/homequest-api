@@ -835,7 +835,7 @@ export class AutodeskForgeService {
           // Check if this looks like a room label (contains letters and maybe numbers/SF)
           const looksLikeRoomText = textString && typeof textString === 'string' &&
                                    /[A-Za-z]{2,}/.test(textString) && // At least 2 letters
-                                   textString.length > 2 && textString.length < 100;
+                                   textString.length > 2 && textString.length < 500;
 
           if (isTextEntity && looksLikeRoomText) {
             // Text position can be in General props, Geometry section, or Text section
