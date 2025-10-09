@@ -683,7 +683,7 @@ export class AutodeskForgeService {
               position: (positionX !== undefined && positionY !== undefined) ?
                 { x: positionX, y: positionY, z: positionZ } : null
             });
-          } else if (isRoomLayer || category.includes('room') || category.includes('space')) {
+          } else if (isRoomLayer || hasRoomProperties || category.includes('room') || category.includes('space')) {
             // Skip text entities - they're labels, not rooms
             const itemName = item.name || props.Name || generalProps.Name || '';
             const isTextEntity = entityType === 'AcDbText' || entityType === 'AcDbMText' ||
@@ -694,20 +694,36 @@ export class AutodeskForgeService {
               continue;
             }
 
+            // Extract room properties
             const area = props.Area || generalProps.Area || 0;
+            const perimeter = props.Perimeter || generalProps.Perimeter || 0;
+            const volume = props.Volume || generalProps.Volume || 0;
+
+            // Only skip if matched by properties (not layer) AND has no properties
+            if (!isRoomLayer && hasRoomProperties && area === 0 && perimeter === 0) {
+              continue;
+            }
+
             totalArea += area;
+
+            // Extract position coordinates
+            const positionX = generalProps['Position X'] || props['Position X'] || generalProps.PositionX || props.PositionX;
+            const positionY = generalProps['Position Y'] || props['Position Y'] || generalProps.PositionY || props.PositionY;
+            const positionZ = generalProps['Position Z'] || props['Position Z'] || generalProps.PositionZ || props.PositionZ || 0;
 
             rooms.push({
               id: item.objectid,
-              name: itemName || 'Unnamed Room',
+              name: item.name || props.Name || generalProps.Name || 'Unnamed Room',
               area,
               squareFootage: area,
-              perimeter: props.Perimeter || generalProps.Perimeter || 0,
-              volume: props.Volume || generalProps.Volume || 0,
+              perimeter,
+              volume,
               level: props.Level || generalProps.Level || 'Ground Floor',
               number: props.Number || props['Room Number'] || generalProps.Number || '',
               type: props['Room Type'] || generalProps['Room Type'] || 'general',
-              layer: layer
+              layer: layer,
+              position: (positionX !== undefined && positionY !== undefined) ?
+                { x: positionX, y: positionY, z: positionZ } : null
             });
           }
 
