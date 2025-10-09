@@ -527,7 +527,7 @@ export class AutodeskForgeService {
       // Handle undefined/null properties
       if (!properties) {
         console.warn('⚠️ Properties is null/undefined');
-        return { walls, doors, windows, stairs, rooms, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
+        return { walls, doors, windows, stairs, rooms, textLabels, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
       }
 
       // Check if collection exists directly or nested
@@ -537,13 +537,13 @@ export class AutodeskForgeService {
       if (!collection) {
         console.warn('⚠️ No collection found in properties. Keys:', Object.keys(properties));
         console.warn('📋 Full properties object:', JSON.stringify(properties).substring(0, 500));
-        return { walls, doors, windows, stairs, rooms, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
+        return { walls, doors, windows, stairs, rooms, textLabels, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
       }
 
       // If result is "Accepted" (202 status), properties are still being generated
       if (collection === 'Accepted' || typeof collection === 'string') {
         console.warn('⚠️ Properties still being generated (202 Accepted). Retry in a few seconds.');
-        return { walls, doors, windows, stairs, rooms, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
+        return { walls, doors, windows, stairs, rooms, textLabels, measurements: { totalArea: 0, totalRooms: 0, totalWalls: 0, totalDoors: 0, totalWindows: 0, totalStairs: 0 } };
       }
 
       if (collection) {
@@ -556,6 +556,74 @@ export class AutodeskForgeService {
 
         // Track unique layers
         const layersFound = new Set<string>();
+
+        // FIRST PASS: Detect all room layers and count geometry vs text entities
+        const allRoomLayers = new Set<string>();
+        const layerGeometryCounts: { [key: string]: number } = {};
+
+        for (const item of collection) {
+          const props = item.properties || {};
+          const generalProps = props.General || {};
+          const layer = (generalProps.Layer || props.Layer || '').toUpperCase();
+          const entityType = generalProps.Name || props['Entity Type'] || '';
+
+          if (layer && /ROOM|SPACE/i.test(layer) && !/TEXT|IDEN|RNUM|LABEL/i.test(layer)) {
+            allRoomLayers.add(layer);
+
+            // Count non-text entities (actual geometry)
+            const itemName = item.name || '';
+            const isTextEntity = entityType === 'AcDbText' || entityType === 'AcDbMText' ||
+                                entityType === 'Text' || entityType === 'MText' ||
+                                itemName.includes('Text [') || itemName.includes('MText [');
+
+            if (!isTextEntity) {
+              layerGeometryCounts[layer] = (layerGeometryCounts[layer] || 0) + 1;
+            }
+          }
+        }
+
+        // Determine authoritative room layer(s) to extract from
+        let authoritativeRoomLayers: string[] = [];
+
+        if (allRoomLayers.size > 0) {
+          const roomLayerArray = Array.from(allRoomLayers);
+
+          // Check if there are multiple layers with the same prefix (e.g., ROOMS-COLLEGE-COLOR, ROOMS-DIVISION-COLOR)
+          const prefixGroups: { [key: string]: string[] } = {};
+          for (const layer of roomLayerArray) {
+            // Extract prefix before first dash/underscore or full layer if no separator
+            const prefix = layer.split(/[-_]/)[0];
+            if (!prefixGroups[prefix]) prefixGroups[prefix] = [];
+            prefixGroups[prefix].push(layer);
+          }
+
+          // If we have duplicate prefixes (e.g., multiple ROOMS-* layers), pick the one with most geometry
+          const hasDuplicatePrefixes = Object.values(prefixGroups).some(group => group.length > 1);
+
+          if (hasDuplicatePrefixes) {
+            console.log('🔍 Multiple room layers detected, selecting layer with most geometry...');
+            console.log('   All room layers:', roomLayerArray);
+            console.log('   Geometry counts:', layerGeometryCounts);
+
+            // Sort by geometry count (descending)
+            const sortedByGeometry = roomLayerArray
+              .filter(layer => (layerGeometryCounts[layer] || 0) > 0) // Only layers with geometry
+              .sort((a, b) => (layerGeometryCounts[b] || 0) - (layerGeometryCounts[a] || 0));
+
+            if (sortedByGeometry.length > 0) {
+              authoritativeRoomLayers = [sortedByGeometry[0]];
+              console.log(`✅ Selected layer with most geometry: ${authoritativeRoomLayers[0]} (${layerGeometryCounts[authoritativeRoomLayers[0]]} entities)`);
+            } else {
+              // Fallback: pick first alphabetically if no geometry found
+              authoritativeRoomLayers = [roomLayerArray.sort()[0]];
+              console.log(`⚠️ No geometry found, using first layer: ${authoritativeRoomLayers[0]}`);
+            }
+          } else {
+            // No duplicates, use all room layers
+            authoritativeRoomLayers = roomLayerArray;
+            console.log(`✅ Using all ${authoritativeRoomLayers.length} room layer(s):`, authoritativeRoomLayers);
+          }
+        }
 
         for (const item of collection) {
           const props = item.properties || {};
@@ -584,8 +652,19 @@ export class AutodeskForgeService {
           const isDoorLayer = /DOOR|PORTE|PUERTA|TÜR/i.test(layer);
           const isWindowLayer = /WINDOW|WIND|FENÊTRE|VENTANA|FENSTER/i.test(layer);
           const isStairLayer = /STAIR|STRS|ESCALIER|ESCALERA|TREPPE|FLOR/i.test(layer);
-          const isRoomLayer = /ROOM|AREA|SPACE/i.test(layer);
           const isTextLayer = /TEXT|IDEN|RNUM|LABEL/i.test(layer);
+          // Only extract from authoritative room layer(s) determined in first pass
+          const isRoomLayer = !isTextLayer && authoritativeRoomLayers.includes(layer);
+
+          // Universal property-based classification (fallback when layer names don't match)
+          const hasRoomProperties = (props.Area > 0 || generalProps.Area > 0) &&
+                                   (props.Perimeter > 0 || generalProps.Perimeter > 0);
+          const hasWallProperties = (props.Length > 0 || generalProps.Length > 0) &&
+                                   (props.Height > 0 || generalProps.Height > 0 || generalProps.Thickness > 0);
+          const hasDoorProperties = (props.Width > 0 || generalProps.Width > 0) &&
+                                   (props.Height > 0 || generalProps.Height > 0);
+          const hasStairProperties = (props['Number of Risers'] || props['Actual Number of Risers'] ||
+                                     generalProps['Number of Risers']);
 
           // Classify elements (check Layer first for AutoCAD, then Category for Revit)
           if (isWallLayer || category.includes('wall') || name.includes('wall') || entityType === 'AcDbLine' || entityType === 'AcDbPolyline') {
@@ -804,6 +883,86 @@ export class AutodeskForgeService {
       }
 
       console.log(`📊 Extracted: ${walls.length} walls, ${doors.length} doors, ${windows.length} windows, ${stairs.length} stairs, ${rooms.length} rooms, ${textLabels.length} text labels`);
+
+      // Match text labels to rooms by room number (positions are all 0,0 for text entities)
+      if (textLabels.length > 0) {
+        console.log(`📍 Matching ${textLabels.length} text labels to ${rooms.length} rooms by room number...`);
+
+        // Group labels by room number
+        const labelsByRoomNumber: { [key: string]: any[] } = {};
+
+        for (const label of textLabels) {
+          // Extract room number from labels like "Bldg.1, Room 126A" or "Room 109A"
+          const roomMatch = label.text?.match(/Room\s+([A-Z0-9]+)/i);
+          if (roomMatch) {
+            const roomNumber = roomMatch[1].toUpperCase();
+            if (!labelsByRoomNumber[roomNumber]) {
+              labelsByRoomNumber[roomNumber] = [];
+            }
+            labelsByRoomNumber[roomNumber].push(label);
+          }
+        }
+
+        console.log(`📊 Found ${Object.keys(labelsByRoomNumber).length} unique room numbers in labels`);
+
+        // Assign label data to rooms
+        let matchedCount = 0;
+        for (let i = 0; i < rooms.length; i++) {
+          const room = rooms[i];
+          const roomNumbers = Object.keys(labelsByRoomNumber);
+
+          if (i < roomNumbers.length) {
+            const roomNumber = roomNumbers[i];
+            const labels = labelsByRoomNumber[roomNumber];
+
+            // Extract room info from labels
+            let roomName = `Room ${roomNumber}`;
+            let roomType = 'room';
+            let area = 0;
+
+            for (const label of labels) {
+              const text = label.text || '';
+
+              // Extract area from "ASF: 144" or "ASF:144"
+              const asfMatch = text.match(/ASF:\s*(\d+)/i);
+              if (asfMatch) {
+                area = Math.max(area, parseInt(asfMatch[1]));
+              }
+
+              // Extract room type from "FICM: Staff Office" or similar
+              const ficmMatch = text.match(/FICM:\s*(.+)/i);
+              if (ficmMatch) {
+                const type = ficmMatch[1].trim().toLowerCase();
+                if (type.includes('office')) roomType = 'office';
+                else if (type.includes('classroom')) roomType = 'classroom';
+                else if (type.includes('lab')) roomType = 'lab';
+                else if (type.includes('restroom')) roomType = 'restroom';
+                else if (type.includes('mechanical')) roomType = 'mechanical';
+                else if (type.includes('storage') || type.includes('closet')) roomType = 'storage';
+                else if (type.includes('elevator')) roomType = 'elevator';
+                else if (type.includes('hallway') || type.includes('corridor')) roomType = 'hallway';
+                else roomType = type;
+
+                roomName = `Room ${roomNumber} (${ficmMatch[1].trim()})`;
+              }
+            }
+
+            // Update room with extracted data
+            room.name = roomName;
+            room.type = roomType;
+            room.number = roomNumber;
+            if (area > 0) {
+              room.area = area;
+              room.squareFootage = area;
+            }
+
+            matchedCount++;
+            console.log(`✅ Matched room ${i + 1}: ${roomName}, type: ${roomType}, area: ${area} sq ft (from ${labels.length} labels)`);
+          }
+        }
+
+        console.log(`📊 Matched ${matchedCount} rooms with label data`);
+      }
 
     } catch (error) {
       console.warn('⚠️ Error extracting floorplan data:', error);
