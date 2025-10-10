@@ -4,6 +4,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs/promises';
 import { createClient } from '@supabase/supabase-js';
+import { fromPath } from 'pdf2pic';
 
 // Initialize Supabase
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -49,6 +50,7 @@ const upload = multer({
 /**
  * POST /api/selections/upload
  * Upload selections document files (supports multiple files)
+ * Converts PDFs to images for GPT Vision processing
  */
 router.post('/upload', upload.array('files', 10), async (req: Request, res: Response) => {
   try {
@@ -67,24 +69,79 @@ router.post('/upload', upload.array('files', 10), async (req: Request, res: Resp
     // Generate file URLs
     const file_urls = files.map(file => `/uploads/selections/${file.filename}`);
 
-    // Convert files to base64 images for frontend processing
-    const images = await Promise.all(files.map(async (file) => {
-      const filePath = file.path;
-      const buffer = await fs.readFile(filePath);
-      const base64Data = buffer.toString('base64');
+    // Convert files to images (PDFs -> images, images -> base64)
+    const allImages: any[] = [];
 
-      return {
-        filename: file.originalname,
-        mimeType: file.mimetype,
-        base64Data
-      };
-    }));
+    for (const file of files) {
+      const filePath = file.path;
+
+      // Check if file is a PDF
+      if (file.mimetype === 'application/pdf') {
+        console.log(`Converting PDF to images: ${file.originalname}`);
+
+        // Convert PDF to images using pdf2pic
+        const options = {
+          density: 200,           // DPI
+          saveFilename: uuidv4(),
+          savePath: path.join(__dirname, '../../uploads/selections/temp'),
+          format: 'png',
+          width: 2000,            // Max width
+          height: 2000            // Max height
+        };
+
+        // Ensure temp directory exists
+        await fs.mkdir(options.savePath, { recursive: true });
+
+        const converter = fromPath(filePath, options);
+
+        // Convert all pages (up to 10)
+        const maxPages = 10;
+        for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+          try {
+            const result = await converter(pageNum, { responseType: 'image' });
+
+            if (result && result.path) {
+              // Read the converted image
+              const imageBuffer = await fs.readFile(result.path);
+              const base64Data = imageBuffer.toString('base64');
+
+              allImages.push({
+                filename: `${file.originalname} - Page ${pageNum}`,
+                mimeType: 'image/png',
+                base64Data
+              });
+
+              // Clean up temp file
+              await fs.unlink(result.path).catch(() => {});
+            }
+          } catch (err) {
+            // No more pages
+            break;
+          }
+        }
+
+        console.log(`✅ Converted PDF to ${allImages.length} images`);
+      } else if (file.mimetype.startsWith('image/')) {
+        // For image files, just convert to base64
+        const buffer = await fs.readFile(filePath);
+        const base64Data = buffer.toString('base64');
+
+        allImages.push({
+          filename: file.originalname,
+          mimeType: file.mimetype,
+          base64Data
+        });
+      } else {
+        // Skip unsupported file types
+        console.warn(`Unsupported file type: ${file.mimetype}`);
+      }
+    }
 
     res.json({
       success: true,
       file_urls,
-      images,
-      total_images: images.length
+      images: allImages,
+      total_images: allImages.length
     });
 
   } catch (error) {
