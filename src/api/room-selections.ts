@@ -4,7 +4,8 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs/promises';
 import { createClient } from '@supabase/supabase-js';
-import { fromPath } from 'pdf2pic';
+import * as pdfjs from 'pdfjs-dist';
+import { Canvas, createCanvas } from 'canvas';
 
 // Initialize Supabase
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -79,48 +80,52 @@ router.post('/upload', upload.array('files', 10), async (req: Request, res: Resp
       if (file.mimetype === 'application/pdf') {
         console.log(`Converting PDF to images: ${file.originalname}`);
 
-        // Convert PDF to images using pdf2pic
-        const options = {
-          density: 200,           // DPI
-          saveFilename: uuidv4(),
-          savePath: path.join(__dirname, '../../uploads/selections/temp'),
-          format: 'png',
-          width: 2000,            // Max width
-          height: 2000            // Max height
-        };
+        try {
+          // Read PDF file
+          const pdfBuffer = await fs.readFile(filePath);
+          const pdfData = new Uint8Array(pdfBuffer);
 
-        // Ensure temp directory exists
-        await fs.mkdir(options.savePath, { recursive: true });
+          // Load PDF document
+          const loadingTask = pdfjs.getDocument({
+            data: pdfData,
+            useSystemFonts: true,
+          });
 
-        const converter = fromPath(filePath, options);
+          const pdfDoc = await loadingTask.promise;
+          const numPages = Math.min(pdfDoc.numPages, 10); // Max 10 pages
 
-        // Convert all pages (up to 10)
-        const maxPages = 10;
-        for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-          try {
-            const result = await converter(pageNum, { responseType: 'image' });
+          console.log(`PDF has ${pdfDoc.numPages} pages, converting first ${numPages}`);
 
-            if (result && result.path) {
-              // Read the converted image
-              const imageBuffer = await fs.readFile(result.path);
-              const base64Data = imageBuffer.toString('base64');
+          // Convert each page to image
+          for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+            const page = await pdfDoc.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for better quality
 
-              allImages.push({
-                filename: `${file.originalname} - Page ${pageNum}`,
-                mimeType: 'image/png',
-                base64Data
-              });
+            // Create canvas
+            const canvas = createCanvas(viewport.width, viewport.height);
+            const context = canvas.getContext('2d');
 
-              // Clean up temp file
-              await fs.unlink(result.path).catch(() => {});
-            }
-          } catch (err) {
-            // No more pages
-            break;
+            // Render PDF page to canvas
+            await page.render({
+              canvasContext: context as any,
+              viewport: viewport,
+            }).promise;
+
+            // Convert canvas to base64 PNG
+            const base64Data = canvas.toBuffer('image/png').toString('base64');
+
+            allImages.push({
+              filename: `${file.originalname} - Page ${pageNum}`,
+              mimeType: 'image/png',
+              base64Data
+            });
           }
-        }
 
-        console.log(`✅ Converted PDF to ${allImages.length} images`);
+          console.log(`✅ Converted PDF to ${allImages.length} images`);
+        } catch (pdfError) {
+          console.error(`Error converting PDF ${file.originalname}:`, pdfError);
+          throw new Error(`Failed to convert PDF: ${pdfError.message}`);
+        }
       } else if (file.mimetype.startsWith('image/')) {
         // For image files, just convert to base64
         const buffer = await fs.readFile(filePath);
