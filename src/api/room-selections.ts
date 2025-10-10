@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs/promises';
 import { createClient } from '@supabase/supabase-js';
 import * as pdfjs from 'pdfjs-dist';
-import { Canvas, createCanvas } from 'canvas';
+import { createCanvas } from 'canvas';
 
 // Initialize Supabase
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -109,6 +109,7 @@ router.post('/upload', upload.array('files', 10), async (req: Request, res: Resp
             await page.render({
               canvasContext: context as any,
               viewport: viewport,
+              canvas: canvas as any,
             }).promise;
 
             // Convert canvas to base64 PNG
