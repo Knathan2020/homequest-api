@@ -29,23 +29,33 @@ const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
-    if (allowedTypes.includes(file.mimetype)) {
+    const allowedTypes = [
+      'application/pdf',
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document' // .docx
+    ];
+    const isValidType = allowedTypes.includes(file.mimetype) || file.originalname.endsWith('.docx');
+
+    if (isValidType) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only PDF and images are allowed.'));
+      cb(new Error('Invalid file type. Only PDF, Word documents (.docx), and images are allowed.'));
     }
   }
 });
 
 /**
  * POST /api/selections/upload
- * Upload a selections document file
+ * Upload selections document files (supports multiple files)
  */
-router.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/upload', upload.array('files', 10), async (req: Request, res: Response) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
     }
 
     const { project_id, floor_plan_id } = req.body;
@@ -54,20 +64,32 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       return res.status(400).json({ error: 'project_id is required' });
     }
 
-    // Generate file URL
-    const file_url = `/uploads/selections/${req.file.filename}`;
+    // Generate file URLs
+    const file_urls = files.map(file => `/uploads/selections/${file.filename}`);
+
+    // Convert files to base64 images for frontend processing
+    const images = await Promise.all(files.map(async (file) => {
+      const filePath = file.path;
+      const buffer = await fs.readFile(filePath);
+      const base64Data = buffer.toString('base64');
+
+      return {
+        filename: file.originalname,
+        mimeType: file.mimetype,
+        base64Data
+      };
+    }));
 
     res.json({
       success: true,
-      file_url,
-      file_name: req.file.originalname,
-      file_size: req.file.size,
-      mime_type: req.file.mimetype
+      file_urls,
+      images,
+      total_images: images.length
     });
 
   } catch (error) {
-    console.error('Error uploading file:', error);
-    res.status(500).json({ error: 'Failed to upload file', details: error.message });
+    console.error('Error uploading files:', error);
+    res.status(500).json({ error: 'Failed to upload files', details: error.message });
   }
 });
 
