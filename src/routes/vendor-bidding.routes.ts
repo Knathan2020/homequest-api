@@ -1210,17 +1210,50 @@ router.post('/send-rfq', async (req, res) => {
       }
     }
     
-    // In real app, would save to database:
-    // - Create RFQ record
-    // - Create line items
-    // - Send actual emails with templates
-    
+    // Save line items to database if Supabase is available
+    if (supabase && lineItems && lineItems.length > 0) {
+      try {
+        // First, delete existing line items for this project to avoid duplicates
+        await supabase
+          .from('project_line_items')
+          .delete()
+          .eq('project_id', projectId);
+
+        // Prepare line items for insertion
+        const lineItemsToInsert = lineItems.map(item => ({
+          project_id: projectId,
+          category: item.category,
+          name: item.name,
+          description: item.description || '',
+          quantity: item.quantity || 1,
+          unit: item.unit || 'unit',
+          estimated_cost: item.estimated_cost || 0,
+          trade_type: item.trade_type || item.category,
+          created_at: new Date().toISOString()
+        }));
+
+        const { data: insertedItems, error: lineItemsError } = await supabase
+          .from('project_line_items')
+          .insert(lineItemsToInsert)
+          .select();
+
+        if (lineItemsError) {
+          console.error('❌ Error saving line items:', lineItemsError);
+        } else {
+          console.log(`✅ Saved ${insertedItems.length} line items for project ${projectId}`);
+        }
+      } catch (dbError) {
+        console.error('❌ Database error saving line items:', dbError);
+      }
+    }
+
     res.json({
       success: true,
       message: `RFQ sent successfully to ${vendorEmails?.length || 0} vendors`,
       rfqId,
       projectId,
       lineItemsCount: lineItems?.length || 0,
+      lineItemsSaved: lineItems?.length || 0,
       emailResults,
       biddingDeadline: deadline,
       biddingPortalUrl: biddingLink
