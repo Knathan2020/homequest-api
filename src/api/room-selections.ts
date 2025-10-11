@@ -3,14 +3,12 @@ import multer from 'multer';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs/promises';
-import { createClient } from '@supabase/supabase-js';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { createCanvas } from 'canvas';
+import { supabase, supabaseAdmin } from '../config/supabase';
 
-// Initialize Supabase
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+// Use admin client for server-side operations
+const supabaseClient = supabaseAdmin || supabase;
 
 const router = express.Router();
 
@@ -162,7 +160,7 @@ router.post('/upload', upload.array('files', 10), async (req: Request, res: Resp
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    if (!supabase) {
+    if (!supabaseClient) {
       return res.status(500).json({ error: 'Database not configured' });
     }
 
@@ -187,7 +185,7 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('room_selections')
       .insert({
         floor_plan_id: floor_plan_id || null,
@@ -225,13 +223,13 @@ router.post('/', async (req: Request, res: Response) => {
  */
 router.get('/project/:projectId', async (req: Request, res: Response) => {
   try {
-    if (!supabase) {
+    if (!supabaseClient) {
       return res.status(500).json({ error: 'Database not configured' });
     }
 
     const { projectId } = req.params;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('room_selections')
       .select('*')
       .eq('project_id', projectId)
@@ -256,13 +254,13 @@ router.get('/project/:projectId', async (req: Request, res: Response) => {
  */
 router.get('/floor-plan/:floorPlanId', async (req: Request, res: Response) => {
   try {
-    if (!supabase) {
+    if (!supabaseClient) {
       return res.status(500).json({ error: 'Database not configured' });
     }
 
     const { floorPlanId } = req.params;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('room_selections')
       .select('*')
       .eq('floor_plan_id', floorPlanId)
@@ -287,13 +285,13 @@ router.get('/floor-plan/:floorPlanId', async (req: Request, res: Response) => {
  */
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    if (!supabase) {
+    if (!supabaseClient) {
       return res.status(500).json({ error: 'Database not configured' });
     }
 
     const { id } = req.params;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('room_selections')
       .select('*')
       .eq('id', id)
@@ -323,7 +321,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    if (!supabase) {
+    if (!supabaseClient) {
       return res.status(500).json({ error: 'Database not configured' });
     }
 
@@ -351,7 +349,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'No fields to update' });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('room_selections')
       .update(updateObj)
       .eq('id', id)
@@ -382,14 +380,14 @@ router.put('/:id', async (req: Request, res: Response) => {
  */
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    if (!supabase) {
+    if (!supabaseClient) {
       return res.status(500).json({ error: 'Database not configured' });
     }
 
     const { id } = req.params;
 
     // Get the file URL before deleting
-    const { data: selection, error: selectError } = await supabase
+    const { data: selection, error: selectError } = await supabaseClient
       .from('room_selections')
       .select('document_url')
       .eq('id', id)
@@ -403,7 +401,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     }
 
     // Delete from database
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await supabaseClient
       .from('room_selections')
       .delete()
       .eq('id', id);
