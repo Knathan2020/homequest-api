@@ -9,6 +9,7 @@ import * as nodemailer from 'nodemailer';
 import OpenAI from 'openai';
 import { fromPath } from 'pdf2pic';
 import pdfParse from 'pdf-parse';
+import { Resend } from 'resend';
 
 const router = express.Router();
 
@@ -36,6 +37,10 @@ if (supabaseUrl && (supabaseServiceKey || supabaseAnonKey)) {
     anonKey: !!supabaseAnonKey
   });
 }
+
+// Initialize Resend for email notifications
+const resend = new Resend(process.env.RESEND_API_KEY);
+const fromEmail = process.env.RESEND_FROM_EMAIL || 'HomeQuest Tech <noreply@homequesttech.com>';
 
 // Default line items for estimates (comprehensive construction scope)
 const defaultLineItems = [
@@ -1714,6 +1719,35 @@ router.get('/projects/:projectId/line-items', async (req, res) => {
   }
 });
 
+// Vendor file upload endpoint
+router.post('/vendor/upload-files', upload.array('files', 10), async (req, res) => {
+  try {
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    const uploadedFiles = files.map(file => ({
+      name: file.originalname,
+      size: file.size,
+      type: file.mimetype,
+      path: file.path,
+      url: `/uploads/${path.relative('uploads', file.path)}`
+    }));
+
+    console.log(`✅ Uploaded ${files.length} vendor files`);
+
+    res.json({
+      success: true,
+      files: uploadedFiles
+    });
+  } catch (error) {
+    console.error('Error uploading vendor files:', error);
+    res.status(500).json({ error: 'Failed to upload files' });
+  }
+});
+
 // Submit vendor bid (called from VendorBiddingPage)
 router.post('/vendor/submit-bid', async (req, res) => {
   try {
@@ -1867,6 +1901,153 @@ router.post('/vendor/submit-bid', async (req, res) => {
     existingBids.push(formattedBid);
     inMemoryBids.set(project_id, existingBids);
     console.log(`💾 Stored bid in memory for project ${project_id}. Total bids: ${existingBids.length}`);
+
+    // Send email notification to builder with attachments
+    try {
+      //Get builder email from project
+      let builderEmail = null;
+      if (supabase) {
+        const { data: projectData } = await supabase
+          .from('projects')
+          .select('created_by, user_id')
+          .eq('id', project_id)
+          .single();
+
+        if (projectData) {
+          const userId = projectData.user_id || projectData.created_by;
+          if (userId) {
+            const { data: userData } = await supabase
+              .from('users')
+              .select('email')
+              .eq('id', userId)
+              .single();
+
+            builderEmail = userData?.email;
+          }
+        }
+      }
+
+      if (builderEmail && resend) {
+        // Prepare email attachments from uploaded files
+        const attachments = [];
+        if (uploaded_files && Array.isArray(uploaded_files)) {
+          for (const file of uploaded_files) {
+            if (file.path && fs.existsSync(file.path)) {
+              const fileContent = await fsPromises.readFile(file.path);
+              attachments.push({
+                filename: file.name,
+                content: fileContent
+              });
+            }
+          }
+        }
+
+        // Format line items for email
+        const lineItemsHtml = line_item_bids
+          ?.filter((bid: any) => bid.can_perform)
+          .map((bid: any) => `
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd;">${bid.line_item_name || bid.line_item_id}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">$${(bid.bid_amount || 0).toLocaleString()}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${bid.timeline_days || 0} days</td>
+            </tr>
+          `).join('') || '<tr><td colspan="3">No line items</td></tr>';
+
+        const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background-color: #2563eb; color: white; padding: 20px; text-align: center; }
+    .content { background-color: #f9fafb; padding: 20px; }
+    .section { background-color: white; padding: 15px; margin: 15px 0; border-radius: 8px; border: 1px solid #e5e7eb; }
+    .section h3 { margin-top: 0; color: #2563eb; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+    th { background-color: #f3f4f6; padding: 8px; border: 1px solid #ddd; text-align: left; }
+    .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }
+    .badge { display: inline-block; padding: 4px 12px; background-color: #10b981; color: white; border-radius: 12px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎉 New Vendor Bid Received!</h1>
+    </div>
+
+    <div class="content">
+      <div class="section">
+        <h3>Vendor Information</h3>
+        <p><strong>Company:</strong> ${vendor_info?.company_name || 'N/A'}</p>
+        <p><strong>Contact:</strong> ${vendor_info?.contact_name || 'N/A'}</p>
+        <p><strong>Email:</strong> ${vendor_info?.email || 'N/A'}</p>
+        <p><strong>Phone:</strong> ${vendor_info?.phone || 'N/A'}</p>
+        <p><strong>License:</strong> ${vendor_info?.license_number || 'N/A'}</p>
+        <p><strong>Insurance:</strong> ${vendor_info?.insurance_amount || 'N/A'}</p>
+      </div>
+
+      <div class="section">
+        <h3>Bid Summary</h3>
+        <p><strong>Total Bid Amount:</strong> <span class="badge">$${(total_bid_amount || 0).toLocaleString()}</span></p>
+        <p><strong>Line Items Selected:</strong> ${line_item_bids?.filter((b: any) => b.can_perform).length || 0} items</p>
+        <p><strong>Submitted:</strong> ${new Date(submitted_at || Date.now()).toLocaleString()}</p>
+      </div>
+
+      <div class="section">
+        <h3>Line Items</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Bid Amount</th>
+              <th>Timeline</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lineItemsHtml}
+          </tbody>
+        </table>
+      </div>
+
+      ${general_notes ? `
+      <div class="section">
+        <h3>Vendor Notes</h3>
+        <p>${general_notes}</p>
+      </div>
+      ` : ''}
+
+      <div class="section">
+        <h3>📎 Attachments</h3>
+        <p>${attachments.length > 0 ? `${attachments.length} file(s) attached (COI, bid documents, etc.)` : 'No files attached'}</p>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>HomeQuest Tech - Construction Management Platform</p>
+      <p>This email was automatically generated from a vendor bid submission.</p>
+    </div>
+  </div>
+</body>
+</html>
+        `;
+
+        await resend.emails.send({
+          from: fromEmail,
+          to: builderEmail,
+          subject: `New Bid from ${vendor_info?.company_name || 'Vendor'} - $${(total_bid_amount || 0).toLocaleString()}`,
+          html: emailHtml,
+          attachments: attachments.length > 0 ? attachments : undefined
+        });
+
+        console.log(`✅ Sent bid notification email to builder: ${builderEmail}`);
+      } else {
+        console.log('⚠️ No builder email found or Resend not configured - skipping email notification');
+      }
+    } catch (emailError) {
+      console.error('❌ Error sending builder notification email:', emailError);
+      // Don't fail the request if email fails
+    }
 
     res.json(bidResponse);
     
