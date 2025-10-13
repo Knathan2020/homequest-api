@@ -2111,12 +2111,25 @@ router.get('/projects/:projectId/bids', async (req, res) => {
         }
         
         console.log(`📋 Found ${projectBids.length} bids in memory for project ${projectId}`);
-        // Add project_id to each bid to ensure proper isolation
-        const bidsWithProjectId = projectBids.map(bid => ({
-          ...bid,
-          project_id: projectId
+
+        // Transform in-memory format to match frontend expectations
+        const transformedBids = projectBids.map((bid: any) => ({
+          id: bid.id,
+          project_id: projectId,
+          vendor: {
+            company_name: bid.vendor_company || 'Unknown Company',
+            contact_name: bid.vendor_name || 'Unknown',
+            email: bid.vendor_email || '',
+            phone: bid.vendor_phone || ''
+          },
+          line_items: bid.line_item_bids || [],
+          total_amount: bid.total_bid_amount || 0,
+          status: bid.status || 'submitted',
+          submitted_at: bid.submitted_at,
+          general_notes: bid.general_notes || ''
         }));
-        return res.json(bidsWithProjectId);
+
+        return res.json(transformedBids);
       }
       console.log('📊 Database error, returning empty bid list:', rfqError);
       return res.json([]);
@@ -2195,11 +2208,25 @@ router.get('/projects/:projectId/bids', async (req, res) => {
     try {
       const projectBids = getProjectBids(projectId);
       console.log(`📋 Returning ${projectBids.length} bids from memory for project ${projectId}`);
-      const bidsWithProjectId = projectBids.map((bid: any) => ({
-        ...bid,
-        project_id: projectId
+
+      // Transform in-memory format to match frontend expectations
+      const transformedBids = projectBids.map((bid: any) => ({
+        id: bid.id,
+        project_id: projectId,
+        vendor: {
+          company_name: bid.vendor_company || 'Unknown Company',
+          contact_name: bid.vendor_name || 'Unknown',
+          email: bid.vendor_email || '',
+          phone: bid.vendor_phone || ''
+        },
+        line_items: bid.line_item_bids || [],
+        total_amount: bid.total_bid_amount || 0,
+        status: bid.status || 'submitted',
+        submitted_at: bid.submitted_at,
+        general_notes: bid.general_notes || ''
       }));
-      return res.json(bidsWithProjectId);
+
+      return res.json(transformedBids);
     } catch (memError) {
       console.error('Error accessing in-memory storage:', memError);
       return res.json([]);
