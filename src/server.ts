@@ -521,21 +521,8 @@ app.post('/api/attachments/process', async (req, res) => {
 });
 
 // ============= VENDOR BIDDING API =============
-app.get('/api/vendor-bidding/projects/:projectId/bidding-details', async (req, res) => {
-  try {
-    const { data: details, error } = await supabase
-      .from('vendor_bids')
-      .select('*')
-      .eq('project_id', req.params.projectId);
-
-    if (error) throw error;
-
-    res.json({ success: true, data: details || [] });
-  } catch (error) {
-    console.error('Error fetching bidding details:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// NOTE: Vendor bidding endpoints are handled by vendorBiddingRoutes (registered at line 517)
+// DO NOT add duplicate endpoints here - they will override the correct implementations
 
 app.get('/api/vendor-bidding/projects/:projectId/line-items', async (req, res) => {
   try {
