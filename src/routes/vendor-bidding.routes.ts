@@ -1768,9 +1768,9 @@ router.post('/vendor/submit-bid', async (req, res) => {
     // Generate unique bid ID
     const bidId = crypto.randomUUID();
 
-    // Store in database using vendor_bids table
-    if (supabase && line_item_bids && line_item_bids.length > 0) {
-      try {
+    // Store in database using vendor_bids table - wrapped in try-catch to never fail the request
+    try {
+      if (supabase && line_item_bids && line_item_bids.length > 0) {
         // Insert each line item bid into vendor_bids table
         const vendorBidsData = line_item_bids
           .filter((bid: any) => bid.can_perform)
@@ -1803,10 +1803,10 @@ router.post('/vendor/submit-bid', async (req, res) => {
             console.log(`✅ Stored ${vendorBidsData.length} bids in database`);
           }
         }
-      } catch (dbError) {
-        console.error('❌ Database error (non-fatal):', dbError);
-        // Continue with in-memory storage
       }
+    } catch (dbError: any) {
+      console.error('❌ Database error (non-fatal, continuing with in-memory storage):', dbError?.message || dbError);
+      // Continue with in-memory storage - database errors should never fail bid submission
     }
 
     // Store bid in memory for persistence
