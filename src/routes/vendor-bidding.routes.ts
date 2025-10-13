@@ -1788,20 +1788,23 @@ router.post('/vendor/submit-bid', async (req, res) => {
           }));
 
         if (vendorBidsData.length > 0) {
+          console.log('📤 Attempting to store bids in database:', JSON.stringify(vendorBidsData[0], null, 2));
+
           const { data, error } = await supabase
             .from('vendor_bids')
             .insert(vendorBidsData)
             .select();
 
           if (error) {
-            console.error('Database insert error:', error);
+            console.error('❌ Database insert error:', error);
+            console.error('❌ Error details:', JSON.stringify(error, null, 2));
             // Don't fail the request - continue with in-memory storage
           } else {
             console.log(`✅ Stored ${vendorBidsData.length} bids in database`);
           }
         }
       } catch (dbError) {
-        console.error('Database error (non-fatal):', dbError);
+        console.error('❌ Database error (non-fatal):', dbError);
         // Continue with in-memory storage
       }
     }
