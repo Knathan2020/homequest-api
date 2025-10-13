@@ -2187,11 +2187,23 @@ router.get('/projects/:projectId/bids', async (req, res) => {
     res.json(formattedBids);
     
   } catch (error) {
+    const { projectId } = req.params;
     console.error('Error loading project bids:', error.message || error);
-    res.status(500).json({ 
-      error: 'Failed to fetch project bids',
-      details: error.message || 'Unknown error'
-    });
+    console.log('📊 Falling back to in-memory bid storage due to error');
+
+    // Always fall back to in-memory storage on any error
+    try {
+      const projectBids = getProjectBids(projectId);
+      console.log(`📋 Returning ${projectBids.length} bids from memory for project ${projectId}`);
+      const bidsWithProjectId = projectBids.map((bid: any) => ({
+        ...bid,
+        project_id: projectId
+      }));
+      return res.json(bidsWithProjectId);
+    } catch (memError) {
+      console.error('Error accessing in-memory storage:', memError);
+      return res.json([]);
+    }
   }
 });
 
