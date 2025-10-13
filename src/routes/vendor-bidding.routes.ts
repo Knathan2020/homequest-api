@@ -1373,7 +1373,8 @@ router.get('/projects/:projectId/bidding-details', async (req, res) => {
         .select('*')
         .eq('project_id', projectId)
         .eq('validation_status', 'validated')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(1); // Only get the most recent validated selection to avoid duplicates
 
       if (!selectionsError && selections && selections.length > 0) {
         roomSelections = selections.map(sel => ({
@@ -1382,10 +1383,21 @@ router.get('/projects/:projectId/bidding-details', async (req, res) => {
           room_mappings: sel.room_mappings,
           created_at: sel.created_at
         }));
-        console.log(`✅ Found ${roomSelections.length} room selections for project ${projectId}`);
+        console.log(`✅ Found ${roomSelections.length} room selection document(s) for project ${projectId}`);
       }
     } catch (selectionsError) {
       console.warn('⚠️ Could not fetch room selections:', selectionsError);
+    }
+
+    // Clean up description - remove PHASES_DATA markers
+    let cleanDescription = project.description || project.notes || 'No description available';
+    if (cleanDescription.includes('[PHASES_DATA]')) {
+      cleanDescription = cleanDescription
+        .replace(/\[PHASES_DATA\].*?\[\/PHASES_DATA\]/g, '')
+        .trim();
+      if (!cleanDescription) {
+        cleanDescription = 'Commercial construction project';
+      }
     }
 
     // Format the real project data for the frontend
@@ -1393,12 +1405,12 @@ router.get('/projects/:projectId/bidding-details', async (req, res) => {
       id: project.id,
       project_name: project.project_name || project.name || `Project ${projectId}`,
       address: project.address ? `${project.address}${project.city ? `, ${project.city}` : ''}${project.state ? `, ${project.state}` : ''}` : 'Address not specified',
-      description: project.description || project.notes || 'No description available',
+      description: cleanDescription,
       square_footage: project.square_footage || null,
       project_type: project.project_type || 'Residential',
       deadline: project.target_completion_date || project.end_date || null,
-      scope_of_work: project.scope || project.description || 'Scope of work to be determined',
-      attachments: ['project-plans.pdf', 'site-survey.pdf', 'material-specifications.xlsx'], // TODO: Replace with real attachments when table is available
+      scope_of_work: project.scope || cleanDescription || 'Scope of work to be determined',
+      attachments: [], // Real attachments will be added when attachment system is implemented
       budget_range: project.budget ? `$${project.budget.toLocaleString()}` : 'Budget TBD',
       timeline_weeks: project.timeline_weeks ||
         (project.start_date && project.end_date ?

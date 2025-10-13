@@ -801,22 +801,8 @@ app.get('/api/vendor-bidding/projects/:projectId/line-items', async (req, res) =
   }
 });
 
-app.post('/api/vendor-bidding/vendor/submit-bid', async (req, res) => {
-  try {
-    const { data: bid, error } = await supabase
-      .from('vendor_bids')
-      .insert([req.body])
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    res.status(201).json({ success: true, data: bid });
-  } catch (error) {
-    console.error('Error submitting bid:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// NOTE: submit-bid endpoint is handled by vendorBiddingRoutes (registered at line 1023)
+// DO NOT add duplicate endpoints here
 
 // ============= VENDOR BIDS ENDPOINT =============
 app.get('/api/vendor-bidding/projects/:projectId/bids', async (req, res) => {
