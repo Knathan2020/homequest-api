@@ -802,28 +802,8 @@ app.get('/api/vendor-bidding/projects/:projectId/line-items', async (req, res) =
 });
 
 // NOTE: submit-bid endpoint is handled by vendorBiddingRoutes (registered at line 1023)
-// DO NOT add duplicate endpoints here
-
-// ============= VENDOR BIDS ENDPOINT =============
-app.get('/api/vendor-bidding/projects/:projectId/bids', async (req, res) => {
-  try {
-    const { data: bids, error } = await supabase
-      .from('vendor_bids')
-      .select(`
-        *,
-        vendor:vendors(*)
-      `)
-      .eq('project_id', req.params.projectId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    res.json(bids || []);
-  } catch (error) {
-    console.error('Error fetching bids:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// NOTE: GET /bids endpoint is also handled by vendorBiddingRoutes
+// DO NOT add duplicate endpoints here - they will override the correct implementations
 
 // ============= USAGE ENDPOINT =============
 app.get('/api/usage/today/:teamId', async (req, res) => {
