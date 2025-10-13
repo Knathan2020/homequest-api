@@ -835,7 +835,7 @@ app.post('/api/vendor-bidding/vendor/submit-bid', async (req, res) => {
 app.get('/api/vendor-bidding/projects/:projectId/bids', async (req, res) => {
   try {
     const { data: bids, error } = await supabase
-      .from('bids')
+      .from('vendor_bids')
       .select(`
         *,
         vendor:vendors(*)
