@@ -1855,10 +1855,13 @@ router.post('/vendor/submit-bid', async (req, res) => {
 
       } catch (dbError) {
         console.error('❌ Database storage error:', dbError);
-        // Don't fail the request if database storage fails
+        console.error('❌ Error details:', JSON.stringify(dbError, null, 2));
+        // Log but don't fail the request
+        (bidResponse as any).databaseError = (dbError as any).message || String(dbError);
       }
     } else {
       console.log('⚠️ Supabase not configured or no line items to save');
+      (bidResponse as any).warning = 'Supabase not configured';
     }
 
     // Store bid in memory for persistence demo
