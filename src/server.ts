@@ -521,21 +521,8 @@ app.post('/api/attachments/process', async (req, res) => {
 });
 
 // ============= VENDOR BIDDING API =============
-app.get('/api/vendor-bidding/projects/:projectId/bidding-details', async (req, res) => {
-  try {
-    const { data: details, error } = await supabase
-      .from('vendor_bids')
-      .select('*')
-      .eq('project_id', req.params.projectId);
-
-    if (error) throw error;
-
-    res.json({ success: true, data: details || [] });
-  } catch (error) {
-    console.error('Error fetching bidding details:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// NOTE: Vendor bidding endpoints are handled by vendorBiddingRoutes (registered at line 517)
+// DO NOT add duplicate endpoints here - they will override the correct implementations
 
 app.get('/api/vendor-bidding/projects/:projectId/line-items', async (req, res) => {
   try {
@@ -814,43 +801,9 @@ app.get('/api/vendor-bidding/projects/:projectId/line-items', async (req, res) =
   }
 });
 
-app.post('/api/vendor-bidding/vendor/submit-bid', async (req, res) => {
-  try {
-    const { data: bid, error } = await supabase
-      .from('vendor_bids')
-      .insert([req.body])
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    res.status(201).json({ success: true, data: bid });
-  } catch (error) {
-    console.error('Error submitting bid:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============= VENDOR BIDS ENDPOINT =============
-app.get('/api/vendor-bidding/projects/:projectId/bids', async (req, res) => {
-  try {
-    const { data: bids, error } = await supabase
-      .from('bids')
-      .select(`
-        *,
-        vendor:vendors(*)
-      `)
-      .eq('project_id', req.params.projectId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    res.json(bids || []);
-  } catch (error) {
-    console.error('Error fetching bids:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// NOTE: submit-bid endpoint is handled by vendorBiddingRoutes (registered at line 1023)
+// NOTE: GET /bids endpoint is also handled by vendorBiddingRoutes
+// DO NOT add duplicate endpoints here - they will override the correct implementations
 
 // ============= USAGE ENDPOINT =============
 app.get('/api/usage/today/:teamId', async (req, res) => {
