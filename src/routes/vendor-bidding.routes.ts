@@ -1784,19 +1784,31 @@ router.post('/vendor/submit-bid', async (req, res) => {
     try {
       if (supabase && line_item_bids && line_item_bids.length > 0) {
         // Insert each line item bid into vendor_bids table
+        // Transform vendor portal format into complete vendor_bids table format
         const vendorBidsData = line_item_bids
           .filter((bid: any) => bid.can_perform)
           .map((bid: any) => ({
             project_id: project_id,
-            vendor_id: crypto.randomUUID(),
+            vendor_id: vendor_info?.email || crypto.randomUUID(), // Use email as vendor identifier
+            vendor_name: vendor_info?.contact_name || 'Unknown',
             vendor_company: vendor_info?.company_name || 'Unknown Company',
             vendor_email: vendor_info?.email || '',
             vendor_phone: vendor_info?.phone || '',
             line_item_name: bid.line_item_name || bid.line_item_id || 'Unknown Item',
-            line_item_id: bid.line_item_id,
+            line_item_category: bid.line_item_category || '',
             bid_amount: bid.bid_amount || 0,
-            status: 'pending',
-            created_at: new Date().toISOString()
+            timeline_days: bid.timeline_days || 0,
+            materials_cost: bid.materials_cost || 0,
+            labor_cost: bid.labor_cost || 0,
+            vendor_notes: bid.vendor_notes || general_notes || '',
+            confidence_level: bid.confidence_level || 3,
+            status: 'submitted',
+            submitted_at: submitted_at || new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            // Initialize notification tracking fields
+            notification_processed: false,
+            notification_dismissed: false
           }));
 
         if (vendorBidsData.length > 0) {
