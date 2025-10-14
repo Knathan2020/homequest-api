@@ -1800,111 +1800,65 @@ router.post('/vendor/submit-bid', async (req, res) => {
       filesUploaded: uploaded_files?.length || 0
     };
 
-    // Store in database
-    if (supabase) {
+    // Store in database - save directly to vendor_bids table
+    if (supabase && line_item_bids?.length) {
       try {
-        // Store RFQ response
-        const { data: rfqResponse, error: rfqError } = await supabase
-          .from('rfq_responses')
-          .insert({
+        console.log(`💾 Saving ${line_item_bids.length} bids to vendor_bids table...`);
+
+        const vendorBidsData = line_item_bids
+          .filter((bid: any) => bid.can_perform) // Only save bids vendor can perform
+          .map((bid: any) => ({
             project_id: project_id,
-            vendor_company_name: vendor_info?.company_name,
-            vendor_contact_name: vendor_info?.contact_name,
-            vendor_email: vendor_info?.email,
-            vendor_phone: vendor_info?.phone,
-            total_bid_amount: total_bid_amount,
-            general_notes: general_notes,
-            status: 'submitted',
-            submitted_at: submitted_at || new Date().toISOString()
-          })
-          .select()
-          .single();
-
-        if (rfqError) throw rfqError;
-
-        // Store line item bids if response was created successfully
-        if (rfqResponse && line_item_bids?.length) {
-          const lineItemBidsData = line_item_bids.map((bid: any) => ({
-            rfq_response_id: rfqResponse.id,
+            project_name: '', // Will be populated if available
+            vendor_id: crypto.randomUUID(),
+            vendor_name: vendor_info?.contact_name || vendor_info?.company_name || 'Unknown',
+            vendor_email: vendor_info?.email || '',
+            vendor_phone: vendor_info?.phone || '',
+            vendor_company: vendor_info?.company_name || 'Unknown Company',
             line_item_id: bid.line_item_id,
-            can_perform: bid.can_perform,
+            line_item_name: bid.line_item_name || 'Unknown Item',
+            line_item_category: bid.line_item_category || 'General',
             bid_amount: bid.bid_amount,
-            timeline_days: bid.timeline_days,
-            materials_cost: bid.materials_cost,
-            labor_cost: bid.labor_cost,
-            confidence_level: bid.confidence_level,
-            vendor_notes: bid.vendor_notes,
-            status: 'submitted',
-            submitted_at: submitted_at || new Date().toISOString()
+            timeline_days: bid.timeline_days || 0,
+            materials_cost: bid.materials_cost || 0,
+            labor_cost: bid.labor_cost || 0,
+            vendor_notes: bid.vendor_notes || '',
+            confidence_level: bid.confidence_level || 3,
+            status: 'pending',
+            submitted_at: submitted_at || new Date().toISOString(),
+            notification_processed: false,
+            notification_dismissed: false
           }));
 
-          const { error: bidsError } = await supabase
-            .from('rfq_line_item_bids')
-            .insert(lineItemBidsData);
+        if (vendorBidsData.length > 0) {
+          const { error: vendorBidsError } = await supabase
+            .from('vendor_bids')
+            .insert(vendorBidsData);
 
-          if (bidsError) throw bidsError;
-
-          // ALSO save to vendor_bids table for EstimatesTab and notifications
-          const vendorBidsData = line_item_bids
-            .filter((bid: any) => bid.can_perform) // Only save bids vendor can perform
-            .map((bid: any) => ({
-              project_id: project_id,
-              project_name: '', // Will be populated if available
-              vendor_id: crypto.randomUUID(),
-              vendor_name: vendor_info?.contact_name || vendor_info?.company_name || 'Unknown',
-              vendor_email: vendor_info?.email || '',
-              vendor_phone: vendor_info?.phone || '',
-              vendor_company: vendor_info?.company_name || 'Unknown Company',
-              line_item_id: bid.line_item_id,
-              line_item_name: bid.line_item_name || 'Unknown Item',
-              line_item_category: bid.line_item_category || 'General',
-              bid_amount: bid.bid_amount,
-              timeline_days: bid.timeline_days || 0,
-              materials_cost: bid.materials_cost || 0,
-              labor_cost: bid.labor_cost || 0,
-              vendor_notes: bid.vendor_notes || '',
-              confidence_level: bid.confidence_level || 3,
-              status: 'pending',
-              submitted_at: submitted_at || new Date().toISOString(),
-              notification_processed: false,
-              notification_dismissed: false
-            }));
-
-          if (vendorBidsData.length > 0) {
-            const { error: vendorBidsError } = await supabase
-              .from('vendor_bids')
-              .insert(vendorBidsData);
-
-            if (vendorBidsError) {
-              console.error('Error saving to vendor_bids:', vendorBidsError);
-              // Don't throw - still successful even if vendor_bids fails
-            } else {
-              console.log(`✅ Saved ${vendorBidsData.length} bids to vendor_bids table for notifications`);
-            }
+          if (vendorBidsError) {
+            console.error('❌ Error saving to vendor_bids:', vendorBidsError);
+            throw vendorBidsError;
+          } else {
+            console.log(`✅ Saved ${vendorBidsData.length} bids to vendor_bids table successfully!`);
           }
+        } else {
+          console.log('⚠️ No bids to save (all bids had can_perform = false)');
         }
 
-        console.log('✅ Bid stored successfully:', {
+        console.log('✅ Bid stored successfully in database:', {
           bidId,
-          rfqResponseId: rfqResponse.id,
           vendor: vendor_info?.company_name,
           project: project_id,
           amount: total_bid_amount,
-          items: line_item_bids?.length
+          items: vendorBidsData.length
         });
 
       } catch (dbError) {
-        console.error('Database storage error:', dbError);
+        console.error('❌ Database storage error:', dbError);
         // Don't fail the request if database storage fails
       }
     } else {
-      console.log('⚠️ Supabase not configured, logging bid data:', {
-        bidId,
-        vendor: vendor_info?.company_name,
-        project: project_id,
-        amount: total_bid_amount,
-        items: line_item_bids?.length
-      });
+      console.log('⚠️ Supabase not configured or no line items to save');
     }
 
     // Store bid in memory for persistence demo
@@ -1940,45 +1894,6 @@ router.post('/vendor/submit-bid', async (req, res) => {
     existingBids.push(formattedBid);
     inMemoryBids.set(project_id, existingBids);
     console.log(`💾 Stored bid in memory for project ${project_id}. Total bids: ${existingBids.length}`);
-
-    // ALSO save to vendor_bids table for EstimatesTab and notifications
-    const vendorBidsData = line_item_bids
-      .filter((bid: any) => bid.can_perform) // Only save bids vendor can perform
-      .map((bid: any) => ({
-        project_id: project_id,
-        project_name: '', // Will be populated if available
-        vendor_id: crypto.randomUUID(),
-        vendor_name: vendor_info?.contact_name || vendor_info?.company_name || 'Unknown',
-        vendor_email: vendor_info?.email || '',
-        vendor_phone: vendor_info?.phone || '',
-        vendor_company: vendor_info?.company_name || 'Unknown Company',
-        line_item_id: bid.line_item_id,
-        line_item_name: bid.line_item_name || 'Unknown Item',
-        line_item_category: bid.line_item_category || 'General',
-        bid_amount: bid.bid_amount,
-        timeline_days: bid.timeline_days || 0,
-        materials_cost: bid.materials_cost || 0,
-        labor_cost: bid.labor_cost || 0,
-        vendor_notes: bid.vendor_notes || '',
-        confidence_level: bid.confidence_level || 3,
-        status: 'pending',
-        submitted_at: submitted_at || new Date().toISOString(),
-        notification_processed: false,
-        notification_dismissed: false
-      }));
-
-    if (vendorBidsData.length > 0) {
-      const { error: vendorBidsError } = await supabase
-        .from('vendor_bids')
-        .insert(vendorBidsData);
-
-      if (vendorBidsError) {
-        console.error('Error saving to vendor_bids:', vendorBidsError);
-        // Don't throw - still successful even if vendor_bids fails
-      } else {
-        console.log(`✅ Saved ${vendorBidsData.length} bids to vendor_bids table for notifications`);
-      }
-    }
 
     // Send email notification to builder with attachments
     try {
