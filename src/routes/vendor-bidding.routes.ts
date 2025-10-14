@@ -1809,13 +1809,11 @@ router.post('/vendor/submit-bid', async (req, res) => {
           .filter((bid: any) => bid.can_perform) // Only save bids vendor can perform
           .map((bid: any) => ({
             project_id: project_id,
-            project_name: '', // Will be populated if available
             vendor_id: crypto.randomUUID(),
             vendor_name: vendor_info?.contact_name || vendor_info?.company_name || 'Unknown',
             vendor_email: vendor_info?.email || '',
             vendor_phone: vendor_info?.phone || '',
             vendor_company: vendor_info?.company_name || 'Unknown Company',
-            line_item_id: bid.line_item_id,
             line_item_name: bid.line_item_name || 'Unknown Item',
             line_item_category: bid.line_item_category || 'General',
             bid_amount: bid.bid_amount,
