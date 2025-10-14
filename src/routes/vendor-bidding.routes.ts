@@ -1941,6 +1941,45 @@ router.post('/vendor/submit-bid', async (req, res) => {
     inMemoryBids.set(project_id, existingBids);
     console.log(`💾 Stored bid in memory for project ${project_id}. Total bids: ${existingBids.length}`);
 
+    // ALSO save to vendor_bids table for EstimatesTab and notifications
+    const vendorBidsData = line_item_bids
+      .filter((bid: any) => bid.can_perform) // Only save bids vendor can perform
+      .map((bid: any) => ({
+        project_id: project_id,
+        project_name: '', // Will be populated if available
+        vendor_id: crypto.randomUUID(),
+        vendor_name: vendor_info?.contact_name || vendor_info?.company_name || 'Unknown',
+        vendor_email: vendor_info?.email || '',
+        vendor_phone: vendor_info?.phone || '',
+        vendor_company: vendor_info?.company_name || 'Unknown Company',
+        line_item_id: bid.line_item_id,
+        line_item_name: bid.line_item_name || 'Unknown Item',
+        line_item_category: bid.line_item_category || 'General',
+        bid_amount: bid.bid_amount,
+        timeline_days: bid.timeline_days || 0,
+        materials_cost: bid.materials_cost || 0,
+        labor_cost: bid.labor_cost || 0,
+        vendor_notes: bid.vendor_notes || '',
+        confidence_level: bid.confidence_level || 3,
+        status: 'pending',
+        submitted_at: submitted_at || new Date().toISOString(),
+        notification_processed: false,
+        notification_dismissed: false
+      }));
+
+    if (vendorBidsData.length > 0) {
+      const { error: vendorBidsError } = await supabase
+        .from('vendor_bids')
+        .insert(vendorBidsData);
+
+      if (vendorBidsError) {
+        console.error('Error saving to vendor_bids:', vendorBidsError);
+        // Don't throw - still successful even if vendor_bids fails
+      } else {
+        console.log(`✅ Saved ${vendorBidsData.length} bids to vendor_bids table for notifications`);
+      }
+    }
+
     // Send email notification to builder with attachments
     try {
       //Get builder email from project
