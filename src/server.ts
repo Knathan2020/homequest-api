@@ -116,7 +116,11 @@ app.use(cors({
 
       // Vercel Production
       'https://construction-platform-sigma.vercel.app',
-      'https://construction-platform.vercel.app'
+      'https://construction-platform.vercel.app',
+
+      // Custom Domain
+      'https://homequesttech.com',
+      'https://www.homequesttech.com'
     ];
 
     // Check if origin is in allowed list
