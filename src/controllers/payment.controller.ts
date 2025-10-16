@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import StripeService, { TierType, PRICING_TIERS } from '../services/stripe.service';
-import { logger } from '../utils/logger';
+import { loggers } from '../utils/logger';
+
+const logger = loggers.system;
 
 export class PaymentController {
   /**
