@@ -66,7 +66,7 @@ import appointmentsRoutes from './routes/appointments.routes';
 import meetingInvitesRoutes from './routes/meeting-invites.routes';
 import builderBriefingRoutes from './routes/builder-briefing.routes';
 import usageRoutes from './routes/usage.routes';
-import paymentRoutes from './routes/payment.routes';
+import paymentRoutes from './routes/payments.routes';
 
 // RAG & Learning Systems
 import ragRoutes from './routes/rag.routes';
