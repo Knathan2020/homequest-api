@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import floorPlanRoutes from './src/routes/floorPlans';
 import floorPlanPersistenceRoutes from './src/routes/floor-plan-persistence.routes';
+import paymentRoutes from './src/routes/payment.routes';
 // Import working routes with fallback
 let workingRoutes: any;
 try {
@@ -117,6 +118,10 @@ app.use('/api/floor-plans', floorPlanRoutes);
 
 // Add persistence routes (auto-save, load, update, delete)
 app.use('/api/floor-plans', floorPlanPersistenceRoutes);
+
+// Register payment routes
+app.use('/api/payments', paymentRoutes);
+console.log('✅ Payment routes registered');
 
 // Register all working API routes
 if (workingRoutes) {
