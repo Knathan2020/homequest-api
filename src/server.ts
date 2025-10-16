@@ -66,6 +66,7 @@ import appointmentsRoutes from './routes/appointments.routes';
 import meetingInvitesRoutes from './routes/meeting-invites.routes';
 import builderBriefingRoutes from './routes/builder-briefing.routes';
 import usageRoutes from './routes/usage.routes';
+import paymentRoutes from './routes/payment.routes';
 
 // RAG & Learning Systems
 import ragRoutes from './routes/rag.routes';
@@ -987,6 +988,7 @@ app.use('/api/appointments', appointmentsRoutes);
 
 // Business Logic & Workflows
 app.use('/api/vendor-bidding', vendorBiddingRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/meeting-invites', meetingInvitesRoutes);
 app.use('/api/builder-briefing', builderBriefingRoutes);
 app.use('/api/usage', usageRoutes);
