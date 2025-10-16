@@ -361,6 +361,30 @@ app.put('/api/projects/:id', async (req, res) => {
   }
 });
 
+app.patch('/api/projects/:id', async (req, res) => {
+  try {
+    const { action, data } = req.body;
+
+    if (action === 'update_status' && data?.status) {
+      const { data: project, error } = await supabase
+        .from('projects')
+        .update({ status: data.status })
+        .eq('id', req.params.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      res.json({ success: true, data: project });
+    } else {
+      res.status(400).json({ success: false, error: 'Invalid action or missing status' });
+    }
+  } catch (error) {
+    console.error('Error patching project:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.delete('/api/projects/:id', async (req, res) => {
   try {
     const { error } = await supabase
