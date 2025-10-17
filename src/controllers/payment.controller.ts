@@ -330,10 +330,65 @@ export class PaymentController {
     const session = event.data.object;
     logger.info(`Checkout completed for customer: ${session.customer}`);
 
-    // TODO: Update user's subscription in database
-    // This is where you would save the subscription details to Supabase
-    const { tier, userId } = session.metadata;
-    logger.info(`User ${userId} subscribed to ${tier} tier`);
+    try {
+      const { tier, userId } = session.metadata;
+
+      if (!userId || !tier) {
+        logger.error('Missing userId or tier in session metadata');
+        return;
+      }
+
+      logger.info(`User ${userId} subscribed to ${tier} tier`);
+
+      // Import supabase here to avoid circular dependency
+      const { createClient } = require('@supabase/supabase-js');
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (!supabaseUrl || !supabaseKey) {
+        logger.error('Supabase credentials not configured');
+        return;
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      // Get user's team_id from profiles
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('team_id')
+        .eq('id', userId)
+        .single();
+
+      if (!profile?.team_id) {
+        logger.error(`No team found for user ${userId}`);
+        return;
+      }
+
+      // Create subscription record
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .upsert({
+          team_id: profile.team_id,
+          tier: tier,
+          status: 'active',
+          stripe_customer_id: session.customer,
+          stripe_subscription_id: session.subscription,
+          current_period_end: new Date(session.subscription ? Date.now() + 30 * 24 * 60 * 60 * 1000 : Date.now()).toISOString(),
+          trial_end: session.subscription_data?.trial_end ? new Date(session.subscription_data.trial_end * 1000).toISOString() : null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'team_id'
+        });
+
+      if (error) {
+        logger.error('Error creating subscription:', error);
+      } else {
+        logger.info(`✅ Subscription created for team ${profile.team_id}`);
+      }
+    } catch (error) {
+      logger.error('Error in handleCheckoutSessionCompleted:', error);
+    }
   }
 
   /**
