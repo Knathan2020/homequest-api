@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import floorPlanRoutes from './src/routes/floorPlans';
 import floorPlanPersistenceRoutes from './src/routes/floor-plan-persistence.routes';
 import paymentRoutes from './src/routes/payment.routes';
+import testStripeRoutes from './src/routes/test-stripe.routes';
 // Import working routes with fallback
 let workingRoutes: any;
 try {
@@ -118,6 +119,9 @@ app.use('/api/floor-plans', floorPlanRoutes);
 
 // Add persistence routes (auto-save, load, update, delete)
 app.use('/api/floor-plans', floorPlanPersistenceRoutes);
+
+// Register test route (temporary debugging)
+app.use('/api', testStripeRoutes);
 
 // Register payment routes
 app.use('/api/payments', paymentRoutes);

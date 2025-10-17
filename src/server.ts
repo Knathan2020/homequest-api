@@ -66,6 +66,7 @@ import appointmentsRoutes from './routes/appointments.routes';
 import meetingInvitesRoutes from './routes/meeting-invites.routes';
 import builderBriefingRoutes from './routes/builder-briefing.routes';
 import usageRoutes from './routes/usage.routes';
+import paymentRoutes from './routes/payments.routes';
 
 // RAG & Learning Systems
 import ragRoutes from './routes/rag.routes';
@@ -115,7 +116,11 @@ app.use(cors({
 
       // Vercel Production
       'https://construction-platform-sigma.vercel.app',
-      'https://construction-platform.vercel.app'
+      'https://construction-platform.vercel.app',
+
+      // Custom Domain
+      'https://homequesttech.com',
+      'https://www.homequesttech.com'
     ];
 
     // Check if origin is in allowed list
@@ -352,6 +357,30 @@ app.put('/api/projects/:id', async (req, res) => {
     res.json({ success: true, data: project });
   } catch (error) {
     console.error('Error updating project:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.patch('/api/projects/:id', async (req, res) => {
+  try {
+    const { action, data } = req.body;
+
+    if (action === 'update_status' && data?.status) {
+      const { data: project, error } = await supabase
+        .from('projects')
+        .update({ status: data.status })
+        .eq('id', req.params.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      res.json({ success: true, data: project });
+    } else {
+      res.status(400).json({ success: false, error: 'Invalid action or missing status' });
+    }
+  } catch (error) {
+    console.error('Error patching project:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -987,6 +1016,7 @@ app.use('/api/appointments', appointmentsRoutes);
 
 // Business Logic & Workflows
 app.use('/api/vendor-bidding', vendorBiddingRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/meeting-invites', meetingInvitesRoutes);
 app.use('/api/builder-briefing', builderBriefingRoutes);
 app.use('/api/usage', usageRoutes);

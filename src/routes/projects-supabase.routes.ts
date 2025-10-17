@@ -299,7 +299,7 @@ router.put('/projects/:id', async (req, res) => {
       });
     }
     
-    // Update in Supabase
+    // Update in Supabase - don't use .single() to avoid row count error
     const { data, error } = await supabase
       .from('projects')
       .update({
@@ -307,26 +307,106 @@ router.put('/projects/:id', async (req, res) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
-      .select()
-      .single();
+      .select();
     
     if (error) {
-      if (error.code === 'PGRST116') {
+      console.error('Update error:', error);
+      throw error;
+    }
+
+    // Check if any rows were updated
+    if (!data || data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Project updated successfully',
+      data: data[0]
+    });
+  } catch (error: any) {
+    console.error('Error updating project:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update project'
+    });
+  }
+});
+
+/**
+ * PATCH project (for status updates like archiving)
+ */
+router.patch('/projects/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, data: updateData } = req.body;
+
+    if (!supabase) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured'
+      });
+    }
+
+    // Handle different actions
+    if (action === 'update_status') {
+      const { data, error } = await supabase
+        .from('projects')
+        .update({
+          status: updateData.status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select();
+
+      if (error) {
+        console.error('Archive error:', error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
         return res.status(404).json({
           success: false,
           error: 'Project not found'
         });
       }
-      throw error;
+
+      return res.json({
+        success: true,
+        message: 'Project status updated successfully',
+        data: data[0]
+      });
     }
-    
+
+    // Default: update with provided data
+    const { data, error } = await supabase
+      .from('projects')
+      .update({
+        ...updateData,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      });
+    }
+
     res.json({
       success: true,
       message: 'Project updated successfully',
-      data
+      data: data[0]
     });
   } catch (error: any) {
-    console.error('Error updating project:', error);
+    console.error('Error patching project:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to update project'

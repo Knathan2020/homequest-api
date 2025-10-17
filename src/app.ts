@@ -36,6 +36,7 @@ import setupDatabaseRoutes from './routes/setup-database.routes';
 import projectsRoutes from './routes/projects.routes';
 import builderBriefingRoutes from './routes/builder-briefing.routes';
 import roomSelectionsRoutes from './api/room-selections';
+import paymentRoutes from './routes/payment.routes';
 // import floorPlan3DRoutes from './routes/floor-plan-3d.routes'; // Temporarily disabled for build
 // import roomRoutes from './routes/room.routes';
 // import processingRoutes from './routes/processing.routes';
@@ -319,6 +320,7 @@ export const createApp = (): Application => {
   app.use('/api', projectsRoutes); // Projects management routes
   app.use('/api/selections', roomSelectionsRoutes); // Room selections upload and management
   app.use('/api/documents', require('./routes/documents.routes').default); // Document management and team sharing
+  app.use('/api/payments', paymentRoutes); // Stripe payment and subscription management
 
   // Add explicit CORS middleware for Nylas and autonomous routes (GitHub Codespaces fix)
   app.use('/api/nylas', (req, res, next) => {

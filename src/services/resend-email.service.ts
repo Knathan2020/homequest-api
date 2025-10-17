@@ -62,7 +62,7 @@ class ResendEmailService {
       });
 
       // Use verified domain email from environment variable or default
-      const fromEmail = process.env.RESEND_FROM_EMAIL || 'HomeQuest Tech <noreply@homequesttech.com>';
+      const fromEmail = process.env.RESEND_FROM_EMAIL || 'HomeQuest Tech <noreply@send.homequesttech.com>';
 
       const result = await resend.emails.send({
         from: fromEmail,
