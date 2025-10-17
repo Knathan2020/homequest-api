@@ -1017,6 +1017,7 @@ app.use('/api/appointments', appointmentsRoutes);
 // Business Logic & Workflows
 app.use('/api/vendor-bidding', vendorBiddingRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api', require('./routes/provision-phone.routes').default); // Phone provisioning after payment
 app.use('/api/meeting-invites', meetingInvitesRoutes);
 app.use('/api/builder-briefing', builderBriefingRoutes);
 app.use('/api/usage', usageRoutes);
