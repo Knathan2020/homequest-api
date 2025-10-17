@@ -337,6 +337,84 @@ router.put('/projects/:id', async (req, res) => {
 });
 
 /**
+ * PATCH project (for status updates like archiving)
+ */
+router.patch('/projects/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, data: updateData } = req.body;
+
+    if (!supabase) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured'
+      });
+    }
+
+    // Handle different actions
+    if (action === 'update_status') {
+      const { data, error } = await supabase
+        .from('projects')
+        .update({
+          status: updateData.status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select();
+
+      if (error) {
+        console.error('Archive error:', error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Project not found'
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Project status updated successfully',
+        data: data[0]
+      });
+    }
+
+    // Default: update with provided data
+    const { data, error } = await supabase
+      .from('projects')
+      .update({
+        ...updateData,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Project updated successfully',
+      data: data[0]
+    });
+  } catch (error: any) {
+    console.error('Error patching project:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update project'
+    });
+  }
+});
+
+/**
  * Delete project
  */
 router.delete('/projects/:id', async (req, res) => {
