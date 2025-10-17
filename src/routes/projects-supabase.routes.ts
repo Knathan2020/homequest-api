@@ -299,7 +299,7 @@ router.put('/projects/:id', async (req, res) => {
       });
     }
     
-    // Update in Supabase
+    // Update in Supabase - don't use .single() to avoid row count error
     const { data, error } = await supabase
       .from('projects')
       .update({
@@ -307,23 +307,25 @@ router.put('/projects/:id', async (req, res) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
-      .select()
-      .single();
+      .select();
     
     if (error) {
-      if (error.code === 'PGRST116') {
-        return res.status(404).json({
-          success: false,
-          error: 'Project not found'
-        });
-      }
+      console.error('Update error:', error);
       throw error;
     }
-    
+
+    // Check if any rows were updated
+    if (!data || data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      });
+    }
+
     res.json({
       success: true,
       message: 'Project updated successfully',
-      data
+      data: data[0]
     });
   } catch (error: any) {
     console.error('Error updating project:', error);
