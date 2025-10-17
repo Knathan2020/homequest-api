@@ -335,6 +335,74 @@ router.put('/projects/:id', async (req, res) => {
 });
 
 /**
+ * PATCH project (for status updates like archiving)
+ */
+router.patch('/projects/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, data } = req.body;
+
+    if (!supabase) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured'
+      });
+    }
+
+    // Handle different actions
+    if (action === 'update_status' && data?.status) {
+      const { data: updatedProject, error } = await supabase
+        .from('projects')
+        .update({
+          status: data.status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select();
+
+      if (error) {
+        console.error('Supabase update error:', error);
+        if (error.code === 'PGRST116') {
+          return res.status(404).json({
+            success: false,
+            error: 'Project not found'
+          });
+        }
+        throw error;
+      }
+
+      // Check if any rows were returned
+      if (!updatedProject || updatedProject.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Project not found'
+        });
+      }
+
+      // Return the first (and should be only) project
+      return res.json({
+        success: true,
+        message: 'Project status updated successfully',
+        data: updatedProject[0]
+      });
+    }
+
+    // If action is not recognized
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid action or missing data'
+    });
+
+  } catch (error: any) {
+    console.error('Error updating project status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update project status'
+    });
+  }
+});
+
+/**
  * Delete project
  */
 router.delete('/projects/:id', async (req, res) => {
