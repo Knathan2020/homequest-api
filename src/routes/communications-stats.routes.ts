@@ -19,8 +19,15 @@ router.get('/stats', async (req, res) => {
     }
 
     // Get calls count from Vapi
-    const calls = await vapiService.listCalls(1000);
-    const callsCount = calls?.length || 0;
+    const allCalls = await vapiService.listCalls(1000);
+
+    // 🔥 FIX: Filter calls by teamId from metadata
+    const calls = allCalls?.filter((call: any) => {
+      // Check if metadata exists and has teamId matching our team
+      return call.metadata?.teamId === teamId;
+    }) || [];
+
+    const callsCount = calls.length;
 
     // Get messages count from Supabase
     const { count: messagesCount } = await supabase
@@ -28,15 +35,15 @@ router.get('/stats', async (req, res) => {
       .select('*', { count: 'exact', head: true })
       .eq('team_id', teamId);
 
-    // Calculate response rate (calls answered / total calls)
-    const answeredCalls = calls?.filter((call: any) =>
+    // Calculate response rate (calls answered / total calls) - NOW TEAM-SPECIFIC
+    const answeredCalls = calls.filter((call: any) =>
       call.endedReason === 'assistant-ended-call' ||
       call.endedReason === 'customer-ended-call'
-    ).length || 0;
+    ).length;
     const responseRate = callsCount > 0 ? Math.round((answeredCalls / callsCount) * 100) : 0;
 
-    // Calculate MTD spend from Vapi costs
-    const totalCost = calls?.reduce((sum: number, call: any) => sum + (call.cost || 0), 0) || 0;
+    // Calculate MTD spend from Vapi costs - NOW TEAM-SPECIFIC
+    const totalCost = calls.reduce((sum: number, call: any) => sum + (call.cost || 0), 0);
 
     res.json({
       success: true,
