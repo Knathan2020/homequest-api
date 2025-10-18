@@ -55,7 +55,7 @@ import microsoftDirectRoutes from './routes/microsoft-direct.routes';
 import teamRoutes from './routes/team.routes';
 import teamMembersRoutes from './routes/team-members.routes';
 import teamProvisioningRoutes from './routes/team-provisioning.routes';
-import projectsRoutes from './routes/projects.routes';
+import projectsRoutes from './routes/projects-supabase.routes';
 import contactsRoutes from './routes/contacts.routes';
 import messagingRoutes from './routes/messaging.routes';
 import userRoutes from './routes/user.routes';
