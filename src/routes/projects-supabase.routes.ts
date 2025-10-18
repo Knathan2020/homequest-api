@@ -344,6 +344,8 @@ router.patch('/projects/:id', async (req, res) => {
     const { id } = req.params;
     const { action, data: updateData } = req.body;
 
+    console.log('🔄 PATCH /projects/:id called', { id, action, updateData });
+
     if (!supabase) {
       return res.status(503).json({
         success: false,
@@ -353,6 +355,8 @@ router.patch('/projects/:id', async (req, res) => {
 
     // Handle different actions
     if (action === 'update_status') {
+      console.log(`📦 Updating project ${id} status to:`, updateData.status);
+
       const { data, error } = await supabase
         .from('projects')
         .update({
@@ -363,17 +367,23 @@ router.patch('/projects/:id', async (req, res) => {
         .select();
 
       if (error) {
-        console.error('Archive error:', error);
-        throw error;
+        console.error('❌ Supabase update error:', error);
+        console.error('Error details:', { code: error.code, message: error.message, details: error.details });
+        return res.status(500).json({
+          success: false,
+          error: error.message || 'Database error updating project status'
+        });
       }
 
       if (!data || data.length === 0) {
+        console.warn(`⚠️ Project ${id} not found in database`);
         return res.status(404).json({
           success: false,
           error: 'Project not found'
         });
       }
 
+      console.log(`✅ Project ${id} archived successfully`);
       return res.json({
         success: true,
         message: 'Project status updated successfully',
@@ -382,6 +392,7 @@ router.patch('/projects/:id', async (req, res) => {
     }
 
     // Default: update with provided data
+    console.log(`📝 Default update for project ${id}:`, updateData);
     const { data, error } = await supabase
       .from('projects')
       .update({
@@ -391,7 +402,10 @@ router.patch('/projects/:id', async (req, res) => {
       .eq('id', id)
       .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Supabase update error:', error);
+      throw error;
+    }
 
     if (!data || data.length === 0) {
       return res.status(404).json({
@@ -406,78 +420,10 @@ router.patch('/projects/:id', async (req, res) => {
       data: data[0]
     });
   } catch (error: any) {
-    console.error('Error patching project:', error);
+    console.error('❌ Error patching project:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to update project'
-    });
-  }
-});
-
-/**
- * PATCH project (for status updates like archiving)
- */
-router.patch('/projects/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { action, data } = req.body;
-
-    if (!supabase) {
-      return res.status(503).json({
-        success: false,
-        error: 'Database not configured'
-      });
-    }
-
-    // Handle different actions
-    if (action === 'update_status' && data?.status) {
-      const { data: updatedProject, error } = await supabase
-        .from('projects')
-        .update({
-          status: data.status,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id)
-        .select();
-
-      if (error) {
-        console.error('Supabase update error:', error);
-        if (error.code === 'PGRST116') {
-          return res.status(404).json({
-            success: false,
-            error: 'Project not found'
-          });
-        }
-        throw error;
-      }
-
-      // Check if any rows were returned
-      if (!updatedProject || updatedProject.length === 0) {
-        return res.status(404).json({
-          success: false,
-          error: 'Project not found'
-        });
-      }
-
-      // Return the first (and should be only) project
-      return res.json({
-        success: true,
-        message: 'Project status updated successfully',
-        data: updatedProject[0]
-      });
-    }
-
-    // If action is not recognized
-    return res.status(400).json({
-      success: false,
-      error: 'Invalid action or missing data'
-    });
-
-  } catch (error: any) {
-    console.error('Error updating project status:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to update project status'
     });
   }
 });
