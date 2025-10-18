@@ -85,9 +85,10 @@ class PhoneProvisioningService {
         status: 'active',
         created_at: new Date().toISOString()
       });
-      
-      // Step 4: Configure webhooks for call tracking
-      await this.configureTwilioWebhooks(twilioNumber, config.teamId);
+
+      // Step 4: Vapi automatically configures webhooks when importing the number
+      // No need to manually configure - Vapi handles this!
+      // await this.configureTwilioWebhooks(twilioNumber, config.teamId);
       
       return {
         success: true,
