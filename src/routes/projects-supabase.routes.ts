@@ -14,7 +14,7 @@ const router = express.Router();
 // Initialize Supabase client with service role key for backend operations
 const supabaseUrl = process.env.SUPABASE_URL || '';
 // Use service role key to bypass RLS policies in backend
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
 
 // Create Supabase client with error handling
 const supabase = supabaseUrl && supabaseKey
@@ -26,8 +26,8 @@ const supabase = supabaseUrl && supabaseKey
     })
   : null;
 
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.warn('⚠️ SUPABASE_SERVICE_ROLE_KEY not set - using ANON key which may cause RLS issues');
+if (!process.env.SUPABASE_SERVICE_KEY) {
+  console.warn('⚠️ SUPABASE_SERVICE_KEY not set - using ANON key which may cause RLS issues');
 }
 
 /**
