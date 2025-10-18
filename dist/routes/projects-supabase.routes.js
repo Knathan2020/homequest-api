@@ -305,7 +305,7 @@ router.patch('/projects/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { action, data: updateData } = req.body;
-        console.log('🔄 PATCH /projects/:id called', { id, action, updateData });
+        console.log('🔄🔄🔄 PATCH /projects/:id called [FORCED DEPLOY]', { id, action, updateData });
         if (!supabase) {
             return res.status(503).json({
                 success: false,
