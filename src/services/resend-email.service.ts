@@ -13,7 +13,6 @@ interface TeamInviteData {
   email: string;
   fullName: string;
   teamName: string;
-  teamInitials: string;
   role: string;
   department: string;
   inviteUrl: string;
@@ -57,19 +56,18 @@ class ResendEmailService {
       const html = this.replaceVariables(this.teamInviteTemplate, {
         fullName: data.fullName,
         teamName: data.teamName,
-        teamInitials: data.teamInitials,
         role: data.role,
         department: data.department,
         inviteUrl: data.inviteUrl
       });
 
       // Use verified domain email from environment variable or default
-      const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@homequesttech.com';
+      const fromEmail = process.env.RESEND_FROM_EMAIL || 'HomeQuest Tech <noreply@homequesttech.com>';
 
       const result = await resend.emails.send({
         from: fromEmail,
         to: data.email,
-        subject: `You're invited to join ${data.teamName}`,
+        subject: `You're invited to join ${data.teamName} on HomeQuest`,
         html: html
       });
 

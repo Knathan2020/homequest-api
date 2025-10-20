@@ -193,6 +193,7 @@ router.get('/projects', async (req, res) => {
 router.get('/projects/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    console.log('🔍 GET /projects/:id called - USING NEW FIX (no .single())', id);
 
     if (!supabase) {
       return res.status(503).json({
