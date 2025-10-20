@@ -36,11 +36,42 @@ if (!process.env.SUPABASE_SERVICE_KEY) {
 router.get('/projects', async (req, res) => {
   try {
     // Get team_id or user_id from query params or headers
-    const teamId = req.query.team_id || req.headers['x-team-id'];
-    const userId = req.query.user_id || req.headers['x-user-id'];
+    let teamId = req.query.team_id || req.headers['x-team-id'];
+    let userId = req.query.user_id || req.headers['x-user-id'];
+
+    // If not provided, try to extract from JWT token
+    if (!teamId && !userId) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        try {
+          // Use Supabase to verify token and get user
+          const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+          if (!authError && user) {
+            userId = user.id;
+            console.log('✅ Extracted user from token:', user.email);
+
+            // Look up user's team_id from profiles
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('team_id')
+              .eq('id', user.id)
+              .single();
+
+            if (profile?.team_id) {
+              teamId = profile.team_id;
+              console.log('✅ Found team_id from profile:', teamId);
+            }
+          }
+        } catch (e) {
+          console.error('Error extracting user from token:', e);
+        }
+      }
+    }
 
     console.log('📊 Fetching projects from database', { teamId, userId });
-    
+
     // If Supabase is not configured, return mock data
     if (!supabase) {
       console.log('⚠️ Supabase not configured, using mock data');
