@@ -18,7 +18,7 @@ const openai = new OpenAI({
 // Helper function to get all project data
 async function getFullProjectData(projectId: string) {
   const [projectRes, phasesRes, vendorsRes, bidsRes, issuesRes, documentsRes] = await Promise.all([
-    supabase.from('projects').select('*').eq('id', projectId).single(),
+    supabase.from('projects').select('*').eq('id', projectId), // Removed .single() to handle duplicates
     supabase.from('project_phases').select('*').eq('project_id', projectId),
     supabase.from('vendor_profiles').select('*').eq('project_id', projectId),
     supabase.from('project_bids').select('*').eq('project_id', projectId),
@@ -27,7 +27,7 @@ async function getFullProjectData(projectId: string) {
   ]);
 
   return {
-    project: projectRes.data,
+    project: projectRes.data?.[0] || null, // Get first project from array (handle duplicates)
     phases: phasesRes.data || [],
     vendors: vendorsRes.data || [],
     bids: bidsRes.data || [],
