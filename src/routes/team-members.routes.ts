@@ -282,25 +282,27 @@ router.post('/accept-invite', async (req, res) => {
             .update({ user_id: authUser.user.id })
             .eq('id', token);
 
-          // Create profile record for the new user
+          // Create or update profile record for the new user
+          // Use upsert so if they already have a profile (signed up first), we update their team_id
           const { error: profileError } = await supabase
             .from('profiles')
-            .insert({
+            .upsert({
               id: authUser.user.id,
               email: member.permissions.email,
               full_name: member.permissions?.fullName || 'Team Member',
               phone_number: phoneNumber,
-              team_id: member.team_id,
+              team_id: member.team_id, // This will override their existing team if they have one
               role: 'builder', // Default role
-              created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
+            }, {
+              onConflict: 'id'
             });
 
           if (profileError) {
-            console.error('Error creating profile:', profileError);
+            console.error('Error creating/updating profile:', profileError);
             // Don't fail the whole request if profile creation fails
           } else {
-            console.log('✅ Profile created for new team member');
+            console.log('✅ Profile created/updated for new team member - team_id set to:', member.team_id);
           }
         }
       } catch (authError) {
