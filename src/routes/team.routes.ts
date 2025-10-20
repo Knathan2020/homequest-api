@@ -479,17 +479,33 @@ router.get('/:teamId/members', async (req, res) => {
     const transformedMembers = (teamMembers || []).map(member => {
       const profile = profiles?.find(p => p.id === member.user_id);
       console.log(`🔄 Transforming member ${member.user_id}, found profile:`, profile);
+
+      // For pending invites (no user_id yet), get data from permissions
+      const isPending = !member.user_id && member.permissions?.inviteStatus === 'pending';
+      const name = profile?.full_name ||
+                   member.name ||
+                   (isPending ? member.permissions?.fullName : null) ||
+                   profile?.email?.split('@')[0] ||
+                   'Team Member';
+      const email = profile?.email ||
+                    member.email ||
+                    (isPending ? member.permissions?.email : null);
+      const phoneNumber = profile?.phone_number ||
+                         member.phone_number ||
+                         (isPending ? member.permissions?.phoneNumber : null);
+
       return {
         id: member.id,
         userId: member.user_id,
         teamId: member.team_id,
-        name: profile?.full_name || member.name || profile?.email?.split('@')[0] || 'Team Member',
-        phoneNumber: profile?.phone_number || member.phone_number,
-        email: profile?.email || member.email,
+        name: name,
+        phoneNumber: phoneNumber,
+        email: email,
         role: member.role,
         department: member.department,
         availability: member.availability,
-        expertise: member.expertise || []
+        expertise: member.expertise || [],
+        inviteStatus: isPending ? 'pending' : 'active'
       };
     });
 

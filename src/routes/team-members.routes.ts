@@ -85,6 +85,45 @@ router.post('/invite', async (req, res) => {
       });
     }
 
+    // Check subscription tier limits
+    const { data: team } = await supabase
+      .from('teams')
+      .select('subscription_tier, company_name, team_name, name')
+      .eq('id', teamId)
+      .single();
+
+    // Count current team members (active + pending)
+    const { count: memberCount } = await supabase
+      .from('team_members')
+      .select('*', { count: 'exact', head: true })
+      .eq('team_id', teamId);
+
+    const currentMemberCount = memberCount || 0;
+    const tier = team?.subscription_tier?.toLowerCase() || 'trial';
+
+    // Define member limits per tier
+    const TIER_LIMITS: Record<string, number> = {
+      trial: 2,          // Trial same as Starter
+      starter: 2,        // 2 users
+      professional: 6,   // 6 users
+      enterprise: -1     // Unlimited
+    };
+
+    const maxMembers = TIER_LIMITS[tier] || 2;
+
+    // Check if they've hit the limit (unlimited = -1)
+    if (maxMembers !== -1 && currentMemberCount >= maxMembers) {
+      const tierName = tier.charAt(0).toUpperCase() + tier.slice(1);
+      return res.status(403).json({
+        success: false,
+        error: `Your ${tierName} plan allows ${maxMembers} team members. You currently have ${currentMemberCount}. Upgrade to add more members.`,
+        currentMembers: currentMemberCount,
+        maxMembers: maxMembers,
+        tier: tier,
+        upgradeRequired: true
+      });
+    }
+
     // Create team member record matching actual Supabase schema
     // Actual columns: id, user_id, team_id, role, permissions, joined_at, invited_by, created_at, department
     // Valid roles: owner, admin, member, viewer
@@ -114,13 +153,7 @@ router.post('/invite', async (req, res) => {
 
     if (memberError) throw memberError;
 
-    // Get actual team name from database
-    const { data: team } = await supabase
-      .from('teams')
-      .select('company_name, team_name, name')
-      .eq('id', teamId)
-      .single();
-
+    // Use team data already fetched during limit check
     const teamName = team?.company_name || team?.name || team?.team_name || 'Your Team';
 
     // Generate team initials for logo (first 2 letters of company name)
@@ -248,6 +281,27 @@ router.post('/accept-invite', async (req, res) => {
             .from('team_members')
             .update({ user_id: authUser.user.id })
             .eq('id', token);
+
+          // Create profile record for the new user
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: authUser.user.id,
+              email: member.permissions.email,
+              full_name: member.permissions?.fullName || 'Team Member',
+              phone_number: phoneNumber,
+              team_id: member.team_id,
+              role: 'builder', // Default role
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+
+          if (profileError) {
+            console.error('Error creating profile:', profileError);
+            // Don't fail the whole request if profile creation fails
+          } else {
+            console.log('✅ Profile created for new team member');
+          }
         }
       } catch (authError) {
         console.error('Auth error:', authError);
