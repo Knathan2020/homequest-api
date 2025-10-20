@@ -428,13 +428,20 @@ app.patch('/api/projects/:id', async (req, res) => {
 
 app.delete('/api/projects/:id', async (req, res) => {
   try {
-    const { error } = await supabase
+    console.log('🗑️ [server.ts] DELETE /api/projects/:id called - USING ADMIN CLIENT', req.params.id);
+
+    // Use admin client to bypass RLS
+    const { error } = await supabaseAdmin
       .from('projects')
       .delete()
       .eq('id', req.params.id);
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Delete error:', error);
+      throw error;
+    }
 
+    console.log('✅ Project deleted successfully:', req.params.id);
     res.json({ success: true, message: 'Project deleted successfully' });
   } catch (error) {
     console.error('Error deleting project:', error);
