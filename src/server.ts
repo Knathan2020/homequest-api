@@ -365,10 +365,11 @@ app.post('/api/projects', authenticateUser, async (req, res) => {
 
 app.put('/api/projects/:id', async (req, res) => {
   try {
-    console.log('🔄 [server.ts] PUT /api/projects/:id called - FIXED (no .single())', req.params.id);
+    console.log('🔄 [server.ts] PUT /api/projects/:id called - USING ADMIN CLIENT', req.params.id);
     console.log('🔄 Update payload:', JSON.stringify(req.body));
 
-    const { data, error } = await supabase
+    // Use admin client to bypass RLS
+    const { data, error } = await supabaseAdmin
       .from('projects')
       .update(req.body)
       .eq('id', req.params.id)
@@ -382,7 +383,7 @@ app.put('/api/projects/:id', async (req, res) => {
     }
 
     if (!data || data.length === 0) {
-      console.warn('⚠️ No rows updated - might be RLS issue or project doesnt exist');
+      console.warn('⚠️ No rows updated - project might not exist');
       return res.status(404).json({ success: false, error: 'Project not found' });
     }
 
@@ -397,11 +398,12 @@ app.put('/api/projects/:id', async (req, res) => {
 
 app.patch('/api/projects/:id', async (req, res) => {
   try {
-    console.log('🔄 [server.ts] PATCH /api/projects/:id called - FIXED (no .single())', req.params.id);
+    console.log('🔄 [server.ts] PATCH /api/projects/:id called - USING ADMIN CLIENT', req.params.id);
     const { action, data } = req.body;
 
     if (action === 'update_status' && data?.status) {
-      const { data: projects, error } = await supabase
+      // Use admin client to bypass RLS
+      const { data: projects, error } = await supabaseAdmin
         .from('projects')
         .update({ status: data.status })
         .eq('id', req.params.id)
