@@ -366,6 +366,7 @@ app.post('/api/projects', authenticateUser, async (req, res) => {
 app.put('/api/projects/:id', async (req, res) => {
   try {
     console.log('🔄 [server.ts] PUT /api/projects/:id called - FIXED (no .single())', req.params.id);
+    console.log('🔄 Update payload:', JSON.stringify(req.body));
 
     const { data, error } = await supabase
       .from('projects')
@@ -373,12 +374,19 @@ app.put('/api/projects/:id', async (req, res) => {
       .eq('id', req.params.id)
       .select();
 
-    if (error) throw error;
+    console.log('🔄 Update result - data count:', data?.length, 'error:', error);
+
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      throw error;
+    }
 
     if (!data || data.length === 0) {
+      console.warn('⚠️ No rows updated - might be RLS issue or project doesnt exist');
       return res.status(404).json({ success: false, error: 'Project not found' });
     }
 
+    console.log('✅ Project updated successfully:', data[0].id);
     // Return first result (handles duplicates)
     res.json({ success: true, data: data[0] });
   } catch (error) {
