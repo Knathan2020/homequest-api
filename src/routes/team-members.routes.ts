@@ -114,6 +114,23 @@ router.post('/invite', async (req, res) => {
 
     if (memberError) throw memberError;
 
+    // Get actual team name from database
+    const { data: team } = await supabase
+      .from('teams')
+      .select('company_name, team_name, name')
+      .eq('id', teamId)
+      .single();
+
+    const teamName = team?.company_name || team?.name || team?.team_name || 'Your Team';
+
+    // Generate team initials for logo (first 2 letters of company name)
+    const teamInitials = teamName
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+
     // Generate invitation URL with team member ID
     const frontendUrl = process.env.FRONTEND_URL || process.env.ALLOWED_ORIGINS || 'https://construction-platform-rc3mhy39v-ken-whites-projects-cbf8a7e8.vercel.app';
     const inviteUrl = `${frontendUrl}/accept-invite?token=${member.id}`;
@@ -123,7 +140,8 @@ router.post('/invite', async (req, res) => {
       await resendEmailService.sendTeamInvite({
         email: inviteData.email,
         fullName: inviteData.fullName,
-        teamName: 'Your Team', // TODO: Get actual team name from database
+        teamName: teamName,
+        teamInitials: teamInitials,
         role: inviteData.jobTitle || inviteData.role,
         department: inviteData.department,
         inviteUrl: inviteUrl
