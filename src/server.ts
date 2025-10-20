@@ -288,15 +288,35 @@ app.get('/api/projects', authenticateUser, async (req, res) => {
 
 app.get('/api/projects/:id', async (req, res) => {
   try {
-    const { data: project, error } = await supabase
+    console.log('🔍 [server.ts] GET /api/projects/:id called - FIXED (no .single())', req.params.id);
+
+    // Query without .single() to handle duplicates gracefully
+    const { data, error } = await supabase
       .from('projects')
       .select('*')
-      .eq('id', req.params.id)
-      .single();
+      .eq('id', req.params.id);
 
     if (error) throw error;
 
-    res.json({ success: true, data: project });
+    if (!data || data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+
+    // If duplicates found, log warning and return most recent
+    if (data.length > 1) {
+      console.warn(`⚠️ [server.ts] DUPLICATE PROJECTS! ID: ${req.params.id}, Count: ${data.length}`);
+      const sortedData = data.sort((a, b) =>
+        new Date(b.updated_at || b.created_at).getTime() -
+        new Date(a.updated_at || a.created_at).getTime()
+      );
+      return res.json({
+        success: true,
+        data: sortedData[0],
+        warning: `Found ${data.length} duplicates - returning most recent`
+      });
+    }
+
+    res.json({ success: true, data: data[0] });
   } catch (error) {
     console.error('Error fetching project:', error);
     res.status(500).json({ success: false, error: error.message });
