@@ -193,33 +193,53 @@ router.get('/projects', async (req, res) => {
 router.get('/projects/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     if (!supabase) {
       return res.status(503).json({
         success: false,
         error: 'Database not configured'
       });
     }
-    
+
+    // First query without .single() to check for duplicates
     const { data, error } = await supabase
       .from('projects')
       .select('*')
-      .eq('id', id)
-      .single();
-    
+      .eq('id', id);
+
     if (error) {
-      if (error.code === 'PGRST116') {
-        return res.status(404).json({
-          success: false,
-          error: 'Project not found'
-        });
-      }
       throw error;
     }
-    
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      });
+    }
+
+    // If multiple rows found, log warning and return first one
+    if (data.length > 1) {
+      console.warn(`⚠️ DUPLICATE PROJECTS FOUND! ID: ${id}, Count: ${data.length}`);
+      console.warn('This should not happen - project IDs should be unique!');
+      console.warn('Returning most recently updated project');
+
+      // Sort by updated_at and return most recent
+      const sortedData = data.sort((a, b) =>
+        new Date(b.updated_at || b.created_at).getTime() -
+        new Date(a.updated_at || a.created_at).getTime()
+      );
+
+      return res.json({
+        success: true,
+        data: sortedData[0],
+        warning: `Found ${data.length} duplicate projects - returning most recent`
+      });
+    }
+
     res.json({
       success: true,
-      data
+      data: data[0]
     });
   } catch (error: any) {
     console.error('Error fetching project:', error);
