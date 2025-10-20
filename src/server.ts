@@ -365,16 +365,22 @@ app.post('/api/projects', authenticateUser, async (req, res) => {
 
 app.put('/api/projects/:id', async (req, res) => {
   try {
-    const { data: project, error } = await supabase
+    console.log('🔄 [server.ts] PUT /api/projects/:id called - FIXED (no .single())', req.params.id);
+
+    const { data, error } = await supabase
       .from('projects')
       .update(req.body)
       .eq('id', req.params.id)
-      .select()
-      .single();
+      .select();
 
     if (error) throw error;
 
-    res.json({ success: true, data: project });
+    if (!data || data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+
+    // Return first result (handles duplicates)
+    res.json({ success: true, data: data[0] });
   } catch (error) {
     console.error('Error updating project:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -383,19 +389,24 @@ app.put('/api/projects/:id', async (req, res) => {
 
 app.patch('/api/projects/:id', async (req, res) => {
   try {
+    console.log('🔄 [server.ts] PATCH /api/projects/:id called - FIXED (no .single())', req.params.id);
     const { action, data } = req.body;
 
     if (action === 'update_status' && data?.status) {
-      const { data: project, error } = await supabase
+      const { data: projects, error } = await supabase
         .from('projects')
         .update({ status: data.status })
         .eq('id', req.params.id)
-        .select()
-        .single();
+        .select();
 
       if (error) throw error;
 
-      res.json({ success: true, data: project });
+      if (!projects || projects.length === 0) {
+        return res.status(404).json({ success: false, error: 'Project not found' });
+      }
+
+      // Return first result (handles duplicates)
+      res.json({ success: true, data: projects[0] });
     } else {
       res.status(400).json({ success: false, error: 'Invalid action or missing status' });
     }
