@@ -15,12 +15,20 @@ const router = express.Router();
  */
 router.get('/emails', async (req: Request, res: Response) => {
   try {
-    const { folder, limit = 200 } = req.query;
-    const userId = 'demo-user'; // Default user for compatibility
+    const { folder, limit = 200, userId } = req.query;
 
-    console.log('📧 Legacy emails endpoint called, redirecting to Nylas');
+    if (!userId) {
+      console.log('⚠️ Legacy emails endpoint called without userId - returning empty');
+      return res.json({
+        success: true,
+        emails: [],
+        count: 0
+      });
+    }
 
-    const emails = await nylasEmailService.getEmails(userId, parseInt(limit as string));
+    console.log('📧 Legacy emails endpoint called for user:', userId);
+
+    const emails = await nylasEmailService.getEmails(userId as string, parseInt(limit as string));
 
     res.json({
       success: true,
@@ -43,11 +51,20 @@ router.get('/emails', async (req: Request, res: Response) => {
  */
 router.get('/accounts', async (req: Request, res: Response) => {
   try {
-    const userId = 'demo-user'; // Default user for compatibility
+    const { userId } = req.query;
 
-    console.log('📧 Legacy accounts endpoint called, redirecting to Nylas');
+    if (!userId) {
+      console.log('⚠️ Legacy accounts endpoint called without userId - returning empty');
+      return res.json({
+        success: true,
+        accounts: [],
+        count: 0
+      });
+    }
 
-    const accounts = await nylasEmailService.getUserAccounts(userId);
+    console.log('📧 Legacy accounts endpoint called for user:', userId);
+
+    const accounts = await nylasEmailService.getUserAccounts(userId as string);
 
     res.json({
       success: true,
