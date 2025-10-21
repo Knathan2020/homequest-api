@@ -34,6 +34,7 @@ router.post('/team/signup', async (req, res) => {
     } = req.body;
 
     console.log(`🚀 New team signup: ${teamName}`);
+    console.log(`📍 AREA CODE TRACKING - Received from frontend: ${preferredAreaCode || 'NONE'} for ${email}`);
 
     // Step 1: Create user account in Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({

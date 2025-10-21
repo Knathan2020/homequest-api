@@ -55,14 +55,23 @@ class PhoneProvisioningService {
   async provisionPhoneForTeam(config: TeamPhoneConfig): Promise<PhoneProvisioningResult> {
     try {
       console.log(`📞 Provisioning phone for team: ${config.teamName}`);
-      
+      console.log(`📍 AREA CODE TRACKING - Requested: ${config.preferredAreaCode || 'NONE (will use random)'}`);
+
       // Step 1: Purchase Twilio number
       const twilioNumber = await this.purchaseTwilioNumber(config.preferredAreaCode);
       if (!twilioNumber) {
         throw new Error('Failed to purchase Twilio number');
       }
-      
+
+      // Extract actual area code from provisioned number
+      const provisionedAreaCode = twilioNumber.substring(2, 5); // +1XXX -> XXX
+      const requestedAreaCode = config.preferredAreaCode || 'NONE';
+      const matchStatus = config.preferredAreaCode && provisionedAreaCode === config.preferredAreaCode
+        ? '✅ MATCH'
+        : '⚠️ MISMATCH';
+
       console.log(`✅ Purchased Twilio number: ${twilioNumber}`);
+      console.log(`📍 AREA CODE TRACKING - Provisioned: ${provisionedAreaCode} | Requested: ${requestedAreaCode} | Status: ${matchStatus}`);
       
       // Step 2: Import number to Vapi
       const vapiPhoneId = await this.importToVapi(twilioNumber, config.teamName);
@@ -119,19 +128,26 @@ class PhoneProvisioningService {
         },
         limit: 1
       };
-      
+
       if (areaCode) {
         searchParams.areaCode = areaCode;
+        console.log(`🔍 Searching Twilio for numbers in area code: ${areaCode}`);
+      } else {
+        console.log(`🔍 Searching Twilio for ANY available US number (no area code preference)`);
       }
-      
+
       const availableNumbers = await this.twilioClient
         .availablePhoneNumbers('US')
         .local
         .list(searchParams);
-      
+
       if (availableNumbers.length === 0) {
+        console.log(`❌ No numbers available in area code: ${areaCode || 'ANY'}`);
         throw new Error('No phone numbers available in this area code');
       }
+
+      console.log(`✅ Found ${availableNumbers.length} available number(s) in ${areaCode || 'random US area'}`);
+
       
       // Purchase the first available number
       const numberToPurchase = availableNumbers[0].phoneNumber;

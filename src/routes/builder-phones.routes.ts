@@ -83,8 +83,8 @@ router.post('/create', async (req: Request, res: Response) => {
       });
     }
 
-    // Create subaccount for team
-    console.log('🚀 Creating Twilio subaccount for team:', teamId);
+    // Use the full phone provisioning service (Twilio + VAPI + team_phones)
+    console.log('🚀 Provisioning phone with VAPI for team:', teamId);
 
     // Get full team details
     const { data: teamData } = await supabase
@@ -97,28 +97,28 @@ router.post('/create', async (req: Request, res: Response) => {
       throw new Error('Team data not found');
     }
 
-    const teamAccount = await twilioSubaccountsService.createTeamAccount({
+    // Use phoneProvisioningService for complete setup (Twilio + VAPI + team_phones)
+    const provisionResult = await phoneProvisioningService.provisionPhoneForTeam({
       teamId: teamId,
       teamName: teamData.team_name || company || userName,
       ownerEmail: email,
-      companyName: teamData.company_name || company
+      preferredAreaCode: undefined // Let it pick any available
     });
 
-    if (!teamAccount) {
-      throw new Error('Failed to create Twilio subaccount');
+    if (!provisionResult.success) {
+      throw new Error(provisionResult.error || 'Failed to provision phone');
     }
 
-    console.log('✅ Subaccount created:', {
-      subaccountSid: teamAccount.subaccount_sid,
-      phoneNumber: teamAccount.twilio_phone_number
+    console.log('✅ Phone provisioned with VAPI:', {
+      twilioNumber: provisionResult.twilioNumber,
+      vapiPhoneId: provisionResult.vapiPhoneId
     });
 
-    // Update the teams table with subaccount phone info
+    // Update the teams table with phone number
     await supabase
       .from('teams')
       .update({
-        twilio_phone_number: teamAccount.twilio_phone_number,
-        twilio_subaccount_sid: teamAccount.subaccount_sid,
+        twilio_phone_number: provisionResult.twilioNumber,
         phone_system_active: true,
         updated_at: new Date().toISOString()
       })
@@ -126,12 +126,12 @@ router.post('/create', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: `Phone ${teamAccount.twilio_phone_number} with subaccount created!`,
+      message: `Phone ${provisionResult.twilioNumber} created with AI receptionist!`,
       account: {
-        phoneNumber: teamAccount.twilio_phone_number,
-        subaccountSid: teamAccount.subaccount_sid,
+        phoneNumber: provisionResult.twilioNumber,
+        vapiPhoneId: provisionResult.vapiPhoneId,
         status: 'active',
-        monthlyCost: teamAccount.monthly_cost
+        monthlyCost: 2.15 // $1.15 Twilio + $1 VAPI estimate
       }
     });
   } catch (error: any) {

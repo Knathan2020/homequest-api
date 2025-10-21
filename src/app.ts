@@ -317,6 +317,7 @@ export const createApp = (): Application => {
   app.use('/api', require('./routes/test-phone-provisioning.routes').default); // Test phone provisioning system
   app.use('/api/vendor-bidding', vendorBiddingRoutes); // Vendor bidding portal and project-specific bid management
   app.use('/api/database', setupDatabaseRoutes); // Database setup and maintenance
+  app.use('/api/admin', require('./routes/admin-fix.routes').default); // Admin fixes and one-time migrations
   app.use('/api', projectsRoutes); // Projects management routes
   app.use('/api/selections', roomSelectionsRoutes); // Room selections upload and management
   app.use('/api/documents', require('./routes/documents.routes').default); // Document management and team sharing
