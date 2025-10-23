@@ -10,6 +10,7 @@ import { routeMapper } from './middleware/route-mapper'; // RE-ENABLED - fixes f
 import enhancedDetectionRoutes from './routes/enhanced-detection.routes';
 import intelligentAnalysisRoutes from './routes/intelligent-analysis.routes';
 import floorPlansRoutes from './routes/floor-plans.routes';
+import floorPlansCompleteRoutes from './routes/floorPlans'; // RasterScan + FloorplanToBlender3d workflow
 import floorPlanPersistenceRoutes from './routes/floor-plan-persistence.routes';
 import floorPlan3DRoutes from './routes/floor-plan-3d.routes';
 import floorPlanStorageRoutes from './routes/floor-plan-storage.routes';
@@ -1008,6 +1009,7 @@ app.use('/api/enhanced', enhancedDetectionRoutes);
 app.use('/api/enhanced-detection', enhancedDetectionRoutes); // Alias for frontend compatibility
 app.use('/api/intelligent', intelligentAnalysisRoutes);
 app.use('/api/floor-plans', floorPlansRoutes);
+app.use('/api/floor-plans', floorPlansCompleteRoutes); // Complete 2D+3D workflow
 app.use('/api/floor-plans', floorPlanPersistenceRoutes);
 app.use('/api/floor-plan-3d', floorPlan3DRoutes);
 app.use('/api/floor-plan-storage', floorPlanStorageRoutes);

@@ -7,14 +7,38 @@ import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import { VoiceResponse } from 'twilio/lib/twiml/VoiceResponse';
 
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN
-);
+// Lazy-load Twilio client only when needed (avoid crash with placeholder credentials)
+let twilioClient: any = null;
+const getTwilioClient = () => {
+  if (!twilioClient) {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+    // Skip initialization if using placeholder values
+    if (!accountSid || !authToken || accountSid.includes('your_') || !accountSid.startsWith('AC')) {
+      throw new Error('Twilio credentials not configured. Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in .env');
+    }
+
+    twilioClient = twilio(accountSid, authToken);
+  }
+  return twilioClient;
+};
+
+// Lazy-load OpenAI client only when needed (avoid crash with placeholder credentials)
+let openai: any = null;
+const getOpenAIClient = () => {
+  if (!openai) {
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    // Skip initialization if using placeholder values
+    if (!apiKey || apiKey.includes('your_')) {
+      throw new Error('OpenAI API key not configured. Please set OPENAI_API_KEY in .env');
+    }
+
+    openai = new OpenAI({ apiKey });
+  }
+  return openai;
+};
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -104,7 +128,7 @@ class BillionaireAIVoiceService {
 
     // STEP 1: Send intelligent SMS with project preview
     const smsMessage = await this.generateIntelligentSMS(projectContext);
-    await twilioClient.messages.create({
+    await getTwilioClient().messages.create({
       body: smsMessage,
       to: params.vendorPhone,
       from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER
@@ -154,7 +178,7 @@ Project ID: ${context.projectId}`;
     // Create sophisticated opening
     const openingScript = await this.generateDynamicOpening(context);
 
-    const call = await twilioClient.calls.create({
+    const call = await getTwilioClient().calls.create({
       to: vendorPhone,
       from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER,
       twiml: `
@@ -205,7 +229,7 @@ Project ID: ${context.projectId}`;
 
   // Generate dynamic, intelligent opening based on vendor profile and project
   private async generateDynamicOpening(context: ProjectContext): Promise<string> {
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAIClient().chat.completions.create({
       model: "gpt-4",
       messages: [{
         role: "system",
@@ -284,7 +308,7 @@ Project ID: ${context.projectId}`;
 
   // Generate intelligent responses that close deals
   private async generateIntelligentResponse(state: ConversationState, vendorInput: string): Promise<string> {
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAIClient().chat.completions.create({
       model: "gpt-4",
       messages: [
         {
@@ -680,7 +704,7 @@ Project ID: ${context.projectId}`;
     message += `• Direct line for questions: ${process.env.TWILIO_PHONE_NUMBER}\n`;
     message += `\nProject ID: ${state.projectContext.projectId}`;
 
-    await twilioClient.messages.create({
+    await getTwilioClient().messages.create({
       body: message,
       to: state.projectContext.vendorInfo.company, // Should be phone number
       from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER

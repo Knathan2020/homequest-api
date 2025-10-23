@@ -790,4 +790,232 @@ router.post('/upload-cad', upload.single('cadFile'), async (req, res) => {
   }
 });
 
+/**
+ * RasterScan Floor Plan Recognition Route
+ * Processes floor plans using RapidAPI Floor Plan Digitalization
+ */
+router.post('/rasterscan', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    console.log('🔍 Starting RasterScan processing:', req.file.originalname);
+
+    // Import RasterScan service
+    const { RasterScanService } = await import('../services/rasterscan.service');
+    const rasterScan = new RasterScanService();
+
+    // Import PDF converter if needed
+    const { PDFConverterService } = await import('../services/pdf-converter.service');
+    const pdfConverter = new PDFConverterService();
+
+    let imagePath = req.file.path;
+
+    // Convert PDF to image if necessary
+    if (req.file.mimetype === 'application/pdf') {
+      console.log('📄 Converting PDF to image...');
+      const images = await pdfConverter.convertToImages(req.file.path);
+      if (images.length === 0) {
+        throw new Error('PDF conversion failed');
+      }
+      imagePath = images[0]; // Use first page
+      console.log('✅ PDF converted to image:', imagePath);
+    }
+
+    // Process with RasterScan
+    const result = await rasterScan.processFloorPlan(imagePath);
+
+    // Convert to FloorPlansTab compatible format
+    const floorPlanData = rasterScan.convertToFloorPlanFormat(result);
+
+    console.log('✅ RasterScan processing complete');
+    console.log(`📊 Detected: ${floorPlanData.rooms.length} rooms, ${floorPlanData.walls.length} walls`);
+
+    res.json({
+      success: true,
+      data: floorPlanData,
+      summary: {
+        rooms: floorPlanData.rooms.length,
+        totalArea: floorPlanData.totalSquareFootage,
+        buildableArea: floorPlanData.buildableArea,
+        livingArea: floorPlanData.livingArea,
+        storageArea: floorPlanData.storageArea
+      },
+      metadata: floorPlanData.metadata
+    });
+
+    // Clean up temp files
+    fs.unlink(req.file.path, (err) => {
+      if (err) console.error('Failed to delete temp file:', err);
+    });
+
+    if (imagePath !== req.file.path) {
+      fs.unlink(imagePath, (err) => {
+        if (err) console.error('Failed to delete converted image:', err);
+      });
+    }
+
+  } catch (error: any) {
+    console.error('❌ RasterScan error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'RasterScan processing failed',
+      details: error.message
+    });
+
+    // Clean up on error
+    if (req.file) {
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.error('Failed to delete temp file:', err);
+      });
+    }
+  }
+});
+
+/**
+ * Complete Floor Plan Processing Route (2D + 3D)
+ * Combines RasterScan (2D recognition) + FloorplanToBlender3d (3D model generation)
+ */
+router.post('/complete', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    console.log('🔍 Starting complete floor plan processing:', req.file.originalname);
+
+    // Import services
+    const { RasterScanService } = await import('../services/rasterscan.service');
+    const { FloorPlan3DService } = await import('../services/floorplan3d.service');
+    const { PDFConverterService } = await import('../services/pdf-converter.service');
+
+    const rasterScan = new RasterScanService();
+    const floorPlan3D = new FloorPlan3DService();
+    const pdfConverter = new PDFConverterService();
+
+    let imagePath = req.file.path;
+
+    // Convert PDF to image if necessary
+    if (req.file.mimetype === 'application/pdf') {
+      console.log('📄 Converting PDF to image...');
+      const images = await pdfConverter.convertToImages(req.file.path);
+      if (images.length === 0) {
+        throw new Error('PDF conversion failed');
+      }
+      imagePath = images[0];
+      console.log('✅ PDF converted to image:', imagePath);
+    }
+
+    // Process 2D with RasterScan
+    console.log('🔍 Processing 2D floor plan with RasterScan...');
+    const rasterResult = await rasterScan.processFloorPlan(imagePath);
+    const floorPlanData = rasterScan.convertToFloorPlanFormat(rasterResult);
+    console.log(`✅ 2D processing complete: ${floorPlanData.rooms.length} rooms, ${floorPlanData.walls.length} walls`);
+
+    // Check if 3D service is available
+    const is3DAvailable = await floorPlan3D.healthCheck();
+
+    let model3D = null;
+    if (is3DAvailable) {
+      console.log('🏗️  Generating 3D model with FloorplanToBlender3d...');
+      try {
+        model3D = await floorPlan3D.convertToThreeJS(imagePath, 'glb');
+        console.log('✅ 3D model generated successfully');
+      } catch (error: any) {
+        console.warn('⚠️  3D generation failed:', error.message);
+        model3D = {
+          success: false,
+          error: error.message,
+          message: '3D service unavailable or processing failed'
+        };
+      }
+    } else {
+      console.warn('⚠️  3D service not available');
+      model3D = {
+        success: false,
+        message: 'FloorplanToBlender3d service is not running. Start with: docker-compose -f docker-compose.floorplan3d.yml up -d'
+      };
+    }
+
+    res.json({
+      success: true,
+      data: {
+        floorPlan2D: floorPlanData,
+        floorPlan3D: model3D,
+        summary: {
+          rooms: floorPlanData.rooms.length,
+          totalArea: floorPlanData.totalSquareFootage,
+          buildableArea: floorPlanData.buildableArea,
+          livingArea: floorPlanData.livingArea,
+          storageArea: floorPlanData.storageArea
+        },
+        metadata: floorPlanData.metadata
+      }
+    });
+
+    // Clean up temp files
+    fs.unlink(req.file.path, (err) => {
+      if (err) console.error('Failed to delete temp file:', err);
+    });
+
+    if (imagePath !== req.file.path) {
+      fs.unlink(imagePath, (err) => {
+        if (err) console.error('Failed to delete converted image:', err);
+      });
+    }
+
+  } catch (error: any) {
+    console.error('❌ Complete processing error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Complete floor plan processing failed',
+      details: error.message
+    });
+
+    // Clean up on error
+    if (req.file) {
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.error('Failed to delete temp file:', err);
+      });
+    }
+  }
+});
+
+/**
+ * Get 3D model file
+ * Downloads the generated 3D model file
+ */
+router.get('/3d-model/:filename', async (req, res) => {
+  try {
+    const { FloorPlan3DService } = await import('../services/floorplan3d.service');
+    const floorPlan3D = new FloorPlan3DService();
+
+    const modelBuffer = await floorPlan3D.getModelFile(req.params.filename);
+
+    // Set appropriate content type based on file extension
+    const ext = req.params.filename.split('.').pop()?.toLowerCase();
+    let contentType = 'application/octet-stream';
+
+    if (ext === 'glb') {
+      contentType = 'model/gltf-binary';
+    } else if (ext === 'obj') {
+      contentType = 'text/plain';
+    } else if (ext === 'blend') {
+      contentType = 'application/octet-stream';
+    }
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${req.params.filename}"`);
+    res.send(modelBuffer);
+  } catch (error: any) {
+    console.error('❌ Error retrieving 3D model:', error.message);
+    res.status(404).json({
+      success: false,
+      error: 'Model file not found',
+      details: error.message
+    });
+  }
+});
+
 export default router;
