@@ -219,7 +219,7 @@ export class RasterScanService {
         console.log('🔍 FIRST WINDOW SAMPLE:', JSON.stringify(plan.windows[0], null, 2));
       }
 
-      return this.formatResponse(response.data);
+      return await this.formatResponse(response.data, imagePath);
     } catch (error: any) {
       const isDocker = this.apiUrl.includes('localhost');
       console.error(`❌ RasterScan ${isDocker ? 'Docker' : 'RapidAPI'} error:`, error.message);
@@ -237,7 +237,7 @@ export class RasterScanService {
    * Format RasterScan response with enhanced room information
    * Handles both Docker ({ plans: [...] }) and RapidAPI formats
    */
-  private formatResponse(rawData: any): RasterScanResponse {
+  private async formatResponse(rawData: any, imagePath: string): Promise<RasterScanResponse> {
     // Docker format: { plans: [{ walls: [...], doors: [...], windows: [...] }] }
     // RapidAPI format: { walls: [...], doors: [...], windows: [...] }
     const plan = rawData.plans?.[0] || rawData;
@@ -245,7 +245,7 @@ export class RasterScanService {
     return {
       success: true,
       data: {
-        rooms: this.extractEnhancedRooms(plan),
+        rooms: await this.extractEnhancedRooms(plan, imagePath),
         walls: this.extractWalls(plan),
         doors: this.extractDoors(plan),
         windows: this.extractWindows(plan),
@@ -276,7 +276,7 @@ export class RasterScanService {
    * Extract enhanced room information
    * If API only provides centroids, automatically detect rooms from walls
    */
-  private extractEnhancedRooms(data: any): RasterScanRoom[] {
+  private async extractEnhancedRooms(data: any, imagePath?: string): Promise<RasterScanRoom[]> {
     const rooms = data.rooms || data.spaces || [];
 
     // Check if API provides full room polygons (more than 2 vertices)
@@ -292,8 +292,9 @@ export class RasterScanService {
 
     // API only gave centroids or no rooms - detect from walls
     if (data.walls && data.walls.length > 0) {
-      console.log('🔍 Auto-detecting rooms from wall segments...');
-      return this.detectRoomsFromWalls(data);
+      console.log('🔍 Auto-detecting rooms from wall segments with OCR...');
+      const dataWithImage = { ...data, imagePath };
+      return await this.detectRoomsFromWalls(dataWithImage);
     }
 
     console.log('⚠️ No room data or wall data available for detection');
@@ -354,8 +355,9 @@ export class RasterScanService {
   /**
    * Detect rooms automatically from wall segments
    * Finds closed polygons formed by connected walls
+   * Reads room names from floor plan using OCR
    */
-  private detectRoomsFromWalls(data: any): RasterScanRoom[] {
+  private async detectRoomsFromWalls(data: any): Promise<RasterScanRoom[]> {
     const walls = this.extractWalls(data);
     const doors = this.extractDoors(data);
     const windows = this.extractWindows(data);
@@ -366,7 +368,11 @@ export class RasterScanService {
     const roomPolygons = this.findClosedLoops(walls);
     console.log(`✅ Found ${roomPolygons.length} closed room polygons`);
 
-    // Convert polygons to room objects with intelligent naming
+    // Extract text labels from floor plan image
+    const textLabels = await this.extractTextLabels(data.imagePath);
+    console.log(`📝 Extracted ${textLabels.length} text labels from floor plan`);
+
+    // Convert polygons to room objects with OCR-based naming
     return roomPolygons.map((polygon, index) => {
       const area = this.calculatePolygonArea(polygon);
       const dimensions = this.calculateRoomDimensions(polygon);
@@ -377,12 +383,22 @@ export class RasterScanService {
       const roomDoors = this.countFeaturesInRoom(doors, polygon);
       const roomWindows = this.countFeaturesInRoom(windows, polygon);
 
-      // Infer room type based on size, shape, and features
-      const roomType = this.inferRoomType(area, dimensions, roomDoors, roomWindows);
+      // Find text label inside this room polygon
+      const roomLabel = this.findLabelInRoom(textLabels, polygon, centroid);
+
+      // Use OCR label if found, otherwise infer from size/features
+      let roomName = roomLabel?.text || '';
+      let roomType = this.parseRoomType(roomName);
+
+      if (!roomName) {
+        // Fall back to inference if no label found
+        roomType = this.inferRoomType(area, dimensions, roomDoors, roomWindows);
+        roomName = this.getRoomName(roomType, index);
+      }
 
       return {
         id: `room-${index}`,
-        name: this.getRoomName(roomType, index),
+        name: roomName,
         type: roomType,
         subType: this.inferSubType(roomType, area),
         area,
@@ -576,6 +592,109 @@ export class RasterScanService {
       if (intersect) inside = !inside;
     }
     return inside;
+  }
+
+  /**
+   * Extract text labels from floor plan image using OCR
+   */
+  private async extractTextLabels(imagePath?: string): Promise<Array<{ text: string; x: number; y: number; confidence: number }>> {
+    if (!imagePath) return [];
+
+    try {
+      const Tesseract = require('tesseract.js');
+
+      console.log('📖 Running OCR on floor plan image...');
+      const { data } = await Tesseract.recognize(imagePath, 'eng', {
+        logger: () => {} // Suppress progress logs
+      });
+
+      // Extract text with positions
+      const labels = data.words
+        .filter((word: any) => word.confidence > 60) // Filter low confidence
+        .map((word: any) => ({
+          text: word.text.trim(),
+          x: word.bbox.x0 + (word.bbox.x1 - word.bbox.x0) / 2,
+          y: word.bbox.y0 + (word.bbox.y1 - word.bbox.y0) / 2,
+          confidence: word.confidence
+        }))
+        .filter((label: any) => label.text.length > 2); // Filter single letters
+
+      console.log(`✅ OCR found ${labels.length} text labels`);
+      return labels;
+    } catch (error) {
+      console.warn('⚠️ OCR failed, falling back to inference:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Find text label inside a room polygon
+   */
+  private findLabelInRoom(
+    labels: Array<{ text: string; x: number; y: number; confidence: number }>,
+    polygon: Array<{ x: number; y: number }>,
+    centroid: { x: number; y: number }
+  ): { text: string; confidence: number } | null {
+    // Find labels inside this room
+    const labelsInRoom = labels.filter(label =>
+      this.isPointInPolygon({ x: label.x, y: label.y }, polygon)
+    );
+
+    if (labelsInRoom.length === 0) return null;
+
+    // If multiple labels, pick the one closest to centroid
+    labelsInRoom.sort((a, b) => {
+      const distA = Math.sqrt(Math.pow(a.x - centroid.x, 2) + Math.pow(a.y - centroid.y, 2));
+      const distB = Math.sqrt(Math.pow(b.x - centroid.x, 2) + Math.pow(b.y - centroid.y, 2));
+      return distA - distB;
+    });
+
+    // Combine multiple words if they're part of same label
+    if (labelsInRoom.length > 1) {
+      const combinedText = labelsInRoom
+        .slice(0, 3) // Max 3 words
+        .map(l => l.text)
+        .join(' ');
+
+      return {
+        text: combinedText,
+        confidence: labelsInRoom[0].confidence
+      };
+    }
+
+    return {
+      text: labelsInRoom[0].text,
+      confidence: labelsInRoom[0].confidence
+    };
+  }
+
+  /**
+   * Parse room type from OCR text label
+   */
+  private parseRoomType(text: string): string {
+    if (!text) return 'unknown';
+
+    const normalized = text.toLowerCase().trim();
+
+    // Common room name patterns
+    if (normalized.includes('bedroom') || normalized.includes('bed')) return 'bedroom';
+    if (normalized.includes('master') || normalized.includes('mstr')) return 'bedroom';
+    if (normalized.includes('bath') || normalized.includes('wc')) return 'bathroom';
+    if (normalized.includes('kitchen') || normalized.includes('kit')) return 'kitchen';
+    if (normalized.includes('living') || normalized.includes('family')) return 'living';
+    if (normalized.includes('dining') || normalized.includes('din')) return 'dining';
+    if (normalized.includes('office') || normalized.includes('study')) return 'office';
+    if (normalized.includes('closet') || normalized.includes('clst')) return 'closet';
+    if (normalized.includes('hallway') || normalized.includes('hall') || normalized.includes('corridor')) return 'hallway';
+    if (normalized.includes('garage') || normalized.includes('gar')) return 'garage';
+    if (normalized.includes('laundry') || normalized.includes('utility')) return 'laundry';
+    if (normalized.includes('pantry')) return 'pantry';
+    if (normalized.includes('storage') || normalized.includes('stor')) return 'storage';
+    if (normalized.includes('den')) return 'den';
+    if (normalized.includes('foyer') || normalized.includes('entry')) return 'hallway';
+
+    // If no match, return the text as-is (custom room name)
+    return 'unknown';
   }
 
   /**
