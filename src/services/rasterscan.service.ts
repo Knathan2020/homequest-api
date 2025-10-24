@@ -274,60 +274,356 @@ export class RasterScanService {
 
   /**
    * Extract enhanced room information
+   * If API only provides centroids, automatically detect rooms from walls
    */
   private extractEnhancedRooms(data: any): RasterScanRoom[] {
-    if (!data.rooms && !data.spaces) {
-      return [];
-    }
-
     const rooms = data.rooms || data.spaces || [];
 
-    return rooms.map((room: any, index: number) => {
-      const polygon = room.polygon || room.coordinates || [];
+    // Check if API provides full room polygons (more than 2 vertices)
+    if (rooms.length > 0 && rooms[0].polygon && rooms[0].polygon.length > 2) {
+      console.log('✅ Using room polygons from API');
+      return rooms.map((room: any, index: number) => this.formatRoomData(room, index, data));
+    }
+
+    // Check if we have at least centroids
+    if (rooms.length > 0 && (rooms[0].x !== undefined || rooms[0].centroid)) {
+      console.log('⚠️ API only provided room centroids (no polygons)');
+    }
+
+    // API only gave centroids or no rooms - detect from walls
+    if (data.walls && data.walls.length > 0) {
+      console.log('🔍 Auto-detecting rooms from wall segments...');
+      return this.detectRoomsFromWalls(data);
+    }
+
+    console.log('⚠️ No room data or wall data available for detection');
+    return [];
+  }
+
+  /**
+   * Format room data from API response
+   */
+  private formatRoomData(room: any, index: number, data: any): RasterScanRoom {
+    const polygon = room.polygon || room.coordinates || [];
+    const dimensions = this.calculateRoomDimensions(polygon);
+    const centroid = this.calculateCentroid(polygon);
+    const boundingBox = this.calculateBoundingBox(polygon);
+    const area = room.area || this.calculatePolygonArea(polygon);
+
+    return {
+      id: room.id || `room-${index}`,
+      name: this.getRoomName(room.type || 'unknown', index),
+      type: room.type || 'unknown',
+      subType: room.subType || this.inferSubType(room.type, area),
+      area,
+      dimensions: {
+        width: dimensions.width,
+        length: dimensions.length,
+        height: room.height || 9,
+        perimeter: dimensions.perimeter
+      },
+      polygon,
+      centroid,
+      boundingBox,
+      features: {
+        doors: room.door_count || 0,
+        windows: room.window_count || 0,
+        closets: room.closet_count || 0,
+        hasFireplace: room.has_fireplace || false,
+        hasBuiltIns: room.has_built_ins || false
+      },
+      location: {
+        floor: room.floor || 0,
+        position: this.inferPosition(centroid, data),
+        adjacentRooms: room.adjacent_rooms || []
+      },
+      materials: room.materials || {},
+      fixtures: room.fixtures || [],
+      lighting: {
+        natural: room.window_count || 0,
+        artificial: room.light_fixtures || 0
+      },
+      accessibility: {
+        hasDirectExternalAccess: room.has_external_door || false,
+        doorWidth: room.door_width || 36,
+        clearanceSpace: room.clearance || 0
+      }
+    };
+  }
+
+  /**
+   * Detect rooms automatically from wall segments
+   * Finds closed polygons formed by connected walls
+   */
+  private detectRoomsFromWalls(data: any): RasterScanRoom[] {
+    const walls = this.extractWalls(data);
+    const doors = this.extractDoors(data);
+    const windows = this.extractWindows(data);
+
+    console.log(`🔍 Detecting rooms from ${walls.length} walls, ${doors.length} doors, ${windows.length} windows`);
+
+    // Find closed loops/polygons from wall segments
+    const roomPolygons = this.findClosedLoops(walls);
+    console.log(`✅ Found ${roomPolygons.length} closed room polygons`);
+
+    // Convert polygons to room objects with intelligent naming
+    return roomPolygons.map((polygon, index) => {
+      const area = this.calculatePolygonArea(polygon);
       const dimensions = this.calculateRoomDimensions(polygon);
       const centroid = this.calculateCentroid(polygon);
       const boundingBox = this.calculateBoundingBox(polygon);
 
+      // Count doors and windows inside this room
+      const roomDoors = this.countFeaturesInRoom(doors, polygon);
+      const roomWindows = this.countFeaturesInRoom(windows, polygon);
+
+      // Infer room type based on size, shape, and features
+      const roomType = this.inferRoomType(area, dimensions, roomDoors, roomWindows);
+
       return {
-        id: room.id || `room-${index}`,
-        name: this.getRoomName(room.type || 'unknown', index),
-        type: room.type || 'unknown',
-        subType: room.subType || this.inferSubType(room.type, room.area),
-        area: room.area || room.square_footage || 0,
+        id: `room-${index}`,
+        name: this.getRoomName(roomType, index),
+        type: roomType,
+        subType: this.inferSubType(roomType, area),
+        area,
         dimensions: {
           width: dimensions.width,
           length: dimensions.length,
-          height: room.height || 9, // Default 9ft ceiling
+          height: 9, // Default 9ft ceiling
           perimeter: dimensions.perimeter
         },
         polygon,
         centroid,
         boundingBox,
         features: {
-          doors: room.door_count || 0,
-          windows: room.window_count || 0,
-          closets: room.closet_count || 0,
-          hasFireplace: room.has_fireplace || false,
-          hasBuiltIns: room.has_built_ins || false
+          doors: roomDoors,
+          windows: roomWindows,
+          closets: 0,
+          hasFireplace: false,
+          hasBuiltIns: false
         },
         location: {
-          floor: room.floor || 0,
+          floor: 0,
           position: this.inferPosition(centroid, data),
-          adjacentRooms: room.adjacent_rooms || []
+          adjacentRooms: []
         },
-        materials: room.materials || {},
-        fixtures: room.fixtures || [],
+        materials: {},
+        fixtures: [],
         lighting: {
-          natural: room.window_count || 0,
-          artificial: room.light_fixtures || 0
+          natural: roomWindows,
+          artificial: 0
         },
         accessibility: {
-          hasDirectExternalAccess: room.has_external_door || false,
-          doorWidth: room.door_width || 36, // inches
-          clearanceSpace: room.clearance || 0
+          hasDirectExternalAccess: roomDoors > 0,
+          doorWidth: 36,
+          clearanceSpace: 0
         }
       };
     });
+  }
+
+  /**
+   * Find closed loops (polygons) from wall segments
+   * Uses graph traversal to detect cycles
+   */
+  private findClosedLoops(walls: RasterScanWall[]): Array<Array<{ x: number; y: number }>> {
+    if (walls.length === 0) return [];
+
+    console.log('🔍 Finding closed loops from wall segments...');
+
+    // Build adjacency graph of wall endpoints
+    const graph = new Map<string, Array<{ point: { x: number; y: number }; wallId: string }>>();
+    const epsilon = 5; // Tolerance for point matching (5 pixels)
+
+    // Helper to create point key
+    const pointKey = (p: { x: number; y: number }) => `${Math.round(p.x / epsilon) * epsilon},${Math.round(p.y / epsilon) * epsilon}`;
+
+    // Build graph
+    walls.forEach((wall) => {
+      const startKey = pointKey(wall.start);
+      const endKey = pointKey(wall.end);
+
+      if (!graph.has(startKey)) graph.set(startKey, []);
+      if (!graph.has(endKey)) graph.set(endKey, []);
+
+      graph.get(startKey)!.push({ point: wall.end, wallId: wall.id });
+      graph.get(endKey)!.push({ point: wall.start, wallId: wall.id });
+    });
+
+    console.log(`📊 Built graph with ${graph.size} nodes`);
+
+    // Find cycles using DFS
+    const polygons: Array<Array<{ x: number; y: number }>> = [];
+    const visited = new Set<string>();
+
+    for (const [startKey, neighbors] of graph.entries()) {
+      if (visited.has(startKey)) continue;
+
+      const startPoint = neighbors[0]?.point || this.parsePoint(startKey);
+      const cycle = this.findCycle(startPoint, startPoint, graph, new Set(), epsilon);
+
+      if (cycle && cycle.length >= 4) {
+        // Valid room polygon (at least 4 vertices)
+        const cycleKey = cycle.map(p => pointKey(p)).sort().join('|');
+        if (!visited.has(cycleKey)) {
+          polygons.push(cycle);
+          visited.add(cycleKey);
+          console.log(`✅ Found cycle with ${cycle.length} vertices`);
+        }
+      }
+    }
+
+    return polygons;
+  }
+
+  /**
+   * Find a cycle starting from a point using DFS
+   */
+  private findCycle(
+    current: { x: number; y: number },
+    start: { x: number; y: number },
+    graph: Map<string, Array<{ point: { x: number; y: number }; wallId: string }>>,
+    visited: Set<string>,
+    epsilon: number
+  ): Array<{ x: number; y: number }> | null {
+    const pointKey = (p: { x: number; y: number }) => `${Math.round(p.x / epsilon) * epsilon},${Math.round(p.y / epsilon) * epsilon}`;
+    const distance = (p1: { x: number; y: number }, p2: { x: number; y: number }) =>
+      Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+
+    const currentKey = pointKey(current);
+
+    // If we've visited more than 3 points and we're back at start, we found a cycle
+    if (visited.size >= 3 && distance(current, start) < epsilon) {
+      return [current];
+    }
+
+    // Too many steps, abort
+    if (visited.size > 20) {
+      return null;
+    }
+
+    if (visited.has(currentKey)) {
+      return null;
+    }
+
+    visited.add(currentKey);
+
+    const neighbors = graph.get(currentKey) || [];
+    for (const neighbor of neighbors) {
+      const result = this.findCycle(neighbor.point, start, graph, new Set(visited), epsilon);
+      if (result) {
+        return [current, ...result];
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Parse point from key string
+   */
+  private parsePoint(key: string): { x: number; y: number } {
+    const [x, y] = key.split(',').map(Number);
+    return { x, y };
+  }
+
+  /**
+   * Calculate polygon area using Shoelace formula
+   */
+  private calculatePolygonArea(polygon: Array<{ x: number; y: number }>): number {
+    if (polygon.length < 3) return 0;
+
+    let area = 0;
+    for (let i = 0; i < polygon.length; i++) {
+      const j = (i + 1) % polygon.length;
+      area += polygon[i].x * polygon[j].y;
+      area -= polygon[j].x * polygon[i].y;
+    }
+
+    return Math.abs(area / 2);
+  }
+
+  /**
+   * Count features (doors/windows) inside a room polygon
+   */
+  private countFeaturesInRoom(
+    features: Array<{ x: number; y: number; width: number; height: number }>,
+    polygon: Array<{ x: number; y: number }>
+  ): number {
+    if (polygon.length < 3) return 0;
+
+    return features.filter((feature) => {
+      const featureCenter = {
+        x: feature.x + feature.width / 2,
+        y: feature.y + feature.height / 2
+      };
+      return this.isPointInPolygon(featureCenter, polygon);
+    }).length;
+  }
+
+  /**
+   * Check if a point is inside a polygon using ray casting
+   */
+  private isPointInPolygon(point: { x: number; y: number }, polygon: Array<{ x: number; y: number }>): boolean {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i].x, yi = polygon[i].y;
+      const xj = polygon[j].x, yj = polygon[j].y;
+
+      const intersect = ((yi > point.y) !== (yj > point.y)) &&
+        (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  /**
+   * Infer room type based on size, shape, and features
+   */
+  private inferRoomType(
+    area: number,
+    dimensions: { width: number; length: number; perimeter: number },
+    doors: number,
+    windows: number
+  ): string {
+    const aspectRatio = Math.max(dimensions.width, dimensions.length) / Math.min(dimensions.width, dimensions.length);
+
+    // Very small rooms
+    if (area < 2000) {
+      if (windows === 0) return 'closet';
+      return 'bathroom';
+    }
+
+    // Long narrow spaces (hallways)
+    if (aspectRatio > 3 && area < 5000) {
+      return 'hallway';
+    }
+
+    // Medium rooms
+    if (area < 8000) {
+      if (windows === 0) return 'storage';
+      if (doors >= 2) return 'hallway';
+      return 'bathroom';
+    }
+
+    // Large rooms
+    if (area < 15000) {
+      if (windows >= 2) return 'bedroom';
+      if (windows === 1) return 'office';
+      return 'bedroom';
+    }
+
+    // Very large rooms
+    if (area < 25000) {
+      if (windows >= 3) return 'living';
+      if (windows >= 2) return 'bedroom'; // Master bedroom
+      return 'family';
+    }
+
+    // Extra large rooms
+    if (windows >= 3) return 'living';
+    return 'family';
   }
 
   /**
