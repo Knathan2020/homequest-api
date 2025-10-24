@@ -143,9 +143,13 @@ export class RasterScanService {
     } else {
       // Use RapidAPI for production/Render deployment
       this.apiKey = process.env.RAPIDAPI_KEY || '';
-      this.apiHost = 'floor-plan-recognition1.p.rapidapi.com';
-      this.apiUrl = `https://${this.apiHost}/detectPlan`;
+      this.apiHost = 'floor-plan-digitalization.p.rapidapi.com';
+      this.apiUrl = `https://${this.apiHost}/raster-to-vector-base64`;
       console.log('✅ Using RapidAPI RasterScan service at', this.apiUrl);
+
+      if (!this.apiKey) {
+        console.warn('⚠️ RapidAPI key not found. Set RAPIDAPI_KEY in .env');
+      }
     }
   }
 
