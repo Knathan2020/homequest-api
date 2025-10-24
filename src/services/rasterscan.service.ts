@@ -489,7 +489,7 @@ export class RasterScanService {
   private extractDoors(data: any) {
     if (!data.doors) return [];
 
-    return data.doors.map((door: any) => {
+    const rawDoors = data.doors.map((door: any) => {
       // Handle Docker/RapidAPI box format (both use 4-point arrays)
       const boxData = door.box || door.bbox;
       if (boxData && Array.isArray(boxData) && boxData.length === 4) {
@@ -517,6 +517,92 @@ export class RasterScanService {
         swing: door.swing || 'right'
       };
     });
+
+    // Filter out invalid doors (false positives)
+    return this.filterValidDoors(rawDoors);
+  }
+
+  /**
+   * Filter out invalid door detections (false positives)
+   * Removes doors that are:
+   * - Too small (likely noise)
+   * - Wrong aspect ratio (too thin/wide)
+   * - Overlapping duplicates
+   */
+  private filterValidDoors(doors: any[]): any[] {
+    const validDoors = doors.filter((door) => {
+      const width = door.width;
+      const height = door.height;
+      const area = width * height;
+
+      // Minimum size: doors should be at least 20x20 pixels
+      if (width < 20 || height < 20) {
+        console.log(`🚫 Filtered door (too small): ${width}x${height}`);
+        return false;
+      }
+
+      // Maximum size: doors shouldn't be larger than 150 pixels in either dimension
+      if (width > 150 || height > 150) {
+        console.log(`🚫 Filtered door (too large): ${width}x${height}`);
+        return false;
+      }
+
+      // Aspect ratio check: typical doors are between 1:1.5 and 1:3 (or rotated)
+      const aspectRatio = Math.max(width, height) / Math.min(width, height);
+      if (aspectRatio > 4) {
+        console.log(`🚫 Filtered door (bad aspect ratio ${aspectRatio.toFixed(1)}): ${width}x${height}`);
+        return false;
+      }
+
+      // Minimum area: at least 600 square pixels
+      if (area < 600) {
+        console.log(`🚫 Filtered door (area too small ${area}): ${width}x${height}`);
+        return false;
+      }
+
+      return true;
+    });
+
+    // Remove overlapping duplicates
+    const nonOverlapping = this.removeDuplicateDoors(validDoors);
+
+    console.log(`🚪 Filtered doors: ${doors.length} → ${validDoors.length} → ${nonOverlapping.length} (after dedup)`);
+
+    return nonOverlapping;
+  }
+
+  /**
+   * Remove duplicate/overlapping doors
+   */
+  private removeDuplicateDoors(doors: any[]): any[] {
+    const result: any[] = [];
+
+    for (const door of doors) {
+      // Check if this door overlaps significantly with any existing door
+      const hasOverlap = result.some((existing) => {
+        const overlapX = Math.max(0,
+          Math.min(door.x + door.width, existing.x + existing.width) -
+          Math.max(door.x, existing.x)
+        );
+        const overlapY = Math.max(0,
+          Math.min(door.y + door.height, existing.y + existing.height) -
+          Math.max(door.y, existing.y)
+        );
+        const overlapArea = overlapX * overlapY;
+        const doorArea = door.width * door.height;
+
+        // If more than 50% overlap, consider it a duplicate
+        return (overlapArea / doorArea) > 0.5;
+      });
+
+      if (!hasOverlap) {
+        result.push(door);
+      } else {
+        console.log(`🚫 Filtered duplicate door at (${door.x}, ${door.y})`);
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -529,7 +615,7 @@ export class RasterScanService {
   private extractWindows(data: any) {
     if (!data.windows) return [];
 
-    return data.windows.map((window: any) => {
+    const rawWindows = data.windows.map((window: any) => {
       // Handle Docker/RapidAPI box format (both use 4-point arrays)
       const boxData = window.box || window.bbox;
       if (boxData && Array.isArray(boxData) && boxData.length === 4) {
@@ -557,6 +643,52 @@ export class RasterScanService {
         exposure: window.exposure || 'unknown'
       };
     });
+
+    // Filter out invalid windows (false positives)
+    return this.filterValidWindows(rawWindows);
+  }
+
+  /**
+   * Filter out invalid window detections (false positives)
+   * Similar to door filtering but with slightly different thresholds
+   */
+  private filterValidWindows(windows: any[]): any[] {
+    const validWindows = windows.filter((window) => {
+      const width = window.width;
+      const height = window.height;
+      const area = width * height;
+
+      // Minimum size: windows should be at least 15x15 pixels
+      if (width < 15 || height < 15) {
+        console.log(`🚫 Filtered window (too small): ${width}x${height}`);
+        return false;
+      }
+
+      // Maximum size: windows shouldn't be larger than 120 pixels in either dimension
+      if (width > 120 || height > 120) {
+        console.log(`🚫 Filtered window (too large): ${width}x${height}`);
+        return false;
+      }
+
+      // Aspect ratio check: windows can be wider range than doors (1:1 to 1:4)
+      const aspectRatio = Math.max(width, height) / Math.min(width, height);
+      if (aspectRatio > 5) {
+        console.log(`🚫 Filtered window (bad aspect ratio ${aspectRatio.toFixed(1)}): ${width}x${height}`);
+        return false;
+      }
+
+      // Minimum area: at least 400 square pixels
+      if (area < 400) {
+        console.log(`🚫 Filtered window (area too small ${area}): ${width}x${height}`);
+        return false;
+      }
+
+      return true;
+    });
+
+    console.log(`🪟 Filtered windows: ${windows.length} → ${validWindows.length}`);
+
+    return validWindows;
   }
 
   /**
