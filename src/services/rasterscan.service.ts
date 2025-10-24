@@ -440,32 +440,60 @@ export class RasterScanService {
 
   /**
    * Extract walls with enhanced information
+   * Handles multiple formats:
+   * - RapidAPI: { "position": [[x1,y1], [x2,y2]] }
+   * - Docker/Direct: { start: {x, y}, end: {x, y} }
    */
   private extractWalls(data: any): RasterScanWall[] {
     if (!data.walls) return [];
 
-    return data.walls.map((wall: any, index: number) => ({
-      id: wall.id || `wall-${index}`,
-      start: wall.start || wall.p1 || { x: 0, y: 0 },
-      end: wall.end || wall.p2 || { x: 0, y: 0 },
-      length: wall.length || 0,
-      thickness: wall.thickness || 6, // inches
-      type: wall.type || 'interior',
-      connectedRooms: wall.connected_rooms || []
-    }));
+    return data.walls.map((wall: any, index: number) => {
+      let start: { x: number; y: number };
+      let end: { x: number; y: number };
+
+      // Handle RapidAPI position array format: [[x1,y1], [x2,y2]]
+      if (wall.position && Array.isArray(wall.position) && wall.position.length === 2) {
+        const [pt1, pt2] = wall.position;
+        start = { x: pt1[0], y: pt1[1] };
+        end = { x: pt2[0], y: pt2[1] };
+      } else {
+        // Handle Docker/Direct format: { start: {x, y}, end: {x, y} }
+        start = wall.start || wall.p1 || { x: 0, y: 0 };
+        end = wall.end || wall.p2 || { x: 0, y: 0 };
+      }
+
+      // Calculate length if not provided
+      const length = wall.length || Math.sqrt(
+        Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2)
+      );
+
+      return {
+        id: wall.id || `wall-${index}`,
+        start,
+        end,
+        length,
+        thickness: wall.thickness || 6, // inches
+        type: wall.type || 'interior',
+        connectedRooms: wall.connected_rooms || []
+      };
+    });
   }
 
   /**
    * Extract doors with detailed information
-   * Docker format: { "box": [[x1,y1], [x2,y1], [x2,y2], [x1,y2]] }
+   * Handles multiple formats:
+   * - Docker: { "box": [[x1,y1], [x2,y1], [x2,y2], [x1,y2]] }
+   * - RapidAPI: { "bbox": [[x1,y1], [x2,y1], [x2,y2], [x1,y2]] }
+   * - Direct: { x, y, width, height }
    */
   private extractDoors(data: any) {
     if (!data.doors) return [];
 
     return data.doors.map((door: any) => {
-      // Handle Docker box format: [[x1,y1], [x2,y1], [x2,y2], [x1,y2]]
-      if (door.box && Array.isArray(door.box) && door.box.length === 4) {
-        const [pt1, , pt3] = door.box;
+      // Handle Docker/RapidAPI box format (both use 4-point arrays)
+      const boxData = door.box || door.bbox;
+      if (boxData && Array.isArray(boxData) && boxData.length === 4) {
+        const [pt1, , pt3] = boxData;
         const x1 = pt1[0], y1 = pt1[1];
         const x2 = pt3[0], y2 = pt3[1];
 
@@ -479,7 +507,7 @@ export class RasterScanService {
         };
       }
 
-      // Fallback to RapidAPI or other formats (x, y, width, height)
+      // Fallback to direct format (x, y, width, height)
       return {
         x: door.x || door.position?.x || 0,
         y: door.y || door.position?.y || 0,
@@ -493,14 +521,19 @@ export class RasterScanService {
 
   /**
    * Extract windows with detailed information
+   * Handles multiple formats:
+   * - Docker: { "box": [[x1,y1], [x2,y1], [x2,y2], [x1,y2]] }
+   * - RapidAPI: { "bbox": [[x1,y1], [x2,y1], [x2,y2], [x1,y2]] }
+   * - Direct: { x, y, width, height }
    */
   private extractWindows(data: any) {
     if (!data.windows) return [];
 
     return data.windows.map((window: any) => {
-      // Handle Docker box format: [[x1,y1], [x2,y1], [x2,y2], [x1,y2]]
-      if (window.box && Array.isArray(window.box) && window.box.length === 4) {
-        const [pt1, , pt3] = window.box;
+      // Handle Docker/RapidAPI box format (both use 4-point arrays)
+      const boxData = window.box || window.bbox;
+      if (boxData && Array.isArray(boxData) && boxData.length === 4) {
+        const [pt1, , pt3] = boxData;
         const x1 = pt1[0], y1 = pt1[1];
         const x2 = pt3[0], y2 = pt3[1];
 
@@ -514,7 +547,7 @@ export class RasterScanService {
         };
       }
 
-      // Fallback to RapidAPI or other formats (x, y, width, height)
+      // Fallback to direct format (x, y, width, height)
       return {
         x: window.x || window.position?.x || 0,
         y: window.y || window.position?.y || 0,
