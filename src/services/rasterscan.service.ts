@@ -198,6 +198,16 @@ export class RasterScanService {
       console.log('📊 Walls count:', (plan.walls || []).length);
       console.log('🚪 Doors count:', (plan.doors || []).length);
       console.log('🪟 Windows count:', (plan.windows || []).length);
+      console.log('🏠 Rooms count:', (plan.rooms || plan.spaces || []).length);
+
+      // Log room data structure if present
+      if (plan.rooms && plan.rooms.length > 0) {
+        console.log('🔍 FIRST ROOM SAMPLE:', JSON.stringify(plan.rooms[0], null, 2));
+      } else if (plan.spaces && plan.spaces.length > 0) {
+        console.log('🔍 FIRST SPACE SAMPLE:', JSON.stringify(plan.spaces[0], null, 2));
+      } else {
+        console.log('⚠️ No rooms/spaces in API response');
+      }
 
       if (plan.walls && plan.walls.length > 0) {
         console.log('🔍 FIRST WALL SAMPLE:', JSON.stringify(plan.walls[0], null, 2));
