@@ -130,13 +130,12 @@ export class RasterScanService {
   private apiUrl: string;
 
   constructor() {
-    this.apiKey = process.env.RAPIDAPI_KEY || '';
-    this.apiHost = 'floor-plan-digitalization.p.rapidapi.com';
-    this.apiUrl = `https://${this.apiHost}/raster-to-vector-base64`;
+    // Use local Docker RasterScan service instead of RapidAPI
+    this.apiKey = '';
+    this.apiHost = 'localhost:8888';
+    this.apiUrl = `http://${this.apiHost}/plan_recognition_on_base64`;
 
-    if (!this.apiKey) {
-      console.warn('⚠️ RapidAPI key not found. Set RAPIDAPI_KEY in .env');
-    }
+    console.log('✅ Using local RasterScan Docker service at', this.apiUrl);
   }
 
   /**
@@ -144,11 +143,7 @@ export class RasterScanService {
    */
   async processFloorPlan(imagePath: string): Promise<RasterScanResponse> {
     try {
-      console.log('🔍 Processing floor plan with RasterScan:', imagePath);
-
-      if (!this.apiKey) {
-        throw new Error('RapidAPI key not configured');
-      }
+      console.log('🔍 Processing floor plan with local RasterScan Docker:', imagePath);
 
       if (!fs.existsSync(imagePath)) {
         throw new Error(`Image file not found: ${imagePath}`);
@@ -157,7 +152,7 @@ export class RasterScanService {
       const imageBuffer = fs.readFileSync(imagePath);
       const base64Image = imageBuffer.toString('base64');
 
-      // Call RasterScan API (actual format from RapidAPI)
+      // Call local Docker RasterScan API
       const response = await axios.post(
         this.apiUrl,
         {
@@ -165,59 +160,75 @@ export class RasterScanService {
         },
         {
           headers: {
-            'Content-Type': 'application/json',
-            'x-rapidapi-key': this.apiKey,
-            'x-rapidapi-host': this.apiHost
+            'Content-Type': 'application/json'
           },
           timeout: 60000
         }
       );
 
-      console.log('✅ RasterScan processing complete');
+      console.log('✅ RasterScan Docker processing complete');
+      console.log('🔍 RAW DOCKER RESPONSE:', JSON.stringify(response.data, null, 2).substring(0, 2000));
+
+      // Docker response format: { plans: [{ walls: [...], doors: [...], windows: [...] }] }
+      const plan = response.data.plans?.[0] || {};
+      console.log('📊 Walls count:', (plan.walls || []).length);
+      console.log('🚪 Doors count:', (plan.doors || []).length);
+      console.log('🪟 Windows count:', (plan.windows || []).length);
+
+      if (plan.walls && plan.walls.length > 0) {
+        console.log('🔍 FIRST WALL SAMPLE:', JSON.stringify(plan.walls[0], null, 2));
+      }
+      if (plan.doors && plan.doors.length > 0) {
+        console.log('🔍 FIRST DOOR SAMPLE:', JSON.stringify(plan.doors[0], null, 2));
+      }
+      if (plan.windows && plan.windows.length > 0) {
+        console.log('🔍 FIRST WINDOW SAMPLE:', JSON.stringify(plan.windows[0], null, 2));
+      }
 
       return this.formatResponse(response.data);
     } catch (error: any) {
-      console.error('❌ RasterScan error:', error.message);
+      console.error('❌ RasterScan Docker error:', error.message);
 
       if (error.response) {
         console.error('Response status:', error.response.status);
         console.error('Response data:', error.response.data);
       }
 
-      throw new Error(`RasterScan processing failed: ${error.message}`);
+      throw new Error(`RasterScan Docker processing failed: ${error.message}`);
     }
   }
 
   /**
-   * Format RasterScan response with enhanced room information
+   * Format RasterScan Docker response with enhanced room information
    */
   private formatResponse(rawData: any): RasterScanResponse {
-    const data = rawData.result || rawData.data || rawData;
+    // Docker format: { plans: [{ walls: [...], doors: [...], windows: [...] }] }
+    const plan = rawData.plans?.[0] || {};
 
     return {
       success: true,
       data: {
-        rooms: this.extractEnhancedRooms(data),
-        walls: this.extractWalls(data),
-        doors: this.extractDoors(data),
-        windows: this.extractWindows(data),
-        stairs: this.extractStairs(data),
-        totalArea: this.calculateTotalArea(data),
-        buildableArea: this.calculateBuildableArea(data),
-        circulation: this.calculateCirculation(data),
-        storageArea: this.calculateStorageArea(data),
-        livingArea: this.calculateLivingArea(data),
+        rooms: this.extractEnhancedRooms(plan),
+        walls: this.extractWalls(plan),
+        doors: this.extractDoors(plan),
+        windows: this.extractWindows(plan),
+        stairs: this.extractStairs(plan),
+        totalArea: this.calculateTotalArea(plan),
+        buildableArea: this.calculateBuildableArea(plan),
+        circulation: this.calculateCirculation(plan),
+        storageArea: this.calculateStorageArea(plan),
+        livingArea: this.calculateLivingArea(plan),
         metadata: {
-          processingTime: data.processing_time || 0,
-          imageWidth: data.image_width || 0,
-          imageHeight: data.image_height || 0,
-          scale: data.scale || 1,
-          confidence: data.confidence || 0.85,
+          processingTime: 0,
+          imageWidth: 0,
+          imageHeight: 0,
+          scale: 1,
+          confidence: 0.85,
           detected: {
-            rooms: (data.rooms || []).length,
-            walls: (data.walls || []).length,
-            doors: (data.doors || []).length,
-            windows: (data.windows || []).length
+            rooms: (plan.rooms || []).length,
+            walls: (plan.walls || []).length,
+            doors: (plan.doors || []).length,
+            windows: (plan.windows || []).length
           }
         }
       }
@@ -419,18 +430,38 @@ export class RasterScanService {
 
   /**
    * Extract doors with detailed information
+   * Docker format: { "box": [[x1,y1], [x2,y1], [x2,y2], [x1,y2]] }
    */
   private extractDoors(data: any) {
     if (!data.doors) return [];
 
-    return data.doors.map((door: any) => ({
-      x: door.x || door.position?.x || 0,
-      y: door.y || door.position?.y || 0,
-      width: door.width || 36, // inches
-      height: door.height || 80, // inches
-      type: door.type || 'interior',
-      swing: door.swing || 'right'
-    }));
+    return data.doors.map((door: any) => {
+      // Handle Docker box format: [[x1,y1], [x2,y1], [x2,y2], [x1,y2]]
+      if (door.box && Array.isArray(door.box) && door.box.length === 4) {
+        const [pt1, pt2, pt3, pt4] = door.box;
+        const x1 = pt1[0], y1 = pt1[1];
+        const x2 = pt3[0], y2 = pt3[2];
+
+        return {
+          x: x1,
+          y: y1,
+          width: Math.abs(x2 - x1),
+          height: Math.abs(y2 - y1),
+          type: door.type || 'interior',
+          swing: door.swing || 'right'
+        };
+      }
+
+      // Fallback to other formats
+      return {
+        x: door.x || door.position?.x || 0,
+        y: door.y || door.position?.y || 0,
+        width: door.width || 36,
+        height: door.height || 80,
+        type: door.type || 'interior',
+        swing: door.swing || 'right'
+      };
+    });
   }
 
   /**
@@ -439,14 +470,33 @@ export class RasterScanService {
   private extractWindows(data: any) {
     if (!data.windows) return [];
 
-    return data.windows.map((window: any) => ({
-      x: window.x || window.position?.x || 0,
-      y: window.y || window.position?.y || 0,
-      width: window.width || 36, // inches
-      height: window.height || 48, // inches
-      type: window.type || 'single',
-      exposure: window.exposure || 'unknown'
-    }));
+    return data.windows.map((window: any) => {
+      // Handle Docker box format: [[x1,y1], [x2,y1], [x2,y2], [x1,y2]]
+      if (window.box && Array.isArray(window.box) && window.box.length === 4) {
+        const [pt1, pt2, pt3, pt4] = window.box;
+        const x1 = pt1[0], y1 = pt1[1];
+        const x2 = pt3[0], y2 = pt3[1];
+
+        return {
+          x: x1,
+          y: y1,
+          width: Math.abs(x2 - x1),
+          height: Math.abs(y2 - y1),
+          type: window.type || 'single',
+          exposure: window.exposure || 'unknown'
+        };
+      }
+
+      // Fallback to direct properties if box format not available
+      return {
+        x: window.x || window.position?.x || 0,
+        y: window.y || window.position?.y || 0,
+        width: window.width || 36, // inches
+        height: window.height || 48, // inches
+        type: window.type || 'single',
+        exposure: window.exposure || 'unknown'
+      };
+    });
   }
 
   /**
