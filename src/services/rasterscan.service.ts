@@ -130,12 +130,23 @@ export class RasterScanService {
   private apiUrl: string;
 
   constructor() {
-    // Use local Docker RasterScan service instead of RapidAPI
-    this.apiKey = '';
-    this.apiHost = 'localhost:8888';
-    this.apiUrl = `http://${this.apiHost}/plan_recognition_on_base64`;
+    // Check if running in development with Docker or production with RapidAPI
+    const useDockerLocal = process.env.RASTERSCAN_USE_DOCKER === 'true' ||
+                           process.env.NODE_ENV === 'development';
 
-    console.log('✅ Using local RasterScan Docker service at', this.apiUrl);
+    if (useDockerLocal) {
+      // Use local Docker RasterScan service for development
+      this.apiKey = '';
+      this.apiHost = 'localhost:8888';
+      this.apiUrl = `http://${this.apiHost}/plan_recognition_on_base64`;
+      console.log('✅ Using local RasterScan Docker service at', this.apiUrl);
+    } else {
+      // Use RapidAPI for production/Render deployment
+      this.apiKey = process.env.RAPIDAPI_KEY || '';
+      this.apiHost = 'floor-plan-recognition1.p.rapidapi.com';
+      this.apiUrl = `https://${this.apiHost}/detectPlan`;
+      console.log('✅ Using RapidAPI RasterScan service at', this.apiUrl);
+    }
   }
 
   /**
@@ -143,7 +154,8 @@ export class RasterScanService {
    */
   async processFloorPlan(imagePath: string): Promise<RasterScanResponse> {
     try {
-      console.log('🔍 Processing floor plan with local RasterScan Docker:', imagePath);
+      const isDocker = this.apiUrl.includes('localhost');
+      console.log(`🔍 Processing floor plan with ${isDocker ? 'Docker' : 'RapidAPI'}:`, imagePath);
 
       if (!fs.existsSync(imagePath)) {
         throw new Error(`Image file not found: ${imagePath}`);
@@ -152,25 +164,33 @@ export class RasterScanService {
       const imageBuffer = fs.readFileSync(imagePath);
       const base64Image = imageBuffer.toString('base64');
 
-      // Call local Docker RasterScan API
+      // Prepare headers based on API type
+      const headers: any = {
+        'Content-Type': 'application/json'
+      };
+
+      if (!isDocker && this.apiKey) {
+        headers['x-rapidapi-key'] = this.apiKey;
+        headers['x-rapidapi-host'] = this.apiHost;
+      }
+
+      // Call RasterScan API (Docker or RapidAPI)
       const response = await axios.post(
         this.apiUrl,
         {
           image: base64Image
         },
         {
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers,
           timeout: 60000
         }
       );
 
-      console.log('✅ RasterScan Docker processing complete');
-      console.log('🔍 RAW DOCKER RESPONSE:', JSON.stringify(response.data, null, 2).substring(0, 2000));
+      console.log(`✅ RasterScan ${isDocker ? 'Docker' : 'RapidAPI'} processing complete`);
+      console.log('🔍 RAW RESPONSE:', JSON.stringify(response.data, null, 2).substring(0, 2000));
 
-      // Docker response format: { plans: [{ walls: [...], doors: [...], windows: [...] }] }
-      const plan = response.data.plans?.[0] || {};
+      // Check response format (Docker vs RapidAPI)
+      const plan = response.data.plans?.[0] || response.data;
       console.log('📊 Walls count:', (plan.walls || []).length);
       console.log('🚪 Doors count:', (plan.doors || []).length);
       console.log('🪟 Windows count:', (plan.windows || []).length);
@@ -187,23 +207,26 @@ export class RasterScanService {
 
       return this.formatResponse(response.data);
     } catch (error: any) {
-      console.error('❌ RasterScan Docker error:', error.message);
+      const isDocker = this.apiUrl.includes('localhost');
+      console.error(`❌ RasterScan ${isDocker ? 'Docker' : 'RapidAPI'} error:`, error.message);
 
       if (error.response) {
         console.error('Response status:', error.response.status);
         console.error('Response data:', error.response.data);
       }
 
-      throw new Error(`RasterScan Docker processing failed: ${error.message}`);
+      throw new Error(`RasterScan processing failed: ${error.message}`);
     }
   }
 
   /**
-   * Format RasterScan Docker response with enhanced room information
+   * Format RasterScan response with enhanced room information
+   * Handles both Docker ({ plans: [...] }) and RapidAPI formats
    */
   private formatResponse(rawData: any): RasterScanResponse {
     // Docker format: { plans: [{ walls: [...], doors: [...], windows: [...] }] }
-    const plan = rawData.plans?.[0] || {};
+    // RapidAPI format: { walls: [...], doors: [...], windows: [...] }
+    const plan = rawData.plans?.[0] || rawData;
 
     return {
       success: true,
@@ -438,9 +461,9 @@ export class RasterScanService {
     return data.doors.map((door: any) => {
       // Handle Docker box format: [[x1,y1], [x2,y1], [x2,y2], [x1,y2]]
       if (door.box && Array.isArray(door.box) && door.box.length === 4) {
-        const [pt1, pt2, pt3, pt4] = door.box;
+        const [pt1, , pt3] = door.box;
         const x1 = pt1[0], y1 = pt1[1];
-        const x2 = pt3[0], y2 = pt3[2];
+        const x2 = pt3[0], y2 = pt3[1];
 
         return {
           x: x1,
@@ -452,7 +475,7 @@ export class RasterScanService {
         };
       }
 
-      // Fallback to other formats
+      // Fallback to RapidAPI or other formats (x, y, width, height)
       return {
         x: door.x || door.position?.x || 0,
         y: door.y || door.position?.y || 0,
@@ -473,7 +496,7 @@ export class RasterScanService {
     return data.windows.map((window: any) => {
       // Handle Docker box format: [[x1,y1], [x2,y1], [x2,y2], [x1,y2]]
       if (window.box && Array.isArray(window.box) && window.box.length === 4) {
-        const [pt1, pt2, pt3, pt4] = window.box;
+        const [pt1, , pt3] = window.box;
         const x1 = pt1[0], y1 = pt1[1];
         const x2 = pt3[0], y2 = pt3[1];
 
@@ -487,7 +510,7 @@ export class RasterScanService {
         };
       }
 
-      // Fallback to direct properties if box format not available
+      // Fallback to RapidAPI or other formats (x, y, width, height)
       return {
         x: window.x || window.position?.x || 0,
         y: window.y || window.position?.y || 0,
