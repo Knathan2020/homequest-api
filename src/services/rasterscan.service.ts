@@ -387,6 +387,11 @@ export class RasterScanService {
       // Match this polygon with GPT Vision detected room
       const gptRoom = this.matchGPTVisionRoom(gptVisionRooms, centroid, boundingBox);
 
+      if (index === 0 && gptVisionRooms.length > 0) {
+        console.log(`🔍 Matching room ${index}: centroid=(${centroid.x}, ${centroid.y}), bbox=(${boundingBox.minX},${boundingBox.minY})-(${boundingBox.maxX},${boundingBox.maxY})`);
+        console.log(`🔍 GPT Vision has ${gptVisionRooms.length} rooms, matched: ${gptRoom ? gptRoom.name : 'NO MATCH'}`);
+      }
+
       // Use GPT Vision room name/type if found, otherwise infer from size/features
       let roomName = gptRoom?.name || '';
       let roomType = gptRoom?.type || this.inferRoomType(area, dimensions, roomDoors, roomWindows);
@@ -620,6 +625,8 @@ export class RasterScanService {
       }));
 
       console.log(`✅ GPT Vision detected ${rooms.length} rooms`);
+      console.log('🏠 GPT Vision room names:', rooms.map(r => `${r.name} (${r.type})`).join(', '));
+      console.log('📍 GPT Vision room positions:', rooms.map(r => `${r.name}: (${r.position.x}, ${r.position.y})`).join(', '));
       return rooms;
     } catch (error) {
       console.warn('⚠️ GPT Vision analysis failed, falling back to inference:', error);
