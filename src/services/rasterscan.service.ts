@@ -243,13 +243,26 @@ export class RasterScanService {
     // RapidAPI format: { walls: [...], doors: [...], windows: [...] }
     const plan = rawData.plans?.[0] || rawData;
 
+    // Extract windows from RasterScan
+    let windows = this.extractWindows(plan);
+
+    // If RasterScan found 0 windows, use GPT Vision as fallback
+    if (windows.length === 0) {
+      console.log('⚠️ RasterScan found 0 windows, checking GPT Vision...');
+      const gptWindows = await this.extractWindowsFromGPTVision(imagePath);
+      if (gptWindows.length > 0) {
+        console.log(`✅ Using ${gptWindows.length} windows from GPT Vision`);
+        windows = gptWindows;
+      }
+    }
+
     return {
       success: true,
       data: {
         rooms: await this.extractEnhancedRooms(plan, imagePath),
         walls: this.extractWalls(plan),
         doors: this.extractDoors(plan),
-        windows: this.extractWindows(plan),
+        windows,
         stairs: this.extractStairs(plan),
         totalArea: this.calculateTotalArea(plan),
         buildableArea: this.calculateBuildableArea(plan),
@@ -693,6 +706,39 @@ export class RasterScanService {
       if (intersect) inside = !inside;
     }
     return inside;
+  }
+
+  /**
+   * Extract windows from GPT Vision (fallback when RasterScan finds 0)
+   */
+  private async extractWindowsFromGPTVision(imagePath?: string): Promise<Array<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    type: string;
+    exposure: string;
+  }>> {
+    if (!imagePath || !fs.existsSync(imagePath)) {
+      return [];
+    }
+
+    try {
+      const result = await gptVisionDetector.detectFloorPlan(imagePath);
+
+      // Convert GPT Vision windows to RasterScan format
+      return result.windows.map(window => ({
+        x: window.position.x,
+        y: window.position.y,
+        width: window.width,
+        height: window.height,
+        type: 'single',
+        exposure: 'unknown'
+      }));
+    } catch (error) {
+      console.warn('⚠️ GPT Vision window extraction failed:', error);
+      return [];
+    }
   }
 
   /**
