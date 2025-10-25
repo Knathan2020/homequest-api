@@ -355,8 +355,7 @@ export class RasterScanService {
 
   /**
    * Detect rooms automatically from wall segments
-   * Finds closed polygons formed by connected walls
-   * Reads room names from floor plan using OCR
+   * Uses RasterScan for accurate polygons + GPT Vision for intelligent naming
    */
   private async detectRoomsFromWalls(data: any): Promise<RasterScanRoom[]> {
     const walls = this.extractWalls(data);
@@ -365,25 +364,39 @@ export class RasterScanService {
 
     console.log(`🔍 Detecting rooms from ${walls.length} walls, ${doors.length} doors, ${windows.length} windows`);
 
-    // Use GPT Vision to analyze rooms (PRIMARY SOURCE for room names/types)
+    // Step 1: Get raw polygons from wall boundaries (RasterScan)
+    const rawPolygons = this.findClosedLoops(walls);
+    console.log(`🔷 RasterScan found ${rawPolygons.length} raw polygons`);
+
+    // Step 2: Deduplicate overlapping/duplicate polygons
+    const uniquePolygons = this.deduplicatePolygons(rawPolygons);
+    console.log(`✅ After deduplication: ${uniquePolygons.length} unique polygons`);
+
+    // Step 3: Get intelligent room names from GPT Vision
     const gptVisionRooms = await this.analyzeRoomsWithGPTVision(data.imagePath);
     console.log(`🤖 GPT Vision detected ${gptVisionRooms.length} rooms`);
 
-    // If GPT Vision succeeded, use those rooms directly
+    // Step 4: Merge RasterScan polygons with GPT Vision names
+    if (uniquePolygons.length > 0 && gptVisionRooms.length > 0) {
+      console.log('🔗 Merging RasterScan polygons with GPT Vision room names...');
+      return this.mergePolygonsWithGPTVision(uniquePolygons, gptVisionRooms, doors, windows);
+    }
+
+    // FALLBACK 1: Use GPT Vision rooms with estimated boundaries if no polygons
     if (gptVisionRooms.length > 0) {
-      console.log('✅ Using GPT Vision rooms as primary source');
+      console.log('⚠️ No polygons found, using GPT Vision rooms with estimated boundaries');
       return gptVisionRooms.map((gptRoom, index) => {
-        // Create simple polygon from GPT Vision position (4 corners around center)
-        const size = 50; // Default room visualization size
+        const size = 50;
         const polygon = [
           { x: gptRoom.position.x - size, y: gptRoom.position.y - size },
           { x: gptRoom.position.x + size, y: gptRoom.position.y - size },
           { x: gptRoom.position.x + size, y: gptRoom.position.y + size },
           { x: gptRoom.position.x - size, y: gptRoom.position.y + size }
         ];
-
-        const area = size * size * 4; // Approximate area
-        const centroid = gptRoom.position;
+        const area = this.calculatePolygonArea(polygon);
+        const centroid = this.calculateCentroid(polygon);
+        const dimensions = this.calculateRoomDimensions(polygon);
+        const boundingBox = this.calculateBoundingBox(polygon);
 
         return {
           id: gptRoom.id,
@@ -392,19 +405,14 @@ export class RasterScanService {
           subType: undefined,
           area,
           dimensions: {
-            width: size * 2,
-            length: size * 2,
+            width: dimensions.width,
+            length: dimensions.length,
             height: 9,
-            perimeter: size * 8
+            perimeter: dimensions.perimeter
           },
           polygon,
           centroid,
-          boundingBox: {
-            minX: gptRoom.position.x - size,
-            maxX: gptRoom.position.x + size,
-            minY: gptRoom.position.y - size,
-            maxY: gptRoom.position.y + size
-          },
+          boundingBox,
           features: {
             doors: 0,
             windows: 0,
@@ -432,10 +440,10 @@ export class RasterScanService {
       });
     }
 
-    // FALLBACK: If GPT Vision failed, use polygon detection
-    console.log('⚠️  GPT Vision failed, falling back to polygon detection');
-    const roomPolygons = this.findClosedLoops(walls);
-    console.log(`✅ Found ${roomPolygons.length} closed room polygons`);
+    // FALLBACK 2: Use polygon detection only if GPT Vision failed
+    console.log('⚠️ No GPT Vision data, falling back to polygon-only detection');
+    const roomPolygons = uniquePolygons.length > 0 ? uniquePolygons : rawPolygons;
+    console.log(`✅ Using ${roomPolygons.length} polygons`);
 
     return roomPolygons.map((polygon, index) => {
       const area = this.calculatePolygonArea(polygon);
@@ -599,6 +607,59 @@ export class RasterScanService {
   }
 
   /**
+   * Deduplicate overlapping polygons
+   * Removes polygons that are too similar in area and position
+   */
+  private deduplicatePolygons(polygons: Array<Array<{ x: number; y: number }>>): Array<Array<{ x: number; y: number }>> {
+    if (polygons.length === 0) return [];
+
+    console.log(`🔍 Deduplicating ${polygons.length} polygons...`);
+
+    // Calculate area and centroid for each polygon
+    const polygonData = polygons.map((polygon, index) => ({
+      polygon,
+      area: this.calculatePolygonArea(polygon),
+      centroid: this.calculateCentroid(polygon),
+      index
+    }));
+
+    // Sort by area (largest first) to keep larger rooms
+    polygonData.sort((a, b) => b.area - a.area);
+
+    const unique: typeof polygonData = [];
+    const areaThreshold = 0.15; // 15% area difference tolerance
+    const distanceThreshold = 50; // 50 pixel centroid distance
+
+    for (const current of polygonData) {
+      let isDuplicate = false;
+
+      for (const existing of unique) {
+        // Calculate area similarity
+        const areaDiff = Math.abs(current.area - existing.area) / Math.max(current.area, existing.area);
+
+        // Calculate centroid distance
+        const dx = current.centroid.x - existing.centroid.x;
+        const dy = current.centroid.y - existing.centroid.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // If similar area AND close centroids, it's a duplicate
+        if (areaDiff < areaThreshold && distance < distanceThreshold) {
+          isDuplicate = true;
+          console.log(`🚫 Filtered duplicate: area ${current.area.toFixed(0)} vs ${existing.area.toFixed(0)}, distance ${distance.toFixed(1)}px`);
+          break;
+        }
+      }
+
+      if (!isDuplicate) {
+        unique.push(current);
+      }
+    }
+
+    console.log(`✅ Kept ${unique.length} unique polygons after deduplication`);
+    return unique.map(p => p.polygon);
+  }
+
+  /**
    * Calculate polygon area using Shoelace formula
    */
   private calculatePolygonArea(polygon: Array<{ x: number; y: number }>): number {
@@ -683,6 +744,110 @@ export class RasterScanService {
       console.warn('⚠️ GPT Vision analysis failed, falling back to inference:', error);
       return [];
     }
+  }
+
+  /**
+   * Merge RasterScan polygons with GPT Vision room names
+   * Uses centroid distance to match polygons to room names
+   */
+  private mergePolygonsWithGPTVision(
+    polygons: Array<Array<{ x: number; y: number }>>,
+    gptRooms: Array<{ id: string; name: string; type: string; position: { x: number; y: number }; confidence: number }>,
+    doors: Array<{ x: number; y: number; width: number; height: number }>,
+    windows: Array<{ x: number; y: number; width: number; height: number }>
+  ): RasterScanRoom[] {
+    console.log(`🔗 Merging ${polygons.length} polygons with ${gptRooms.length} GPT Vision rooms`);
+
+    const matchedRooms: RasterScanRoom[] = [];
+    const usedGPTRooms = new Set<string>();
+
+    for (const polygon of polygons) {
+      const area = this.calculatePolygonArea(polygon);
+      const centroid = this.calculateCentroid(polygon);
+      const dimensions = this.calculateRoomDimensions(polygon);
+      const boundingBox = this.calculateBoundingBox(polygon);
+
+      // Find closest GPT Vision room to this polygon
+      let closestRoom = null;
+      let minDistance = Infinity;
+
+      for (const gptRoom of gptRooms) {
+        if (usedGPTRooms.has(gptRoom.id)) continue; // Skip already matched rooms
+
+        const dx = centroid.x - gptRoom.position.x;
+        const dy = centroid.y - gptRoom.position.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestRoom = gptRoom;
+        }
+      }
+
+      // Use GPT Vision name if match is close enough (within 200px)
+      let roomName = 'Unknown';
+      let roomType = 'unknown';
+      if (closestRoom && minDistance < 200) {
+        roomName = closestRoom.name;
+        roomType = closestRoom.type;
+        usedGPTRooms.add(closestRoom.id);
+        console.log(`✅ Matched polygon (${area.toFixed(0)} sq units) to "${roomName}" (distance: ${minDistance.toFixed(1)}px)`);
+      } else {
+        // Fallback: infer room type from polygon features
+        const roomDoors = this.countFeaturesInRoom(doors, polygon);
+        const roomWindows = this.countFeaturesInRoom(windows, polygon);
+        roomType = this.inferRoomType(area, dimensions, roomDoors, roomWindows);
+        roomName = this.getRoomName(roomType, matchedRooms.length);
+        console.log(`⚠️ No GPT match for polygon, inferred as "${roomName}"`);
+      }
+
+      // Count features in this room
+      const roomDoors = this.countFeaturesInRoom(doors, polygon);
+      const roomWindows = this.countFeaturesInRoom(windows, polygon);
+
+      matchedRooms.push({
+        id: `room-${matchedRooms.length}`,
+        name: roomName,
+        type: roomType,
+        subType: this.inferSubType(roomType, area),
+        area,
+        dimensions: {
+          width: dimensions.width,
+          length: dimensions.length,
+          height: 9,
+          perimeter: dimensions.perimeter
+        },
+        polygon,
+        centroid,
+        boundingBox,
+        features: {
+          doors: roomDoors,
+          windows: roomWindows,
+          closets: 0,
+          hasFireplace: false,
+          hasBuiltIns: false
+        },
+        location: {
+          floor: 0,
+          position: 'center',
+          adjacentRooms: []
+        },
+        materials: {},
+        fixtures: [],
+        lighting: {
+          natural: roomWindows,
+          artificial: 0
+        },
+        accessibility: {
+          hasDirectExternalAccess: roomDoors > 0,
+          doorWidth: 36,
+          clearanceSpace: 0
+        }
+      });
+    }
+
+    console.log(`✅ Created ${matchedRooms.length} merged rooms`);
+    return matchedRooms;
   }
 
   /**
