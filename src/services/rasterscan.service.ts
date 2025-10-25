@@ -1,10 +1,11 @@
 /**
  * RasterScan Floor Plan Recognition Service
- * Uses RapidAPI Floor Plan Digitalization API
+ * Uses RapidAPI Floor Plan Digitalization API + GPT Vision for room analysis
  */
 
 import axios from 'axios';
 import * as fs from 'fs';
+import { gptVisionDetector } from './gpt-vision-detection.service';
 
 interface RoomDimensions {
   width: number;
@@ -368,11 +369,11 @@ export class RasterScanService {
     const roomPolygons = this.findClosedLoops(walls);
     console.log(`✅ Found ${roomPolygons.length} closed room polygons`);
 
-    // Extract text labels from floor plan image
-    const textLabels = await this.extractTextLabels(data.imagePath);
-    console.log(`📝 Extracted ${textLabels.length} text labels from floor plan`);
+    // Use GPT Vision to analyze rooms
+    const gptVisionRooms = await this.analyzeRoomsWithGPTVision(data.imagePath);
+    console.log(`🤖 GPT Vision detected ${gptVisionRooms.length} rooms`);
 
-    // Convert polygons to room objects with OCR-based naming
+    // Convert polygons to room objects with GPT Vision naming
     return roomPolygons.map((polygon, index) => {
       const area = this.calculatePolygonArea(polygon);
       const dimensions = this.calculateRoomDimensions(polygon);
@@ -383,16 +384,14 @@ export class RasterScanService {
       const roomDoors = this.countFeaturesInRoom(doors, polygon);
       const roomWindows = this.countFeaturesInRoom(windows, polygon);
 
-      // Find text label inside this room polygon
-      const roomLabel = this.findLabelInRoom(textLabels, polygon, centroid);
+      // Match this polygon with GPT Vision detected room
+      const gptRoom = this.matchGPTVisionRoom(gptVisionRooms, centroid, boundingBox);
 
-      // Use OCR label if found, otherwise infer from size/features
-      let roomName = roomLabel?.text || '';
-      let roomType = this.parseRoomType(roomName);
+      // Use GPT Vision room name/type if found, otherwise infer from size/features
+      let roomName = gptRoom?.name || '';
+      let roomType = gptRoom?.type || this.inferRoomType(area, dimensions, roomDoors, roomWindows);
 
       if (!roomName) {
-        // Fall back to inference if no label found
-        roomType = this.inferRoomType(area, dimensions, roomDoors, roomWindows);
         roomName = this.getRoomName(roomType, index);
       }
 
@@ -595,7 +594,96 @@ export class RasterScanService {
   }
 
   /**
-   * Extract text labels from floor plan image using OCR
+   * Analyze rooms using GPT-4 Vision API
+   */
+  private async analyzeRoomsWithGPTVision(imagePath?: string): Promise<Array<{ id: string; name: string; type: string; position: { x: number; y: number }; confidence: number }>> {
+    if (!imagePath || !fs.existsSync(imagePath)) {
+      console.warn('⚠️ No image path provided or file does not exist, skipping GPT Vision');
+      return [];
+    }
+
+    try {
+      console.log('🤖 Analyzing floor plan with GPT-4 Vision...');
+
+      // Call GPT Vision detection service
+      const result = await gptVisionDetector.detectFloorPlan(imagePath);
+
+      // Extract rooms from GPT Vision results
+      const rooms = result.rooms.map(room => ({
+        id: room.id,
+        name: room.name,
+        type: room.type,
+        position: room.vertices && room.vertices.length > 0
+          ? this.calculateCentroidFromVertices(room.vertices)
+          : { x: 0, y: 0 },
+        confidence: room.confidence
+      }));
+
+      console.log(`✅ GPT Vision detected ${rooms.length} rooms`);
+      return rooms;
+    } catch (error) {
+      console.warn('⚠️ GPT Vision analysis failed, falling back to inference:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Match GPT Vision detected room with rasterscan polygon
+   */
+  private matchGPTVisionRoom(
+    gptRooms: Array<{ id: string; name: string; type: string; position: { x: number; y: number }; confidence: number }>,
+    centroid: { x: number; y: number },
+    boundingBox: { minX: number; maxX: number; minY: number; maxY: number }
+  ): { name: string; type: string } | null {
+    if (gptRooms.length === 0) return null;
+
+    // Find GPT Vision room closest to this polygon's centroid
+    let closestRoom = null;
+    let minDistance = Infinity;
+
+    for (const room of gptRooms) {
+      // Check if GPT room position is within this polygon's bounding box
+      const inBounds =
+        room.position.x >= boundingBox.minX &&
+        room.position.x <= boundingBox.maxX &&
+        room.position.y >= boundingBox.minY &&
+        room.position.y <= boundingBox.maxY;
+
+      if (inBounds) {
+        const distance = Math.sqrt(
+          Math.pow(room.position.x - centroid.x, 2) +
+          Math.pow(room.position.y - centroid.y, 2)
+        );
+
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestRoom = room;
+        }
+      }
+    }
+
+    return closestRoom ? { name: closestRoom.name, type: closestRoom.type } : null;
+  }
+
+  /**
+   * Calculate centroid from vertices
+   */
+  private calculateCentroidFromVertices(vertices: Array<{ x: number; y: number }>): { x: number; y: number } {
+    if (vertices.length === 0) return { x: 0, y: 0 };
+
+    const sum = vertices.reduce(
+      (acc, v) => ({ x: acc.x + v.x, y: acc.y + v.y }),
+      { x: 0, y: 0 }
+    );
+
+    return {
+      x: sum.x / vertices.length,
+      y: sum.y / vertices.length
+    };
+  }
+
+  /**
+   * Extract text labels from floor plan image using OCR (DEPRECATED - Use GPT Vision instead)
    */
   private async extractTextLabels(imagePath?: string): Promise<Array<{ text: string; x: number; y: number; confidence: number }>> {
     if (!imagePath) return [];

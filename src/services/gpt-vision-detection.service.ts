@@ -83,7 +83,7 @@ export class GPTVisionDetectionService {
         messages: [
           {
             role: "system",
-            content: `You are an expert architectural floor plan analyzer. Analyze floor plan images and extract structural elements with precise coordinates.
+            content: `You are an expert architectural floor plan analyzer. Analyze floor plan images and extract ALL structural elements with precise coordinates.
 
 COORDINATE SYSTEM:
 - Origin (0,0) is at the TOP-LEFT corner
@@ -91,21 +91,48 @@ COORDINATE SYSTEM:
 - Y increases from top to bottom (0 to ${imageHeight})
 - All coordinates must be within these bounds
 
-DETECTION RULES:
-- Walls: Identify all wall lines (thick black/dark lines). Include start/end coordinates.
-- Rooms: Detect enclosed spaces. Provide polygon vertices in clockwise order.
-- Doors: Find door symbols (arcs, swing marks). Mark center position.
-- Windows: Find window symbols (parallel lines, rectangles). Mark center position.
-- Measurements: Extract scale and unit from dimension text. If not visible, use scale: 1.0 and unit: "pixels".
+DETECTION RULES FOR ROOMS AND ZONES:
+- Detect EVERY space - both enclosed rooms with walls AND open zones without walls
+- ENCLOSED ROOMS: Spaces with clear wall boundaries (bedrooms, bathrooms, closets, etc.)
+- OPEN ZONES: Areas defined by labels or furniture, even without walls (dining areas, breakfast nooks, sitting areas, etc.)
+- Look for English text labels: "Bedroom", "Living Room", "Kitchen", "Bathroom", "Closet", "Entry", "Hallway", "Dining", "Breakfast", "Nook", "Master", "Bath", "BR", "MBR", "LR", etc.
+- Include ALL space types: bedrooms, living rooms, dining rooms/areas, kitchens, bathrooms, closets, hallways, entries, balconies, storage, laundry, pantries, breakfast nooks
+- For OPEN ZONES without walls: estimate a boundary polygon based on the furniture layout and label position
+- Even unlabeled spaces should be detected and classified by size/fixtures
+- Provide polygon vertices in clockwise order for each room/zone
 
-Be precise with coordinates and conservative with confidence scores (0.0 to 1.0).`
+OTHER ELEMENTS:
+- Walls: Identify ALL wall lines (thick black/dark lines)
+- Doors: Find ALL door symbols (arcs, swing marks)
+- Windows: Find ALL window symbols (parallel lines, rectangles)
+- Measurements: Extract scale and unit from dimension text
+
+CRITICAL: Detect EVERY room visible in the floor plan. Be thorough, not conservative.`
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Analyze this floor plan image and extract all architectural elements. The image dimensions are ${imageWidth}x${imageHeight} pixels. Return precise coordinates for all detected features.`
+                text: `Analyze this floor plan image and detect EVERY SINGLE ROOM AND ZONE visible. The image dimensions are ${imageWidth}x${imageHeight} pixels.
+
+CRITICAL: Detect BOTH types of spaces:
+1. ENCLOSED ROOMS (with walls): Bedrooms, bathrooms, closets, entries, etc.
+2. OPEN ZONES (without walls): Dining areas, breakfast nooks, sitting areas marked by labels or furniture
+
+Read ALL text labels to identify spaces. Look for:
+- Bedrooms (BR, Bedroom, Master, etc.)
+- Living rooms
+- Dining rooms/areas (Dining, Dining Area, Breakfast, Nook, etc.) - INCLUDE EVEN IF NO WALLS
+- Kitchens (Kitchen, Kit, etc.)
+- Bathrooms (Bath, Bathroom, WC, etc.)
+- Closets, Storage
+- Entries, Hallways
+- Any other labeled spaces
+
+For open zones like dining areas without walls, estimate a boundary polygon based on where the furniture/label is located.
+
+Return precise coordinates for ALL rooms/zones, doors, windows, and walls. Do not skip any labeled space.`
               },
               {
                 type: "image_url",
