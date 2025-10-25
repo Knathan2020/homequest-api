@@ -365,15 +365,78 @@ export class RasterScanService {
 
     console.log(`🔍 Detecting rooms from ${walls.length} walls, ${doors.length} doors, ${windows.length} windows`);
 
-    // Find closed loops/polygons from wall segments
-    const roomPolygons = this.findClosedLoops(walls);
-    console.log(`✅ Found ${roomPolygons.length} closed room polygons`);
-
-    // Use GPT Vision to analyze rooms
+    // Use GPT Vision to analyze rooms (PRIMARY SOURCE for room names/types)
     const gptVisionRooms = await this.analyzeRoomsWithGPTVision(data.imagePath);
     console.log(`🤖 GPT Vision detected ${gptVisionRooms.length} rooms`);
 
-    // Convert polygons to room objects with GPT Vision naming
+    // If GPT Vision succeeded, use those rooms directly
+    if (gptVisionRooms.length > 0) {
+      console.log('✅ Using GPT Vision rooms as primary source');
+      return gptVisionRooms.map((gptRoom, index) => {
+        // Create simple polygon from GPT Vision position (4 corners around center)
+        const size = 50; // Default room visualization size
+        const polygon = [
+          { x: gptRoom.position.x - size, y: gptRoom.position.y - size },
+          { x: gptRoom.position.x + size, y: gptRoom.position.y - size },
+          { x: gptRoom.position.x + size, y: gptRoom.position.y + size },
+          { x: gptRoom.position.x - size, y: gptRoom.position.y + size }
+        ];
+
+        const area = size * size * 4; // Approximate area
+        const centroid = gptRoom.position;
+
+        return {
+          id: gptRoom.id,
+          name: gptRoom.name,
+          type: gptRoom.type,
+          subType: undefined,
+          area,
+          dimensions: {
+            width: size * 2,
+            length: size * 2,
+            height: 9,
+            perimeter: size * 8
+          },
+          polygon,
+          centroid,
+          boundingBox: {
+            minX: gptRoom.position.x - size,
+            maxX: gptRoom.position.x + size,
+            minY: gptRoom.position.y - size,
+            maxY: gptRoom.position.y + size
+          },
+          features: {
+            doors: 0,
+            windows: 0,
+            closets: 0,
+            hasFireplace: false,
+            hasBuiltIns: false
+          },
+          location: {
+            floor: 0,
+            position: 'center',
+            adjacentRooms: []
+          },
+          materials: {},
+          fixtures: [],
+          lighting: {
+            natural: 0,
+            artificial: 0
+          },
+          accessibility: {
+            hasDirectExternalAccess: false,
+            doorWidth: 36,
+            clearanceSpace: 0
+          }
+        };
+      });
+    }
+
+    // FALLBACK: If GPT Vision failed, use polygon detection
+    console.log('⚠️  GPT Vision failed, falling back to polygon detection');
+    const roomPolygons = this.findClosedLoops(walls);
+    console.log(`✅ Found ${roomPolygons.length} closed room polygons`);
+
     return roomPolygons.map((polygon, index) => {
       const area = this.calculatePolygonArea(polygon);
       const dimensions = this.calculateRoomDimensions(polygon);
@@ -384,21 +447,9 @@ export class RasterScanService {
       const roomDoors = this.countFeaturesInRoom(doors, polygon);
       const roomWindows = this.countFeaturesInRoom(windows, polygon);
 
-      // Match this polygon with GPT Vision detected room
-      const gptRoom = this.matchGPTVisionRoom(gptVisionRooms, centroid, boundingBox);
-
-      if (index === 0 && gptVisionRooms.length > 0) {
-        console.log(`🔍 Matching room ${index}: centroid=(${centroid.x}, ${centroid.y}), bbox=(${boundingBox.minX},${boundingBox.minY})-(${boundingBox.maxX},${boundingBox.maxY})`);
-        console.log(`🔍 GPT Vision has ${gptVisionRooms.length} rooms, matched: ${gptRoom ? gptRoom.name : 'NO MATCH'}`);
-      }
-
-      // Use GPT Vision room name/type if found, otherwise infer from size/features
-      let roomName = gptRoom?.name || '';
-      let roomType = gptRoom?.type || this.inferRoomType(area, dimensions, roomDoors, roomWindows);
-
-      if (!roomName) {
-        roomName = this.getRoomName(roomType, index);
-      }
+      // Fallback: infer room type from size/features
+      const roomType = this.inferRoomType(area, dimensions, roomDoors, roomWindows);
+      const roomName = this.getRoomName(roomType, index);
 
       return {
         id: `room-${index}`,
