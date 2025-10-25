@@ -355,7 +355,7 @@ export class RasterScanService {
 
   /**
    * Detect rooms automatically from wall segments
-   * Uses RasterScan for accurate polygons + GPT Vision for intelligent naming
+   * Uses GPT Vision for accurate polygons, names, and areas
    */
   private async detectRoomsFromWalls(data: any): Promise<RasterScanRoom[]> {
     const walls = this.extractWalls(data);
@@ -364,45 +364,28 @@ export class RasterScanService {
 
     console.log(`🔍 Detecting rooms from ${walls.length} walls, ${doors.length} doors, ${windows.length} windows`);
 
-    // Step 1: Get raw polygons from wall boundaries (RasterScan)
-    const rawPolygons = this.findClosedLoops(walls);
-    console.log(`🔷 RasterScan found ${rawPolygons.length} raw polygons`);
-
-    // Step 2: Deduplicate overlapping/duplicate polygons
-    const uniquePolygons = this.deduplicatePolygons(rawPolygons);
-    console.log(`✅ After deduplication: ${uniquePolygons.length} unique polygons`);
-
-    // Step 3: Get intelligent room names from GPT Vision
+    // PRIMARY: Use GPT Vision for room detection (polygons + names + areas)
     const gptVisionRooms = await this.analyzeRoomsWithGPTVision(data.imagePath);
     console.log(`🤖 GPT Vision detected ${gptVisionRooms.length} rooms`);
 
-    // Step 4: Merge RasterScan polygons with GPT Vision names
-    if (uniquePolygons.length > 0 && gptVisionRooms.length > 0) {
-      console.log('🔗 Merging RasterScan polygons with GPT Vision room names...');
-      return this.mergePolygonsWithGPTVision(uniquePolygons, gptVisionRooms, doors, windows);
-    }
-
-    // FALLBACK 1: Use GPT Vision rooms with estimated boundaries if no polygons
     if (gptVisionRooms.length > 0) {
-      console.log('⚠️ No polygons found, using GPT Vision rooms with estimated boundaries');
-      return gptVisionRooms.map((gptRoom, index) => {
-        const size = 50;
-        const polygon = [
-          { x: gptRoom.position.x - size, y: gptRoom.position.y - size },
-          { x: gptRoom.position.x + size, y: gptRoom.position.y - size },
-          { x: gptRoom.position.x + size, y: gptRoom.position.y + size },
-          { x: gptRoom.position.x - size, y: gptRoom.position.y + size }
-        ];
-        const area = this.calculatePolygonArea(polygon);
+      console.log('✅ Using GPT Vision rooms with actual polygons and areas');
+      return gptVisionRooms.map((gptRoom) => {
+        const polygon = gptRoom.vertices;
+        const area = gptRoom.area;
         const centroid = this.calculateCentroid(polygon);
         const dimensions = this.calculateRoomDimensions(polygon);
         const boundingBox = this.calculateBoundingBox(polygon);
+
+        // Count doors and windows in this room
+        const roomDoors = this.countFeaturesInRoom(doors, polygon);
+        const roomWindows = this.countFeaturesInRoom(windows, polygon);
 
         return {
           id: gptRoom.id,
           name: gptRoom.name,
           type: gptRoom.type,
-          subType: undefined,
+          subType: this.inferSubType(gptRoom.type, area),
           area,
           dimensions: {
             width: dimensions.width,
@@ -414,8 +397,8 @@ export class RasterScanService {
           centroid,
           boundingBox,
           features: {
-            doors: 0,
-            windows: 0,
+            doors: roomDoors,
+            windows: roomWindows,
             closets: 0,
             hasFireplace: false,
             hasBuiltIns: false
@@ -428,11 +411,11 @@ export class RasterScanService {
           materials: {},
           fixtures: [],
           lighting: {
-            natural: 0,
+            natural: roomWindows,
             artificial: 0
           },
           accessibility: {
-            hasDirectExternalAccess: false,
+            hasDirectExternalAccess: roomDoors > 0,
             doorWidth: 36,
             clearanceSpace: 0
           }
@@ -440,10 +423,12 @@ export class RasterScanService {
       });
     }
 
-    // FALLBACK 2: Use polygon detection only if GPT Vision failed
-    console.log('⚠️ No GPT Vision data, falling back to polygon-only detection');
+    // FALLBACK: Use RasterScan polygon detection if GPT Vision failed
+    console.log('⚠️ No GPT Vision data, falling back to RasterScan polygon detection');
+    const rawPolygons = this.findClosedLoops(walls);
+    const uniquePolygons = this.deduplicatePolygons(rawPolygons);
     const roomPolygons = uniquePolygons.length > 0 ? uniquePolygons : rawPolygons;
-    console.log(`✅ Using ${roomPolygons.length} polygons`);
+    console.log(`✅ Using ${roomPolygons.length} RasterScan polygons`);
 
     return roomPolygons.map((polygon, index) => {
       const area = this.calculatePolygonArea(polygon);
@@ -712,8 +697,16 @@ export class RasterScanService {
 
   /**
    * Analyze rooms using GPT-4 Vision API
+   * Returns full room data including vertices and areas
    */
-  private async analyzeRoomsWithGPTVision(imagePath?: string): Promise<Array<{ id: string; name: string; type: string; position: { x: number; y: number }; confidence: number }>> {
+  private async analyzeRoomsWithGPTVision(imagePath?: string): Promise<Array<{
+    id: string;
+    name: string;
+    type: string;
+    vertices: Array<{ x: number; y: number }>;
+    area: number;
+    confidence: number
+  }>> {
     if (!imagePath || !fs.existsSync(imagePath)) {
       console.warn('⚠️ No image path provided or file does not exist, skipping GPT Vision');
       return [];
@@ -725,20 +718,18 @@ export class RasterScanService {
       // Call GPT Vision detection service
       const result = await gptVisionDetector.detectFloorPlan(imagePath);
 
-      // Extract rooms from GPT Vision results
+      // Return full room data with vertices and areas
       const rooms = result.rooms.map(room => ({
         id: room.id,
         name: room.name,
         type: room.type,
-        position: room.vertices && room.vertices.length > 0
-          ? this.calculateCentroidFromVertices(room.vertices)
-          : { x: 0, y: 0 },
+        vertices: room.vertices || [],
+        area: room.area || 0,
         confidence: room.confidence
       }));
 
       console.log(`✅ GPT Vision detected ${rooms.length} rooms`);
-      console.log('🏠 GPT Vision room names:', rooms.map(r => `${r.name} (${r.type})`).join(', '));
-      console.log('📍 GPT Vision room positions:', rooms.map(r => `${r.name}: (${r.position.x}, ${r.position.y})`).join(', '));
+      console.log('🏠 GPT Vision room names:', rooms.map(r => `${r.name} (${r.type}, ${r.area} sq units)`).join(', '));
       return rooms;
     } catch (error) {
       console.warn('⚠️ GPT Vision analysis failed, falling back to inference:', error);
