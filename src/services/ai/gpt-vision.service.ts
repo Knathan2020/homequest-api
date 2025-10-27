@@ -96,17 +96,33 @@ const PROMPT_TEMPLATES = {
 
 1. ROOMS: Identify all rooms with their types (bedroom, bathroom, kitchen, living room, etc.)
 2. DIMENSIONS: Extract all visible dimensions and measurements
-3. FEATURES: Identify doors, windows, fixtures, and appliances
+3. FEATURES: Identify doors, windows, fixtures, and appliances WITH PIXEL COORDINATES
 4. LAYOUT: Describe the overall layout and flow
 5. UNCLEAR AREAS: Point out any areas that are unclear or ambiguous
+6. STAIRS: Detect staircase locations and orientation
+
+IMPORTANT: For all features (fixtures, appliances, furniture, stairs), provide PIXEL COORDINATES relative to the image dimensions.
 
 Respond in JSON format with the following structure:
 {
+  "image_dimensions": {
+    "width": "image width in pixels",
+    "height": "image height in pixels"
+  },
   "rooms": [
     {
       "type": "room type",
       "label": "room label if visible",
-      "approximate_location": "description of location",
+      "centroid": {
+        "x": "center x pixel coordinate",
+        "y": "center y pixel coordinate"
+      },
+      "bounds": {
+        "x": "top-left x coordinate",
+        "y": "top-left y coordinate",
+        "width": "width in pixels",
+        "height": "height in pixels"
+      },
       "dimensions": {
         "width": "width if visible",
         "height": "height if visible",
@@ -127,10 +143,31 @@ Respond in JSON format with the following structure:
   ],
   "features": [
     {
-      "type": "door/window/fixture/appliance/structural",
+      "type": "door/window/fixture/appliance/structural/stairs",
       "name": "feature name",
-      "location": "description of location",
+      "room": "which room this belongs to",
+      "position": {
+        "x": "pixel x coordinate",
+        "y": "pixel y coordinate",
+        "width": "width in pixels if applicable",
+        "height": "height in pixels if applicable"
+      },
+      "orientation": "north/south/east/west or angle if applicable",
       "attributes": {},
+      "confidence": 0.0-1.0
+    }
+  ],
+  "stairs": [
+    {
+      "type": "staircase/spiral/ladder",
+      "position": {
+        "x": "pixel x coordinate",
+        "y": "pixel y coordinate",
+        "width": "width in pixels",
+        "height": "height in pixels"
+      },
+      "orientation": "direction stairs go (up/down, angle)",
+      "connects_floors": ["floor numbers if visible"],
       "confidence": 0.0-1.0
     }
   ],
