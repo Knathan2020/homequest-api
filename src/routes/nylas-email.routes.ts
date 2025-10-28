@@ -5,6 +5,8 @@
 
 import express, { Request, Response } from 'express';
 import nylasEmailService from '../services/nylas-email.service';
+import microsoftGraphService from '../services/microsoft-graph.service';
+import { supabase } from '../config/supabase';
 
 const router = express.Router();
 
@@ -330,10 +332,10 @@ router.get('/emails/:userId', async (req: Request, res: Response) => {
  */
 router.post('/send-email', async (req: Request, res: Response) => {
   try {
-    const { userId, to, subject, body, cc, bcc } = req.body;
+    const { userId, to, subject, body, cc, bcc, accountId } = req.body;
 
     console.log('📧 BACKEND /api/nylas/send-email received:');
-    console.log('  Request body:', { userId, to, cc, bcc, subject: subject?.substring(0, 50) });
+    console.log('  Request body:', { userId, to, cc, bcc, accountId, subject: subject?.substring(0, 50) });
 
     if (!userId || !to || !subject || !body) {
       return res.status(400).json({
@@ -342,8 +344,51 @@ router.post('/send-email', async (req: Request, res: Response) => {
       });
     }
 
-    console.log('📧 Calling nylasEmailService.sendEmail...');
-    const success = await nylasEmailService.sendEmail(to, subject, body, userId, cc, bcc);
+    // Determine which provider to use by checking user's email accounts
+    console.log('📧 Checking for connected email accounts...');
+
+    // Check for Nylas accounts (Gmail)
+    const nylasAccounts = await nylasEmailService.getUserAccounts(userId);
+    console.log('  Nylas accounts found:', nylasAccounts.length);
+
+    // Check for Microsoft accounts (Outlook)
+    const microsoftAccounts = await microsoftGraphService.getUserAccounts(userId);
+    console.log('  Microsoft accounts found:', microsoftAccounts.length);
+
+    let success = false;
+
+    // If accountId is provided, use that specific account
+    if (accountId) {
+      const nylasAccount = nylasAccounts.find(acc => acc.id === accountId);
+      const microsoftAccount = microsoftAccounts.find(acc => acc.id === accountId);
+
+      if (nylasAccount) {
+        console.log('📧 Using specified Nylas account:', nylasAccount.email);
+        success = await nylasEmailService.sendEmail(to, subject, body, userId, cc, bcc);
+      } else if (microsoftAccount) {
+        console.log('📧 Using specified Microsoft account:', microsoftAccount.email);
+        success = await microsoftGraphService.sendEmail(userId, to, subject, body, cc, bcc);
+      } else {
+        return res.status(404).json({
+          success: false,
+          error: 'Specified account not found'
+        });
+      }
+    } else {
+      // No accountId specified - try Outlook first, then Gmail
+      if (microsoftAccounts.length > 0) {
+        console.log('📧 Sending via Microsoft Graph (Outlook)...');
+        success = await microsoftGraphService.sendEmail(userId, to, subject, body, cc, bcc);
+      } else if (nylasAccounts.length > 0) {
+        console.log('📧 Sending via Nylas (Gmail)...');
+        success = await nylasEmailService.sendEmail(to, subject, body, userId, cc, bcc);
+      } else {
+        return res.status(404).json({
+          success: false,
+          error: 'No connected email account found. Please connect Gmail or Outlook first.'
+        });
+      }
+    }
 
     if (success) {
       res.json({
@@ -356,11 +401,13 @@ router.post('/send-email', async (req: Request, res: Response) => {
         error: 'Failed to send email'
       });
     }
-  } catch (error) {
-    console.error('Send email error:', error);
+  } catch (error: any) {
+    console.error('❌ Send email error:', error);
+    console.error('Error message:', error?.message);
+    console.error('Error stack:', error?.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to send email'
+      error: error?.message || 'Failed to send email'
     });
   }
 });
