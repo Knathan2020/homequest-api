@@ -14,114 +14,130 @@ const USDA_WFS_ENDPOINT = 'https://SDMDataAccess.sc.egov.usda.gov/Spatial/SDMWGS
 /**
  * GET /api/soil/zones
  * Fetch soil zones for a property
- * Query params: minLat, minLng, maxLat, maxLng
+ * Query params: bounds (JSON array of {lat, lng} points)
  */
 router.get('/zones', async (req: Request, res: Response) => {
   try {
-    const { minLat, minLng, maxLat, maxLng } = req.query;
+    const { bounds } = req.query;
 
-    if (!minLat || !minLng || !maxLat || !maxLng) {
+    if (!bounds) {
       return res.status(400).json({
-        error: 'Missing required parameters: minLat, minLng, maxLat, maxLng'
+        error: 'Missing required parameter: bounds (array of {lat, lng} points)'
       });
     }
 
-    console.log(`Fetching soil zones for bbox: ${minLng},${minLat},${maxLng},${maxLat}`);
+    const propertyBounds = JSON.parse(bounds as string);
 
-    // Use center point to get dominant soil type
-    // More reliable than WFS which has strict format requirements
-    const centerLat = (parseFloat(minLat as string) + parseFloat(maxLat as string)) / 2;
-    const centerLng = (parseFloat(minLng as string) + parseFloat(maxLng as string)) / 2;
-
-    console.log(`Using center point: ${centerLat}, ${centerLng}`);
-
-    console.log('📍 Coordinates received:', { minLat, minLng, maxLat, maxLng });
-    console.log('📍 Center point:', { lat: centerLat, lng: centerLng });
-
-    const query = `
-      SELECT DISTINCT
-        mu.mukey,
-        mu.muname,
-        mu.musym
-      FROM mapunit mu
-      WHERE mu.mukey IN (
-        SELECT * FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('POINT(${centerLng} ${centerLat})')
-      )
-    `;
-
-    const formData = new URLSearchParams({
-      FORMAT: 'JSON+COLUMNNAME',
-      QUERY: query
-    });
-
-    const response = await fetch(USDA_SDA_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formData.toString()
-    });
-
-    if (!response.ok) {
-      throw new Error(`USDA API error: ${response.statusText}`);
+    if (!Array.isArray(propertyBounds) || propertyBounds.length < 3) {
+      return res.status(400).json({
+        error: 'bounds must be an array of at least 3 {lat, lng} points'
+      });
     }
 
-    const data: any = await response.json();
+    console.log(`🌱 Fetching soil zones for property with ${propertyBounds.length} boundary points`);
 
-    console.log('USDA API Response:', JSON.stringify(data, null, 2));
+    // Create a grid of sample points within the property to find all soil types
+    // This improves detection of multiple soil zones
+    const samplePoints = generateSamplePointsInPolygon(propertyBounds, 9); // 3x3 grid
 
-    if (!data.Table || data.Table.length < 2) {
-      console.warn('⚠️ No soil map units found in USDA response');
-      console.warn('Response structure:', data);
-      return res.json({ zones: [] });
+    console.log(`📍 Sampling ${samplePoints.length} points within property`);
+
+    // Query USDA for each sample point to find all soil types
+    const mukeySet = new Set<string>();
+    const mukeyToFirstPoint = new Map<string, {lat: number, lng: number}>();
+
+    for (const point of samplePoints) {
+      const query = `
+        SELECT DISTINCT
+          mu.mukey,
+          mu.muname,
+          mu.musym
+        FROM mapunit mu
+        WHERE mu.mukey IN (
+          SELECT * FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('POINT(${point.lng} ${point.lat})')
+        )
+      `;
+
+      const formData = new URLSearchParams({
+        FORMAT: 'JSON+COLUMNNAME',
+        QUERY: query
+      });
+
+      try {
+        const response = await fetch(USDA_SDA_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formData.toString()
+        });
+
+        if (response.ok) {
+          const data: any = await response.json();
+
+          if (data.Table && data.Table.length >= 2) {
+            const columns = data.Table[0];
+            const mukeyIndex = columns.indexOf('mukey');
+
+            for (let i = 1; i < data.Table.length; i++) {
+              const mukey = data.Table[i][mukeyIndex];
+              if (mukey && !mukeySet.has(mukey)) {
+                mukeySet.add(mukey);
+                mukeyToFirstPoint.set(mukey, point);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`Failed to query point (${point.lat}, ${point.lng}):`, error);
+      }
     }
 
-    // Parse map units
-    const columns = data.Table[0];
-    const mukeyIndex = columns.indexOf('mukey');
-    const munameIndex = columns.indexOf('muname');
-    const musymIndex = columns.indexOf('musym');
-
-    console.log(`✅ Found ${data.Table.length - 1} map units`);
+    console.log(`✅ Found ${mukeySet.size} unique soil types in property`);
 
     const zones = [];
+    const propertyCoords = propertyBounds.map((p: any) => [p.lng, p.lat]);
+    propertyCoords.push(propertyCoords[0]); // Close polygon
 
-    // Process each map unit found
-    for (let i = 1; i < data.Table.length; i++) {
-      const row = data.Table[i];
-      console.log(`Processing map unit ${i}: mukey=${row[mukeyIndex]}`);
-      const mukey = row[mukeyIndex];
+    // Calculate property area
+    const area_acres = calculatePolygonArea(propertyBounds);
+    const area_sqft = area_acres * 43560;
+
+    // For each unique soil type found, create a zone
+    // If multiple zones exist, we'll subdivide the property
+    const mukeys = Array.from(mukeySet);
+
+    for (let i = 0; i < mukeys.length; i++) {
+      const mukey = mukeys[i];
       const soilData = await getSoilProperties(mukey);
 
       if (soilData) {
-        // Use bounding box as a simple polygon
-        // Note: For accurate boundaries, would need USDA WFS spatial query
-        const geometry = {
-          type: 'Polygon',
-          coordinates: [[
-            [parseFloat(minLng as string), parseFloat(minLat as string)],
-            [parseFloat(maxLng as string), parseFloat(minLat as string)],
-            [parseFloat(maxLng as string), parseFloat(maxLat as string)],
-            [parseFloat(minLng as string), parseFloat(maxLat as string)],
-            [parseFloat(minLng as string), parseFloat(minLat as string)]
-          ]]
-        };
+        let zoneGeometry;
+        let zoneArea = area_acres;
 
-        // Calculate approximate area
-        const latDiff = parseFloat(maxLat as string) - parseFloat(minLat as string);
-        const lngDiff = parseFloat(maxLng as string) - parseFloat(minLng as string);
-        const area_sqft = Math.abs(latDiff * lngDiff) * 364000 * 364000; // Very rough approximation
-        const area_acres = area_sqft / 43560;
+        if (mukeys.length === 1) {
+          // Single soil type - use full property boundary
+          zoneGeometry = {
+            type: 'Polygon',
+            coordinates: [propertyCoords]
+          };
+        } else {
+          // Multiple soil types - subdivide property
+          // Create zones by dividing property into regions
+          const samplePoint = mukeyToFirstPoint.get(mukey);
+          zoneGeometry = createSubZoneGeometry(propertyBounds, samplePoint!, i, mukeys.length);
+          zoneArea = area_acres / mukeys.length; // Equal division approximation
+        }
 
         zones.push({
           id: `zone-${mukey}`,
-          name: `${soilData.muname}${soilData.slope_r ? ` ${soilData.slope_r}%` : ''}`,
+          name: `${soilData.muname}${soilData.slope_r ? ` (${soilData.slope_r}% slope)` : ''}`,
           mukey,
-          musym: row[musymIndex],
-          geometry,
+          musym: soilData.musym,
+          geometry: zoneGeometry,
           soilData,
-          area_sqft,
-          area_acres,
+          area_sqft: zoneArea * 43560,
+          area_acres: zoneArea,
           septic_suitable: soilData.septic_suitability === 'A' || soilData.septic_suitability === 'B',
           color: getSuitabilityColor(soilData.septic_suitability || 'D'),
           opacity: 0.4
@@ -129,7 +145,7 @@ router.get('/zones', async (req: Request, res: Response) => {
       }
     }
 
-    console.log(`Found ${zones.length} soil zones`);
+    console.log(`📊 Returning ${zones.length} soil zones`);
     res.json({ zones });
 
   } catch (error) {
@@ -548,6 +564,205 @@ function getOverallSuitability(rating: string): string {
     'D': 'Poor'
   };
   return suitability[rating] || 'Poor';
+}
+
+/**
+ * Generate sample points within a polygon for soil sampling
+ * Uses a grid-based approach to distribute points evenly
+ */
+function generateSamplePointsInPolygon(
+  bounds: Array<{lat: number, lng: number}>,
+  numPoints: number
+): Array<{lat: number, lng: number}> {
+  const points: Array<{lat: number, lng: number}> = [];
+
+  // Get bounding box
+  const lats = bounds.map(p => p.lat);
+  const lngs = bounds.map(p => p.lng);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+
+  // Create grid
+  const gridSize = Math.ceil(Math.sqrt(numPoints));
+  const latStep = (maxLat - minLat) / (gridSize + 1);
+  const lngStep = (maxLng - minLng) / (gridSize + 1);
+
+  // Generate points in grid pattern
+  for (let i = 1; i <= gridSize; i++) {
+    for (let j = 1; j <= gridSize; j++) {
+      const lat = minLat + (i * latStep);
+      const lng = minLng + (j * lngStep);
+
+      // Check if point is inside polygon
+      if (isPointInPolygon({lat, lng}, bounds)) {
+        points.push({lat, lng});
+      }
+    }
+  }
+
+  // Always include center point
+  const centerLat = (minLat + maxLat) / 2;
+  const centerLng = (minLng + maxLng) / 2;
+  if (isPointInPolygon({lat: centerLat, lng: centerLng}, bounds)) {
+    points.push({lat: centerLat, lng: centerLng});
+  }
+
+  return points.length > 0 ? points : [{lat: centerLat, lng: centerLng}];
+}
+
+/**
+ * Check if a point is inside a polygon using ray casting algorithm
+ */
+function isPointInPolygon(
+  point: {lat: number, lng: number},
+  polygon: Array<{lat: number, lng: number}>
+): boolean {
+  let inside = false;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lng;
+    const yi = polygon[i].lat;
+    const xj = polygon[j].lng;
+    const yj = polygon[j].lat;
+
+    const intersect = ((yi > point.lat) !== (yj > point.lat))
+        && (point.lng < (xj - xi) * (point.lat - yi) / (yj - yi) + xi);
+
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+}
+
+/**
+ * Calculate area of polygon in acres using shoelace formula
+ */
+function calculatePolygonArea(bounds: Array<{lat: number, lng: number}>): number {
+  let area = 0;
+
+  for (let i = 0; i < bounds.length; i++) {
+    const j = (i + 1) % bounds.length;
+    area += bounds[i].lng * bounds[j].lat;
+    area -= bounds[j].lng * bounds[i].lat;
+  }
+
+  area = Math.abs(area) / 2;
+
+  // Convert from square degrees to square feet (very rough approximation)
+  // At mid-latitudes, 1 degree ≈ 364,000 feet
+  const areaInSqFt = area * 364000 * 364000;
+  const areaInAcres = areaInSqFt / 43560;
+
+  return areaInAcres;
+}
+
+/**
+ * Create geometry for a sub-zone when multiple soil types exist
+ * Divides property into regions based on where each soil type was found
+ */
+function createSubZoneGeometry(
+  propertyBounds: Array<{lat: number, lng: number}>,
+  samplePoint: {lat: number, lng: number},
+  zoneIndex: number,
+  totalZones: number
+): { type: string, coordinates: number[][][] } {
+  // Get property bounding box
+  const lats = propertyBounds.map(p => p.lat);
+  const lngs = propertyBounds.map(p => p.lng);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+
+  const centerLat = (minLat + maxLat) / 2;
+  const centerLng = (minLng + maxLng) / 2;
+
+  // Create a sub-region based on the sample point location
+  // This is a simplified approach - ideally would use Voronoi diagrams
+  const latRange = maxLat - minLat;
+  const lngRange = maxLng - minLng;
+
+  // Determine which quadrant or region the sample point is in
+  const relLat = (samplePoint.lat - minLat) / latRange;
+  const relLng = (samplePoint.lng - minLng) / lngRange;
+
+  // Create a polygon around the sample point, clipped to property bounds
+  const subZoneBounds: Array<[number, number]> = [];
+
+  if (totalZones === 2) {
+    // Split property vertically or horizontally
+    if (Math.abs(relLat - 0.5) > Math.abs(relLng - 0.5)) {
+      // Split horizontally
+      if (relLat > 0.5) {
+        // Top half
+        subZoneBounds.push([minLng, centerLat]);
+        subZoneBounds.push([maxLng, centerLat]);
+        subZoneBounds.push([maxLng, maxLat]);
+        subZoneBounds.push([minLng, maxLat]);
+      } else {
+        // Bottom half
+        subZoneBounds.push([minLng, minLat]);
+        subZoneBounds.push([maxLng, minLat]);
+        subZoneBounds.push([maxLng, centerLat]);
+        subZoneBounds.push([minLng, centerLat]);
+      }
+    } else {
+      // Split vertically
+      if (relLng > 0.5) {
+        // Right half
+        subZoneBounds.push([centerLng, minLat]);
+        subZoneBounds.push([maxLng, minLat]);
+        subZoneBounds.push([maxLng, maxLat]);
+        subZoneBounds.push([centerLng, maxLat]);
+      } else {
+        // Left half
+        subZoneBounds.push([minLng, minLat]);
+        subZoneBounds.push([centerLng, minLat]);
+        subZoneBounds.push([centerLng, maxLat]);
+        subZoneBounds.push([minLng, maxLat]);
+      }
+    }
+  } else {
+    // For 3+ zones, divide into quadrants or sections
+    const isTop = relLat > 0.5;
+    const isRight = relLng > 0.5;
+
+    if (isTop && isRight) {
+      // Top-right quadrant
+      subZoneBounds.push([centerLng, centerLat]);
+      subZoneBounds.push([maxLng, centerLat]);
+      subZoneBounds.push([maxLng, maxLat]);
+      subZoneBounds.push([centerLng, maxLat]);
+    } else if (isTop && !isRight) {
+      // Top-left quadrant
+      subZoneBounds.push([minLng, centerLat]);
+      subZoneBounds.push([centerLng, centerLat]);
+      subZoneBounds.push([centerLng, maxLat]);
+      subZoneBounds.push([minLng, maxLat]);
+    } else if (!isTop && isRight) {
+      // Bottom-right quadrant
+      subZoneBounds.push([centerLng, minLat]);
+      subZoneBounds.push([maxLng, minLat]);
+      subZoneBounds.push([maxLng, centerLat]);
+      subZoneBounds.push([centerLng, centerLat]);
+    } else {
+      // Bottom-left quadrant
+      subZoneBounds.push([minLng, minLat]);
+      subZoneBounds.push([centerLng, minLat]);
+      subZoneBounds.push([centerLng, centerLat]);
+      subZoneBounds.push([minLng, centerLat]);
+    }
+  }
+
+  // Close the polygon
+  subZoneBounds.push(subZoneBounds[0]);
+
+  return {
+    type: 'Polygon',
+    coordinates: [subZoneBounds]
+  };
 }
 
 export default router;
