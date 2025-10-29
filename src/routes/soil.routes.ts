@@ -28,43 +28,80 @@ router.get('/zones', async (req: Request, res: Response) => {
 
     console.log(`Fetching soil zones for bbox: ${minLng},${minLat},${maxLng},${maxLat}`);
 
-    // Build WFS GetFeature request
-    const wfsUrl = new URL(USDA_WFS_ENDPOINT);
-    wfsUrl.searchParams.set('SERVICE', 'WFS');
-    wfsUrl.searchParams.set('VERSION', '1.1.0');
-    wfsUrl.searchParams.set('REQUEST', 'GetFeature');
-    wfsUrl.searchParams.set('TYPENAME', 'MapunitPoly');
-    wfsUrl.searchParams.set('SRSNAME', 'EPSG:4326');
-    wfsUrl.searchParams.set('OUTPUTFORMAT', 'application/json');
-    wfsUrl.searchParams.set('BBOX', `${minLng},${minLat},${maxLng},${maxLat},EPSG:4326`);
+    // Use center point to get dominant soil type
+    // More reliable than WFS which has strict format requirements
+    const centerLat = (parseFloat(minLat as string) + parseFloat(maxLat as string)) / 2;
+    const centerLng = (parseFloat(minLng as string) + parseFloat(maxLng as string)) / 2;
 
-    const response = await fetch(wfsUrl.toString());
+    console.log(`Using center point: ${centerLat}, ${centerLng}`);
+
+    const query = `
+      SELECT DISTINCT
+        mu.mukey,
+        mu.muname,
+        mu.musym
+      FROM mapunit mu
+      WHERE mu.mukey IN (
+        SELECT * FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('POINT(${centerLng} ${centerLat})')
+      )
+    `;
+
+    const formData = new URLSearchParams({
+      FORMAT: 'JSON+COLUMNNAME',
+      QUERY: query
+    });
+
+    const response = await fetch(USDA_SDA_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData.toString()
+    });
 
     if (!response.ok) {
-      throw new Error(`USDA WFS request failed: ${response.statusText}`);
+      throw new Error(`USDA API error: ${response.statusText}`);
     }
 
-    const geoJson = await response.json();
+    const data = await response.json();
 
-    if (!geoJson.features || geoJson.features.length === 0) {
+    if (!data.Table || data.Table.length < 2) {
       return res.json({ zones: [] });
     }
 
-    console.log(`Found ${geoJson.features.length} soil polygons`);
+    // Parse map units
+    const columns = data.Table[0];
+    const mukeyIndex = columns.indexOf('mukey');
+    const munameIndex = columns.indexOf('muname');
+    const musymIndex = columns.indexOf('musym');
 
-    // Get detailed properties for each map unit
     const zones = [];
-    for (const feature of geoJson.features) {
-      const mukey = feature.properties.MUKEY;
+
+    // Process each map unit found
+    for (let i = 1; i < data.Table.length; i++) {
+      const row = data.Table[i];
+      const mukey = row[mukeyIndex];
       const soilData = await getSoilProperties(mukey);
 
       if (soilData) {
+        // Create a rectangular zone for this soil type (approximate)
+        const geometry = {
+          type: 'Polygon',
+          coordinates: [[
+            [parseFloat(minLng as string), parseFloat(minLat as string)],
+            [parseFloat(maxLng as string), parseFloat(minLat as string)],
+            [parseFloat(maxLng as string), parseFloat(maxLat as string)],
+            [parseFloat(minLng as string), parseFloat(maxLat as string)],
+            [parseFloat(minLng as string), parseFloat(minLat as string)]
+          ]]
+        };
+
         zones.push({
           id: `zone-${mukey}`,
           name: `${soilData.muname}${soilData.slope_r ? ` ${soilData.slope_r}%` : ''}`,
           mukey,
-          musym: feature.properties.MUSYM,
-          geometry: feature.geometry,
+          musym: row[musymIndex],
+          geometry,
           soilData,
           septic_suitable: soilData.septic_suitability === 'A' || soilData.septic_suitability === 'B',
           color: getSuitabilityColor(soilData.septic_suitability || 'D'),
@@ -73,6 +110,7 @@ router.get('/zones', async (req: Request, res: Response) => {
       }
     }
 
+    console.log(`Found ${zones.length} soil zones`);
     res.json({ zones });
 
   } catch (error) {
@@ -173,44 +211,82 @@ router.post('/analyze', async (req: Request, res: Response) => {
       });
     }
 
-    // Calculate bounding box
-    const lats = propertyBounds.map((p: any) => p.lat);
-    const lngs = propertyBounds.map((p: any) => p.lng);
-    const bbox = {
-      minLat: Math.min(...lats),
-      minLng: Math.min(...lngs),
-      maxLat: Math.max(...lats),
-      maxLng: Math.max(...lngs)
-    };
+    // Use center point to get soil data
+    const query = `
+      SELECT DISTINCT
+        mu.mukey,
+        mu.muname,
+        mu.musym
+      FROM mapunit mu
+      WHERE mu.mukey IN (
+        SELECT * FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('POINT(${propertyCenter.lng} ${propertyCenter.lat})')
+      )
+    `;
 
-    // Fetch soil zones
-    const wfsUrl = new URL(USDA_WFS_ENDPOINT);
-    wfsUrl.searchParams.set('SERVICE', 'WFS');
-    wfsUrl.searchParams.set('VERSION', '1.1.0');
-    wfsUrl.searchParams.set('REQUEST', 'GetFeature');
-    wfsUrl.searchParams.set('TYPENAME', 'MapunitPoly');
-    wfsUrl.searchParams.set('SRSNAME', 'EPSG:4326');
-    wfsUrl.searchParams.set('OUTPUTFORMAT', 'application/json');
-    wfsUrl.searchParams.set('BBOX', `${bbox.minLng},${bbox.minLat},${bbox.maxLng},${bbox.maxLat},EPSG:4326`);
+    const formData = new URLSearchParams({
+      FORMAT: 'JSON+COLUMNNAME',
+      QUERY: query
+    });
 
-    const response = await fetch(wfsUrl.toString());
-    const geoJson = await response.json();
+    const response = await fetch(USDA_SDA_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData.toString()
+    });
+
+    if (!response.ok) {
+      throw new Error(`USDA API error: ${response.statusText}`);
+    }
+
+    const data: any = await response.json();
 
     const zones = [];
-    for (const feature of geoJson.features || []) {
-      const mukey = feature.properties.MUKEY;
-      const soilData = await getSoilProperties(mukey);
 
-      if (soilData) {
-        zones.push({
-          id: `zone-${mukey}`,
-          name: `${soilData.muname}${soilData.slope_r ? ` ${soilData.slope_r}%` : ''}`,
-          mukey,
-          geometry: feature.geometry,
-          soilData,
-          septic_suitable: soilData.septic_suitability === 'A' || soilData.septic_suitability === 'B',
-          color: getSuitabilityColor(soilData.septic_suitability || 'D')
-        });
+    if (data.Table && data.Table.length >= 2) {
+      const columns = data.Table[0];
+      const mukeyIndex = columns.indexOf('mukey');
+      const musymIndex = columns.indexOf('musym');
+
+      // Calculate bounding box
+      const lats = propertyBounds.map((p: any) => p.lat);
+      const lngs = propertyBounds.map((p: any) => p.lng);
+      const bbox = {
+        minLat: Math.min(...lats),
+        minLng: Math.min(...lngs),
+        maxLat: Math.max(...lats),
+        maxLng: Math.max(...lngs)
+      };
+
+      for (let i = 1; i < data.Table.length; i++) {
+        const row = data.Table[i];
+        const mukey = row[mukeyIndex];
+        const soilData = await getSoilProperties(mukey);
+
+        if (soilData) {
+          const geometry = {
+            type: 'Polygon',
+            coordinates: [[
+              [bbox.minLng, bbox.minLat],
+              [bbox.maxLng, bbox.minLat],
+              [bbox.maxLng, bbox.maxLat],
+              [bbox.minLng, bbox.maxLat],
+              [bbox.minLng, bbox.minLat]
+            ]]
+          };
+
+          zones.push({
+            id: `zone-${mukey}`,
+            name: `${soilData.muname}${soilData.slope_r ? ` ${soilData.slope_r}%` : ''}`,
+            mukey,
+            musym: row[musymIndex],
+            geometry,
+            soilData,
+            septic_suitable: soilData.septic_suitability === 'A' || soilData.septic_suitability === 'B',
+            color: getSuitabilityColor(soilData.septic_suitability || 'D')
+          });
+        }
       }
     }
 
