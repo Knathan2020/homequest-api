@@ -35,6 +35,9 @@ router.get('/zones', async (req: Request, res: Response) => {
 
     console.log(`Using center point: ${centerLat}, ${centerLng}`);
 
+    console.log('📍 Coordinates received:', { minLat, minLng, maxLat, maxLng });
+    console.log('📍 Center point:', { lat: centerLat, lng: centerLng });
+
     const query = `
       SELECT DISTINCT
         mu.mukey,
@@ -63,9 +66,13 @@ router.get('/zones', async (req: Request, res: Response) => {
       throw new Error(`USDA API error: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data: any = await response.json();
+
+    console.log('USDA API Response:', JSON.stringify(data, null, 2));
 
     if (!data.Table || data.Table.length < 2) {
+      console.warn('⚠️ No soil map units found in USDA response');
+      console.warn('Response structure:', data);
       return res.json({ zones: [] });
     }
 
@@ -75,11 +82,14 @@ router.get('/zones', async (req: Request, res: Response) => {
     const munameIndex = columns.indexOf('muname');
     const musymIndex = columns.indexOf('musym');
 
+    console.log(`✅ Found ${data.Table.length - 1} map units`);
+
     const zones = [];
 
     // Process each map unit found
     for (let i = 1; i < data.Table.length; i++) {
       const row = data.Table[i];
+      console.log(`Processing map unit ${i}: mukey=${row[mukeyIndex]}`);
       const mukey = row[mukeyIndex];
       const soilData = await getSoilProperties(mukey);
 
@@ -144,20 +154,12 @@ router.get('/point', async (req: Request, res: Response) => {
         mu.mukey,
         mu.muname,
         mu.musym,
-        c.compname as taxonname,
+        c.compname,
+        c.comppct_r,
         c.drainagecl,
-        c.hydricrating,
-        c.claytotal_r,
-        c.sandtotal_r,
-        c.silttotal_r,
-        c.slope_r,
-        ch.resdept_r as depth_r,
-        ch.wtdepannmin,
-        mu.corcon as corrosion_concrete,
-        mu.corsteel as corrosion_steel
+        c.hydricrating
       FROM mapunit mu
       INNER JOIN component c ON mu.mukey = c.mukey
-      LEFT JOIN chorizon ch ON c.cokey = ch.cokey
       WHERE mu.mukey IN (
         SELECT * FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('POINT(${lng} ${lat})')
       )
@@ -334,20 +336,12 @@ async function getSoilProperties(mukey: string): Promise<any> {
         mu.mukey,
         mu.muname,
         mu.musym,
-        c.compname as taxonname,
+        c.compname,
+        c.comppct_r,
         c.drainagecl,
-        c.hydricrating,
-        c.claytotal_r,
-        c.sandtotal_r,
-        c.silttotal_r,
-        c.slope_r,
-        ch.resdept_r as depth_r,
-        ch.wtdepannmin,
-        mu.corcon as corrosion_concrete,
-        mu.corsteel as corrosion_steel
+        c.hydricrating
       FROM mapunit mu
       INNER JOIN component c ON mu.mukey = c.mukey
-      LEFT JOIN chorizon ch ON c.cokey = ch.cokey
       WHERE mu.mukey = '${mukey}'
       AND c.majcompflag = 'Yes'
       ORDER BY c.comppct_r DESC
@@ -402,22 +396,24 @@ function parseSoilData(apiResponse: any): any {
       mukey: data.mukey || '',
       muname: data.muname || 'Unknown',
       musym: data.musym || '',
-      taxonname: data.taxonname,
+      taxonname: data.compname || data.taxonname,
       drainagecl: data.drainagecl,
       hydricrating: data.hydricrating,
-      claytotal_r: data.claytotal_r,
-      sandtotal_r: data.sandtotal_r,
-      silttotal_r: data.silttotal_r,
-      slope_r: data.slope_r,
-      depth_r: data.depth_r,
-      wtdepannmin: data.wtdepannmin,
+      comppct_r: data.comppct_r,
+      // Note: Detailed soil properties not available in basic query
+      claytotal_r: null,
+      sandtotal_r: null,
+      silttotal_r: null,
+      slope_r: null,
+      depth_r: null,
+      wtdepannmin: null,
       septic_suitability: septicSuitability.rating,
       septic_rating: septicSuitability.description,
       adsorption_rate: septicSuitability.adsorptionRate,
-      corrosion_concrete: data.corrosion_concrete,
-      corrosion_steel: data.corrosion_steel,
+      corrosion_concrete: null,
+      corrosion_steel: null,
       source: 'USDA-SDA',
-      confidence: 85,
+      confidence: 70, // Lower confidence since we have limited data
       query_date: new Date().toISOString()
     };
 
@@ -432,30 +428,29 @@ function parseSoilData(apiResponse: any): any {
  */
 function calculateSepticSuitability(data: any): { rating: string; description: string; adsorptionRate: number } {
   const drainage = data.drainagecl?.toLowerCase() || '';
-  const clay = data.claytotal_r || 0;
-  const sand = data.sandtotal_r || 0;
-  const waterTableDepth = data.wtdepannmin || 999;
-  const slope = data.slope_r || 0;
+  const hydric = data.hydricrating?.toLowerCase() || '';
 
-  if (
-    (drainage.includes('well') || drainage.includes('moderately well')) &&
-    waterTableDepth > 72 &&
-    clay < 30 &&
-    sand > 40 &&
-    slope < 8
-  ) {
-    return { rating: 'A', description: 'Excellent - suitable for on-site septic systems', adsorptionRate: 45 };
-  }
+  // Simplified septic suitability based on drainage and hydric rating
+  // This is a conservative estimate - real site evaluations needed
 
-  if (waterTableDepth > 48 && clay < 40 && slope < 15) {
+  if (drainage.includes('well drained') && hydric !== 'yes') {
     return { rating: 'B', description: 'Good - suitable with proper system design', adsorptionRate: 60 };
   }
 
-  if (waterTableDepth > 36 && slope < 20) {
+  if (drainage.includes('moderately well') && hydric !== 'yes') {
+    return { rating: 'B', description: 'Good - suitable with proper system design', adsorptionRate: 60 };
+  }
+
+  if ((drainage.includes('moderately') || drainage.includes('somewhat')) && hydric !== 'yes') {
     return { rating: 'C', description: 'Fair - may require engineered septic system', adsorptionRate: 90 };
   }
 
-  return { rating: 'D', description: 'Poor - not suitable for conventional septic systems', adsorptionRate: 120 };
+  if (drainage.includes('poor') || hydric === 'yes') {
+    return { rating: 'D', description: 'Poor - not suitable for conventional septic systems', adsorptionRate: 120 };
+  }
+
+  // Default to fair rating if drainage class is unclear
+  return { rating: 'C', description: 'Fair - detailed site evaluation required', adsorptionRate: 90 };
 }
 
 function getSuitabilityColor(rating: string): string {
@@ -486,20 +481,17 @@ function getDrainageRequirements(soilData: any): string[] {
     requirements.push('Consider mound or above-ground system');
   }
 
-  if ((soilData.claytotal_r || 0) > 40) {
-    requirements.push('Clay content high - may need gravel bed');
+  if (soilData.drainagecl?.toLowerCase().includes('somewhat')) {
+    requirements.push('Moderate drainage - engineered system recommended');
   }
 
-  if ((soilData.wtdepannmin || 999) < 48) {
-    requirements.push('Seasonal high water table - elevated system recommended');
-  }
-
-  if ((soilData.slope_r || 0) > 8) {
-    requirements.push('Slope consideration - may need terracing');
+  if (soilData.hydricrating?.toLowerCase() === 'yes') {
+    requirements.push('Wetland soil - special permitting required');
   }
 
   if (requirements.length === 0) {
     requirements.push('Standard drain field acceptable');
+    requirements.push('Site-specific evaluation recommended');
   }
 
   return requirements;
@@ -508,21 +500,16 @@ function getDrainageRequirements(soilData: any): string[] {
 function getWarnings(soilData: any): string[] {
   const warnings: string[] = [];
 
-  if (soilData.hydricrating === 'Yes') {
+  if (soilData.hydricrating?.toLowerCase() === 'yes') {
     warnings.push('⚠ Hydric soil - wetland regulations may apply');
   }
 
-  if (soilData.corrosion_concrete?.toLowerCase().includes('high')) {
-    warnings.push('⚠ High corrosion potential - use resistant materials');
+  if (soilData.drainagecl?.toLowerCase().includes('poor')) {
+    warnings.push('⚠ Poor drainage - conventional septic may not be suitable');
   }
 
-  if ((soilData.depth_r || 999) < 60) {
-    warnings.push('⚠ Shallow bedrock - depth limitations');
-  }
-
-  if ((soilData.slope_r || 0) > 15) {
-    warnings.push('⚠ Steep slope - special installation required');
-  }
+  // Note: Limited soil data available - recommend professional site evaluation
+  warnings.push('ℹ Professional soil evaluation recommended for accurate assessment');
 
   return warnings;
 }
@@ -532,9 +519,14 @@ function estimateSepticCost(soilData: any): number {
 
   if (soilData.septic_suitability === 'C') baseCost += 5000;
   if (soilData.septic_suitability === 'D') baseCost += 12000;
-  if ((soilData.wtdepannmin || 999) < 48) baseCost += 3000;
-  if ((soilData.claytotal_r || 0) > 40) baseCost += 2000;
-  if ((soilData.slope_r || 0) > 10) baseCost += 4000;
+
+  if (soilData.drainagecl?.toLowerCase().includes('poor')) {
+    baseCost += 5000; // Mound or elevated system
+  }
+
+  if (soilData.hydricrating?.toLowerCase() === 'yes') {
+    baseCost += 8000; // Special wetland considerations
+  }
 
   return baseCost;
 }
