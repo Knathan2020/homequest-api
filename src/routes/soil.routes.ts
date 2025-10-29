@@ -94,7 +94,8 @@ router.get('/zones', async (req: Request, res: Response) => {
       const soilData = await getSoilProperties(mukey);
 
       if (soilData) {
-        // Create a rectangular zone for this soil type (approximate)
+        // Use bounding box as a simple polygon
+        // Note: For accurate boundaries, would need USDA WFS spatial query
         const geometry = {
           type: 'Polygon',
           coordinates: [[
@@ -106,6 +107,12 @@ router.get('/zones', async (req: Request, res: Response) => {
           ]]
         };
 
+        // Calculate approximate area
+        const latDiff = parseFloat(maxLat as string) - parseFloat(minLat as string);
+        const lngDiff = parseFloat(maxLng as string) - parseFloat(minLng as string);
+        const area_sqft = Math.abs(latDiff * lngDiff) * 364000 * 364000; // Very rough approximation
+        const area_acres = area_sqft / 43560;
+
         zones.push({
           id: `zone-${mukey}`,
           name: `${soilData.muname}${soilData.slope_r ? ` ${soilData.slope_r}%` : ''}`,
@@ -113,6 +120,8 @@ router.get('/zones', async (req: Request, res: Response) => {
           musym: row[musymIndex],
           geometry,
           soilData,
+          area_sqft,
+          area_acres,
           septic_suitable: soilData.septic_suitability === 'A' || soilData.septic_suitability === 'B',
           color: getSuitabilityColor(soilData.septic_suitability || 'D'),
           opacity: 0.4
@@ -251,15 +260,18 @@ router.post('/analyze', async (req: Request, res: Response) => {
       const mukeyIndex = columns.indexOf('mukey');
       const musymIndex = columns.indexOf('musym');
 
-      // Calculate bounding box
+      // Use actual property boundaries instead of bounding box
+      const propertyCoordinates = propertyBounds.map((p: any) => [p.lng, p.lat]);
+      // Close the polygon
+      propertyCoordinates.push(propertyCoordinates[0]);
+
+      // Calculate area
       const lats = propertyBounds.map((p: any) => p.lat);
       const lngs = propertyBounds.map((p: any) => p.lng);
-      const bbox = {
-        minLat: Math.min(...lats),
-        minLng: Math.min(...lngs),
-        maxLat: Math.max(...lats),
-        maxLng: Math.max(...lngs)
-      };
+      const latDiff = Math.max(...lats) - Math.min(...lats);
+      const lngDiff = Math.max(...lngs) - Math.min(...lngs);
+      const area_sqft = Math.abs(latDiff * lngDiff) * 364000 * 364000; // Rough approximation
+      const area_acres = area_sqft / 43560;
 
       for (let i = 1; i < data.Table.length; i++) {
         const row = data.Table[i];
@@ -267,15 +279,10 @@ router.post('/analyze', async (req: Request, res: Response) => {
         const soilData = await getSoilProperties(mukey);
 
         if (soilData) {
+          // Use actual property boundary shape
           const geometry = {
             type: 'Polygon',
-            coordinates: [[
-              [bbox.minLng, bbox.minLat],
-              [bbox.maxLng, bbox.minLat],
-              [bbox.maxLng, bbox.maxLat],
-              [bbox.minLng, bbox.maxLat],
-              [bbox.minLng, bbox.minLat]
-            ]]
+            coordinates: [propertyCoordinates]
           };
 
           zones.push({
@@ -285,6 +292,8 @@ router.post('/analyze', async (req: Request, res: Response) => {
             musym: row[musymIndex],
             geometry,
             soilData,
+            area_sqft,
+            area_acres,
             septic_suitable: soilData.septic_suitability === 'A' || soilData.septic_suitability === 'B',
             color: getSuitabilityColor(soilData.septic_suitability || 'D')
           });
