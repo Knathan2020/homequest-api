@@ -2,7 +2,9 @@ services:
   - type: web
     name: homequest-api
     runtime: node
-    buildCommand: npm install && npm run build
+    region: oregon
+    plan: starter
+    buildCommand: npm install && npm run build && mkdir -p temp-cad-files
     startCommand: node dist/server.js
     healthCheckPath: /health
     envVars:
@@ -10,3 +12,27 @@ services:
         value: production
       - key: PORT
         value: 4000
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GOOGLE_CLOUD_CREDENTIALS
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
