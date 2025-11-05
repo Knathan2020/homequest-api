@@ -83,6 +83,8 @@ import realtimeAPIRoutes from './routes/realtime-api.routes';
 import elevationRoutes from './routes/elevation.routes';
 import gisProxyRoutes from './routes/gis-proxy';
 import soilRoutes from './routes/soil.routes';
+import gradingAnalysisRoutes from './routes/grading-analysis.routes';
+import waterRiskRoutes from './routes/water-risk.routes';
 
 dotenv.config();
 
@@ -1086,6 +1088,8 @@ app.use('/api/realtime', realtimeAPIRoutes);
 app.use('/api/elevation', elevationRoutes);
 app.use('/api/gis', gisProxyRoutes);
 app.use('/api/soil', soilRoutes);
+app.use('/api/grading', gradingAnalysisRoutes);
+app.use('/api/water-risk', waterRiskRoutes);
 
 // Route Aliases for Backward Compatibility
 app.use('/api/analyze-floorplan', floorPlansRoutes);
