@@ -354,6 +354,8 @@ export const createApp = (): Application => {
   app.use('/api', require('./routes/email-compatibility.routes').default); // Email compatibility layer for old frontend
   app.use('/api/ai', require('./routes/ai.routes').default); // AI email assistance endpoints
   app.use('/api/ai-assistant', require('./routes/ai-assistant').default); // AI assistant with ChatGPT integration
+  app.use('/api/grading', require('./routes/grading-analysis.routes').default); // Grading analysis with GPT
+  app.use('/api/water-risk', require('./routes/water-risk.routes').default); // Water risk detection
   // app.use('/api', floorPlan3DRoutes); // 2D to 3D conversion routes - temporarily disabled
   // app.use('/api/rooms', roomRoutes);
   // app.use('/api/processing', processingRoutes);
