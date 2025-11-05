@@ -10,9 +10,9 @@ import OpenAI from 'openai';
 
 const router = express.Router();
 
-// Initialize OpenAI
+// Initialize OpenAI with fallback
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY || 'sk-dummy-key-will-fail-gracefully'
 });
 
 const supabase = createClient(

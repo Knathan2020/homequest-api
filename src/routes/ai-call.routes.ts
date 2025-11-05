@@ -12,7 +12,7 @@ const router = express.Router();
 
 // Initialize OpenAI (regular chat, not realtime)
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || 'YOUR_NEW_OPENAI_API_KEY_HERE'
+  apiKey: process.env.OPENAI_API_KEY || 'sk-dummy-key-will-fail-gracefully'
 });
 
 // AI-powered call with fallback

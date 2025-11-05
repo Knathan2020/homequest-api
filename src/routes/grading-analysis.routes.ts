@@ -8,9 +8,9 @@ import OpenAI from 'openai';
 
 const router = Router();
 
-// Initialize OpenAI
+// Initialize OpenAI with fallback
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY || 'sk-dummy-key-will-fail-gracefully'
 });
 
 interface GradingInput {
