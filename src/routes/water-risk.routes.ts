@@ -3,10 +3,10 @@
  * Secure water risk detection using FEMA and Google Places APIs
  */
 
-import express, { Request, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import fetch from 'node-fetch';
 
-const router = express.Router();
+const router = Router();
 
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 if (!GOOGLE_MAPS_API_KEY) {

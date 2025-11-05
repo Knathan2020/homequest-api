@@ -3,10 +3,10 @@
  * Secure GPT-powered grading and site analysis
  */
 
-import express, { Request, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import OpenAI from 'openai';
 
-const router = express.Router();
+const router = Router();
 
 // Initialize OpenAI
 const openai = new OpenAI({
