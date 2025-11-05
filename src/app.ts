@@ -37,6 +37,8 @@ import projectsRoutes from './routes/projects.routes';
 import builderBriefingRoutes from './routes/builder-briefing.routes';
 import roomSelectionsRoutes from './api/room-selections';
 import paymentRoutes from './routes/payment.routes';
+import gradingAnalysisRoutes from './routes/grading-analysis.routes';
+import waterRiskRoutes from './routes/water-risk.routes';
 // import floorPlan3DRoutes from './routes/floor-plan-3d.routes'; // Temporarily disabled for build
 // import roomRoutes from './routes/room.routes';
 // import processingRoutes from './routes/processing.routes';
@@ -354,8 +356,8 @@ export const createApp = (): Application => {
   app.use('/api', require('./routes/email-compatibility.routes').default); // Email compatibility layer for old frontend
   app.use('/api/ai', require('./routes/ai.routes').default); // AI email assistance endpoints
   app.use('/api/ai-assistant', require('./routes/ai-assistant').default); // AI assistant with ChatGPT integration
-  app.use('/api/grading', require('./routes/grading-analysis.routes').default); // Grading analysis with GPT
-  app.use('/api/water-risk', require('./routes/water-risk.routes').default); // Water risk detection
+  app.use('/api/grading', gradingAnalysisRoutes); // Grading analysis with GPT
+  app.use('/api/water-risk', waterRiskRoutes); // Water risk detection
   // app.use('/api', floorPlan3DRoutes); // 2D to 3D conversion routes - temporarily disabled
   // app.use('/api/rooms', roomRoutes);
   // app.use('/api/processing', processingRoutes);
