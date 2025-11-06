@@ -24,6 +24,40 @@ interface WaterRiskInput {
 }
 
 /**
+ * @route   POST /api/water-risk/fema-zone
+ * @desc    Get FEMA flood zone (CORS-free proxy)
+ * @access  Public
+ */
+router.post('/fema-zone', async (req: Request, res: Response) => {
+  try {
+    const { lat, lng } = req.body;
+
+    if (!lat || !lng) {
+      return res.status(400).json({
+        success: false,
+        error: 'Latitude and longitude are required'
+      });
+    }
+
+    console.log(`🌊 FEMA Flood Zone lookup: ${lat}, ${lng}`);
+
+    const floodZone = await getFEMAFloodZone(lat, lng);
+
+    res.json({
+      success: true,
+      floodZone
+    });
+
+  } catch (error: any) {
+    console.error('❌ FEMA lookup failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get FEMA flood zone'
+    });
+  }
+});
+
+/**
  * @route   POST /api/water-risk/analyze
  * @desc    Comprehensive water risk analysis
  * @access  Public
