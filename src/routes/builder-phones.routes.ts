@@ -154,6 +154,23 @@ router.get('/token/:teamId', async (req: Request, res: Response) => {
 
     console.log('📱 Generating token for team:', teamId);
 
+    // Validate required environment variables
+    if (!process.env.TWILIO_ACCOUNT_SID) {
+      console.error('❌ Missing TWILIO_ACCOUNT_SID');
+      return res.status(500).json({
+        error: 'Twilio configuration error',
+        message: 'TWILIO_ACCOUNT_SID is not configured. Please contact support.'
+      });
+    }
+
+    if (!process.env.TWILIO_TWIML_APP_SID) {
+      console.error('❌ Missing TWILIO_TWIML_APP_SID');
+      return res.status(500).json({
+        error: 'Twilio configuration error',
+        message: 'TWILIO_TWIML_APP_SID is not configured. Please contact support.'
+      });
+    }
+
     // Get team's phone config
     const { data: teamPhone, error: phoneError } = await supabase
       .from('team_phones')
@@ -171,10 +188,30 @@ router.get('/token/:teamId', async (req: Request, res: Response) => {
 
     // Create access token
     const identity = `team_${teamId}`;
+
+    // Use API Key/Secret if available, fallback to Account SID/Auth Token
+    const apiKey = process.env.TWILIO_API_KEY || process.env.TWILIO_ACCOUNT_SID;
+    const apiSecret = process.env.TWILIO_API_SECRET || process.env.TWILIO_AUTH_TOKEN;
+
+    if (!apiSecret) {
+      console.error('❌ Missing both TWILIO_API_SECRET and TWILIO_AUTH_TOKEN');
+      return res.status(500).json({
+        error: 'Twilio configuration error',
+        message: 'Twilio authentication credentials are not configured. Please contact support.'
+      });
+    }
+
+    console.log('🔑 Token generation config:', {
+      accountSid: process.env.TWILIO_ACCOUNT_SID?.substring(0, 10) + '...',
+      apiKey: apiKey?.substring(0, 10) + '...',
+      twimlAppSid: process.env.TWILIO_TWIML_APP_SID?.substring(0, 10) + '...',
+      identity
+    });
+
     const token = new AccessToken(
-      process.env.TWILIO_ACCOUNT_SID!,
-      process.env.TWILIO_API_KEY || process.env.TWILIO_ACCOUNT_SID!,
-      process.env.TWILIO_API_SECRET || process.env.TWILIO_AUTH_TOKEN!,
+      process.env.TWILIO_ACCOUNT_SID,
+      apiKey!,
+      apiSecret,
       { identity }
     );
 
@@ -187,6 +224,7 @@ router.get('/token/:teamId', async (req: Request, res: Response) => {
     token.addGrant(voiceGrant);
 
     console.log('✅ Generated Twilio access token for:', identity);
+    console.log('🎫 Token JWT (first 50 chars):', token.toJwt().substring(0, 50) + '...');
 
     res.json({
       token: token.toJwt(),
