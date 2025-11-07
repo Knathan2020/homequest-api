@@ -61,11 +61,11 @@ class HomeQuestTwilioService {
     purpose: string;
   }): Promise<any> {
     try {
-      // Check if team has minutes available
-      const canCall = await this.canMakeCall(params.teamId);
-      if (!canCall) {
-        throw new Error('Monthly calling limit reached. Upgrade your plan for more minutes.');
-      }
+      // Skip limit check - rely on actual Twilio account balance
+      // const canCall = await this.canMakeCall(params.teamId);
+      // if (!canCall) {
+      //   throw new Error('Monthly calling limit reached. Upgrade your plan for more minutes.');
+      // }
 
       // Create TwiML with best available Polly Neural voice
       const twimlUrl = `http://twimlets.com/echo?Twiml=${encodeURIComponent(`

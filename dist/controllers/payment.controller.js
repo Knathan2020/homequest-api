@@ -365,6 +365,17 @@ class PaymentController {
             }
             else {
                 logger.info(`✅ Subscription created for team ${profile.team_id}`);
+                // Sync tier to teams table for immediate limit enforcement
+                const { error: tierError } = await supabase
+                    .from('teams')
+                    .update({ subscription_tier: tier })
+                    .eq('id', profile.team_id);
+                if (tierError) {
+                    logger.error('Error updating team tier:', tierError);
+                }
+                else {
+                    logger.info(`✅ Team tier updated to ${tier}`);
+                }
             }
         }
         catch (error) {

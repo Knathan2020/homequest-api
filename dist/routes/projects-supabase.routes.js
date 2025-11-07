@@ -34,8 +34,36 @@ if (!process.env.SUPABASE_SERVICE_KEY) {
 router.get('/projects', async (req, res) => {
     try {
         // Get team_id or user_id from query params or headers
-        const teamId = req.query.team_id || req.headers['x-team-id'];
-        const userId = req.query.user_id || req.headers['x-user-id'];
+        let teamId = req.query.team_id || req.headers['x-team-id'];
+        let userId = req.query.user_id || req.headers['x-user-id'];
+        // If not provided, try to extract from JWT token
+        if (!teamId && !userId) {
+            const authHeader = req.headers.authorization;
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                const token = authHeader.substring(7);
+                try {
+                    // Use Supabase to verify token and get user
+                    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+                    if (!authError && user) {
+                        userId = user.id;
+                        console.log('✅ Extracted user from token:', user.email);
+                        // Look up user's team_id from profiles
+                        const { data: profile } = await supabase
+                            .from('profiles')
+                            .select('team_id')
+                            .eq('id', user.id)
+                            .single();
+                        if (profile?.team_id) {
+                            teamId = profile.team_id;
+                            console.log('✅ Found team_id from profile:', teamId);
+                        }
+                    }
+                }
+                catch (e) {
+                    console.error('Error extracting user from token:', e);
+                }
+            }
+        }
         console.log('📊 Fetching projects from database', { teamId, userId });
         // If Supabase is not configured, return mock data
         if (!supabase) {
@@ -150,29 +178,44 @@ router.get('/projects', async (req, res) => {
 router.get('/projects/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        console.log('🔍 GET /projects/:id called - USING NEW FIX (no .single())', id);
         if (!supabase) {
             return res.status(503).json({
                 success: false,
                 error: 'Database not configured'
             });
         }
+        // First query without .single() to check for duplicates
         const { data, error } = await supabase
             .from('projects')
             .select('*')
-            .eq('id', id)
-            .single();
+            .eq('id', id);
         if (error) {
-            if (error.code === 'PGRST116') {
-                return res.status(404).json({
-                    success: false,
-                    error: 'Project not found'
-                });
-            }
             throw error;
+        }
+        if (!data || data.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Project not found'
+            });
+        }
+        // If multiple rows found, log warning and return first one
+        if (data.length > 1) {
+            console.warn(`⚠️ DUPLICATE PROJECTS FOUND! ID: ${id}, Count: ${data.length}`);
+            console.warn('This should not happen - project IDs should be unique!');
+            console.warn('Returning most recently updated project');
+            // Sort by updated_at and return most recent
+            const sortedData = data.sort((a, b) => new Date(b.updated_at || b.created_at).getTime() -
+                new Date(a.updated_at || a.created_at).getTime());
+            return res.json({
+                success: true,
+                data: sortedData[0],
+                warning: `Found ${data.length} duplicate projects - returning most recent`
+            });
         }
         res.json({
             success: true,
-            data
+            data: data[0]
         });
     }
     catch (error) {
