@@ -5,6 +5,10 @@ import express, { Request, Response } from 'express';
 import twilioSubaccountsService from '../services/twilioSubaccounts.service';
 import phoneProvisioningService from '../services/phone-provisioning.service';
 import { createClient } from '@supabase/supabase-js';
+import twilio from 'twilio';
+
+const { AccessToken } = twilio.jwt;
+const { VoiceGrant } = AccessToken;
 
 const router = express.Router();
 
@@ -140,6 +144,95 @@ router.post('/create', async (req: Request, res: Response) => {
       error: 'Failed to create phone number',
       message: error.message
     });
+  }
+});
+
+// Generate access token for browser-based calling
+router.get('/token/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    // Get user's profile and team info
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('team_id, email, full_name')
+      .eq('id', userId)
+      .single();
+
+    if (!profile?.team_id) {
+      return res.status(400).json({
+        error: 'No team found for user'
+      });
+    }
+
+    // Get team's phone config
+    const { data: teamPhone } = await supabase
+      .from('team_phones')
+      .select('*')
+      .eq('team_id', profile.team_id)
+      .single();
+
+    if (!teamPhone) {
+      return res.status(400).json({
+        error: 'No phone number assigned. Please set up your business phone first.'
+      });
+    }
+
+    // Create access token
+    const identity = `builder_${userId}`;
+    const token = new AccessToken(
+      process.env.TWILIO_ACCOUNT_SID!,
+      process.env.TWILIO_API_KEY || process.env.TWILIO_ACCOUNT_SID!,
+      process.env.TWILIO_API_SECRET || process.env.TWILIO_AUTH_TOKEN!,
+      { identity }
+    );
+
+    // Create Voice grant
+    const voiceGrant = new VoiceGrant({
+      outgoingApplicationSid: process.env.TWILIO_TWIML_APP_SID,
+      incomingAllow: true
+    });
+
+    token.addGrant(voiceGrant);
+
+    console.log('📱 Generated Twilio access token for:', identity);
+
+    res.json({
+      token: token.toJwt(),
+      identity,
+      phoneNumber: teamPhone.twilio_number
+    });
+  } catch (error: any) {
+    console.error('Error generating access token:', error);
+    res.status(500).json({
+      error: 'Failed to generate access token',
+      message: error.message
+    });
+  }
+});
+
+// TwiML endpoint for outbound calls from browser
+router.post('/voice', async (req: Request, res: Response) => {
+  try {
+    const { To, From } = req.body;
+
+    console.log('📞 Outbound call from browser:', { To, From });
+
+    // Create TwiML response to dial the number
+    const twiml = new twilio.twiml.VoiceResponse();
+    const dial = twiml.dial({
+      callerId: From || process.env.TWILIO_PHONE_NUMBER
+    });
+    dial.number(To);
+
+    res.type('text/xml');
+    res.send(twiml.toString());
+  } catch (error: any) {
+    console.error('Error handling voice request:', error);
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.say('An error occurred. Please try again.');
+    res.type('text/xml');
+    res.send(twiml.toString());
   }
 });
 

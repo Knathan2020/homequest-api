@@ -2,6 +2,7 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { createClient } from '@supabase/supabase-js';
+import builderPhonesRoutes from './builder-phones.routes';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -337,6 +338,9 @@ router.put('/wall-editor/walls/:wallId', async (req: Request, res: Response) => 
     message: 'Wall updated'
   });
 });
+
+// ===== BUILDER PHONES & CALLING =====
+router.use('/builder-phones', builderPhonesRoutes);
 
 // ===== HEALTH CHECK =====
 router.get('/health', (req: Request, res: Response) => {
