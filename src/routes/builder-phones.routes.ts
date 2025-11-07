@@ -148,38 +148,29 @@ router.post('/create', async (req: Request, res: Response) => {
 });
 
 // Generate access token for browser-based calling
-router.get('/token/:userId', async (req: Request, res: Response) => {
+router.get('/token/:teamId', async (req: Request, res: Response) => {
   try {
-    const { userId } = req.params;
+    const { teamId } = req.params;
 
-    // Get user's profile and team info
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('team_id, email, full_name')
-      .eq('id', userId)
-      .single();
-
-    if (!profile?.team_id) {
-      return res.status(400).json({
-        error: 'No team found for user'
-      });
-    }
+    console.log('📱 Generating token for team:', teamId);
 
     // Get team's phone config
-    const { data: teamPhone } = await supabase
+    const { data: teamPhone, error: phoneError } = await supabase
       .from('team_phones')
       .select('*')
-      .eq('team_id', profile.team_id)
+      .eq('team_id', teamId)
       .single();
 
-    if (!teamPhone) {
+    if (phoneError || !teamPhone) {
+      console.error('No phone found for team:', teamId, phoneError);
       return res.status(400).json({
-        error: 'No phone number assigned. Please set up your business phone first.'
+        error: 'No phone number assigned. Please set up your business phone first.',
+        details: phoneError?.message
       });
     }
 
     // Create access token
-    const identity = `builder_${userId}`;
+    const identity = `team_${teamId}`;
     const token = new AccessToken(
       process.env.TWILIO_ACCOUNT_SID!,
       process.env.TWILIO_API_KEY || process.env.TWILIO_ACCOUNT_SID!,
@@ -195,7 +186,7 @@ router.get('/token/:userId', async (req: Request, res: Response) => {
 
     token.addGrant(voiceGrant);
 
-    console.log('📱 Generated Twilio access token for:', identity);
+    console.log('✅ Generated Twilio access token for:', identity);
 
     res.json({
       token: token.toJwt(),
