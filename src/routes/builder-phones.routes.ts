@@ -247,11 +247,11 @@ router.post('/voice', async (req: Request, res: Response) => {
 
     console.log('📞 Outbound call from browser:', { To, From });
 
-    // Extract team ID from identity (format: "client:builder_team123")
+    // Extract team ID from identity (format: "client:team_123")
     let callerIdNumber = process.env.TWILIO_PHONE_NUMBER;
 
-    if (From && From.startsWith('client:builder_')) {
-      const teamId = From.replace('client:builder_', '');
+    if (From && From.startsWith('client:team_')) {
+      const teamId = From.replace('client:team_', '');
       console.log('Looking up phone for team:', teamId);
 
       // Get team's phone number from database
