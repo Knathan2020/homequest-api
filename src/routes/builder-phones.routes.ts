@@ -247,12 +247,34 @@ router.post('/voice', async (req: Request, res: Response) => {
 
     console.log('📞 Outbound call from browser:', { To, From });
 
+    // Extract team ID from identity (format: "client:builder_team123")
+    let callerIdNumber = process.env.TWILIO_PHONE_NUMBER;
+
+    if (From && From.startsWith('client:builder_')) {
+      const teamId = From.replace('client:builder_', '');
+      console.log('Looking up phone for team:', teamId);
+
+      // Get team's phone number from database
+      const { data: teamPhone } = await supabase
+        .from('team_phones')
+        .select('twilio_number')
+        .eq('team_id', teamId)
+        .single();
+
+      if (teamPhone?.twilio_number) {
+        callerIdNumber = teamPhone.twilio_number;
+        console.log('Using team phone as caller ID:', callerIdNumber);
+      }
+    }
+
     // Create TwiML response to dial the number
     const twiml = new twilio.twiml.VoiceResponse();
     const dial = twiml.dial({
-      callerId: From || process.env.TWILIO_PHONE_NUMBER
+      callerId: callerIdNumber
     });
     dial.number(To);
+
+    console.log('Generated TwiML:', twiml.toString());
 
     res.type('text/xml');
     res.send(twiml.toString());
