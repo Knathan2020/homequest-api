@@ -21,6 +21,10 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const { category, tag, limit = 10, offset = 0 } = req.query;
 
+    console.log('🔍 Blog API - Fetching posts with params:', { category, tag, limit, offset });
+    console.log('🔍 Blog API - Supabase URL:', process.env.SUPABASE_URL);
+    console.log('🔍 Blog API - Has Service Key:', !!process.env.SUPABASE_SERVICE_KEY);
+
     let query = supabase
       .from('blog_posts')
       .select('*')
@@ -42,6 +46,12 @@ router.get('/', async (req: Request, res: Response) => {
 
     const { data, error, count } = await query;
 
+    console.log('🔍 Blog API - Query result:', {
+      dataCount: data?.length,
+      error: error?.message,
+      count
+    });
+
     if (error) throw error;
 
     res.json({
@@ -52,7 +62,7 @@ router.get('/', async (req: Request, res: Response) => {
       offset: parseInt(offset as string)
     });
   } catch (error) {
-    console.error('Error fetching blog posts:', error);
+    console.error('❌ Error fetching blog posts:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch blog posts'
