@@ -5,13 +5,28 @@
 
 import { Router, Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const router = Router();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || ''
-);
+// Initialize Supabase client with service role key
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
+
+const supabase = supabaseUrl && supabaseKey
+  ? createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+  : null;
+
+if (!process.env.SUPABASE_SERVICE_KEY) {
+  console.warn('⚠️ BLOG ROUTES: SUPABASE_SERVICE_KEY not set - using ANON key which may cause RLS issues');
+}
 
 /**
  * GET /api/blog
@@ -19,6 +34,13 @@ const supabase = createClient(
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
+    if (!supabase) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database connection not configured'
+      });
+    }
+
     const { category, tag, limit = 10, offset = 0 } = req.query;
 
     console.log('🔍 Blog API - Fetching posts with params:', { category, tag, limit, offset });
