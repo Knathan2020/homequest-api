@@ -11,6 +11,28 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 // Pricing tiers configuration
 const PRICING_TIERS = [
   {
+    id: 'pilot',
+    name: 'Pilot',
+    price: 149,
+    priceId: process.env.STRIPE_PRICE_PILOT || 'price_1QU7Nv2Kl52GSEUgXNrZYrNY',
+    maxProjects: 1,
+    maxUsers: 1,
+    features: [
+      'AI Blueprint Processing - Automatic wall & room detection from any plan',
+      '3D Floor Plans & Site Visualization - See your project before you build',
+      'Smart Vendor Bidding - Send requests, track responses, compare quotes',
+      'Auto-Vendor Messaging - AI texts & emails vendors, or calls them for you',
+      'Real-Time Team Collaboration - Keep your crew and subs in sync',
+      'Construction Phase Tracking - Monitor progress from foundation to finish',
+      'Smart Document Management - All plans, permits & contracts organized',
+      'AI Phone System - Automated vendor scheduling and follow-ups',
+      'GIS & Terrain Analysis - Site planning with real elevation data',
+      'Email Integration - Gmail & Outlook with smart inbox management',
+      'Mobile Access - Run your jobs from the field',
+      'Cost & Usage Analytics - Track spending and project performance'
+    ]
+  },
+  {
     id: 'starter',
     name: 'Starter',
     price: 299,
