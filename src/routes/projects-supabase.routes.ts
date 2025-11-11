@@ -33,7 +33,7 @@ if (!process.env.SUPABASE_SERVICE_KEY) {
 /**
  * Get all projects (filtered by team_id or user_id if provided)
  */
-router.get('/projects', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     // Get team_id or user_id from query params or headers
     let teamId = req.query.team_id || req.headers['x-team-id'];
@@ -254,7 +254,7 @@ router.get('/projects/:id', async (req, res) => {
 /**
  * Create new project
  */
-router.post('/projects', async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { 
       project_name, 
@@ -339,7 +339,7 @@ router.post('/projects', async (req, res) => {
 /**
  * Update project
  */
-router.put('/projects/:id', async (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -391,7 +391,7 @@ router.put('/projects/:id', async (req, res) => {
 /**
  * PATCH project (for status updates like archiving)
  */
-router.patch('/projects/:id', async (req, res) => {
+router.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { action, data: updateData } = req.body;
@@ -483,7 +483,7 @@ router.patch('/projects/:id', async (req, res) => {
 /**
  * Delete project
  */
-router.delete('/projects/:id', async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -561,7 +561,7 @@ router.delete('/projects/:id', async (req, res) => {
 /**
  * Get projects for a specific team
  */
-router.get('/projects/team/:teamId', async (req, res) => {
+router.get('/team/:teamId', async (req, res) => {
   try {
     const { teamId } = req.params;
     
