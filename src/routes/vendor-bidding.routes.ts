@@ -2696,8 +2696,71 @@ router.get('/vendor/:vendorId/document/:documentId/download', async (req, res) =
   }
 });
 
+// Update vendor contact information
+router.put('/vendor/:vendorId', async (req, res) => {
+  try {
+    const { vendorId } = req.params;
+    const {
+      name,
+      company,
+      email,
+      phone,
+      status,
+      hasCOI,
+      coiExpiryDate,
+      coiPolicyNumber,
+      coiCoverageAmount,
+      coiInsurer,
+      coiArchived
+    } = req.body;
 
+    if (!supabase) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
 
+    console.log(`📝 Updating vendor ${vendorId}:`, { name, email, phone, status });
+
+    // Update the vendor in Supabase
+    const { data: updatedVendor, error } = await supabase
+      .from('vendors')
+      .update({
+        name,
+        company,
+        email,
+        phone,
+        status,
+        has_coi: hasCOI,
+        coi_expiry_date: coiExpiryDate,
+        coi_policy_number: coiPolicyNumber,
+        coi_coverage_amount: coiCoverageAmount,
+        coi_insurer: coiInsurer,
+        coi_archived: coiArchived,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', vendorId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Error updating vendor:', error);
+      return res.status(500).json({
+        error: 'Failed to update vendor',
+        details: error.message
+      });
+    }
+
+    console.log('✅ Vendor updated successfully:', updatedVendor);
+
+    res.json({
+      success: true,
+      message: 'Vendor updated successfully',
+      vendor: updatedVendor
+    });
+  } catch (error) {
+    console.error('❌ Error updating vendor:', error);
+    res.status(500).json({ error: 'Failed to update vendor' });
+  }
+});
 
 // Get accepted vendor bids from database for team visibility
 router.get('/projects/:projectId/accepted-bids', async (req, res) => {
