@@ -9,11 +9,21 @@ import VoiceResponse from 'twilio/lib/twiml/VoiceResponse';
 
 const router = express.Router();
 
-// Initialize Twilio
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+// Initialize Twilio (conditional - only if credentials are valid)
+let twilioClient: any = null;
+try {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID || '';
+  const authToken = process.env.TWILIO_AUTH_TOKEN || '';
+
+  if (accountSid && accountSid.startsWith('AC') && authToken) {
+    twilioClient = twilio(accountSid, authToken);
+    console.log('✅ Twilio client initialized for ChatGPT Realtime Voice');
+  } else {
+    console.warn('⚠️ Twilio credentials not configured for ChatGPT Realtime Voice - voice endpoints will be disabled');
+  }
+} catch (error) {
+  console.error('❌ Failed to initialize Twilio for ChatGPT Realtime Voice:', error);
+}
 
 // Make a call with ChatGPT Realtime Voice
 router.post('/chatgpt-voice/call', async (req, res) => {

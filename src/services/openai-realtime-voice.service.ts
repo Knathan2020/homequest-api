@@ -6,10 +6,21 @@ import OpenAI from 'openai';
 import WebSocket from 'ws';
 import twilio from 'twilio';
 
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN
-);
+// Initialize Twilio (conditional - only if credentials are valid)
+let twilioClient: any = null;
+try {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID || '';
+  const authToken = process.env.TWILIO_AUTH_TOKEN || '';
+
+  if (accountSid && accountSid.startsWith('AC') && authToken) {
+    twilioClient = twilio(accountSid, authToken);
+    console.log('✅ Twilio client initialized for OpenAI Realtime Voice');
+  } else {
+    console.warn('⚠️ Twilio credentials not configured for OpenAI Realtime Voice');
+  }
+} catch (error) {
+  console.error('❌ Failed to initialize Twilio for OpenAI Realtime Voice:', error);
+}
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'sk-your-key-here'

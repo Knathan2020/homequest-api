@@ -90,6 +90,24 @@ router.post('/sms/send', async (req: Request, res: Response) => {
       });
     }
 
+    // Check if Twilio credentials are configured
+    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
+      console.error('❌ Twilio credentials not configured:', {
+        hasSid: !!process.env.TWILIO_ACCOUNT_SID,
+        hasToken: !!process.env.TWILIO_AUTH_TOKEN,
+        hasPhone: !!process.env.TWILIO_PHONE_NUMBER
+      });
+      return res.status(503).json({
+        error: 'Twilio service not configured',
+        message: 'Missing Twilio credentials. Please configure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER environment variables.',
+        details: {
+          hasSid: !!process.env.TWILIO_ACCOUNT_SID,
+          hasToken: !!process.env.TWILIO_AUTH_TOKEN,
+          hasPhone: !!process.env.TWILIO_PHONE_NUMBER
+        }
+      });
+    }
+
     const result = await twilioAIService.sendSMS(to, message);
 
     res.json({
@@ -101,7 +119,8 @@ router.post('/sms/send', async (req: Request, res: Response) => {
     console.error('Error sending SMS:', error);
     res.status(500).json({
       error: 'Failed to send SMS',
-      message: error.message
+      message: error.message,
+      twilioError: error.code || error.status || 'unknown'
     });
   }
 });
